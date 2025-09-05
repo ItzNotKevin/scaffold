@@ -1,0 +1,26 @@
+import React from 'react';
+import TopBar from './TopBar';
+
+interface LayoutProps {
+  children: React.ReactNode;
+  title?: string;
+  onMenuClick?: () => void;
+}
+
+const Layout: React.FC<LayoutProps> = ({ 
+  children, 
+  title = 'Construction PM',
+  onMenuClick 
+}) => {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopBar title={title} onMenuClick={onMenuClick} />
+      <main className="safe-area-inset px-4 py-6">
+        {children}
+      </main>
+    </div>
+  );
+};
+
+export default Layout;
+
