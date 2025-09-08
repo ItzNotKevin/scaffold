@@ -9,10 +9,7 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { currentUser, loading } = useAuth();
 
-  console.log('ProtectedRoute: loading =', loading, 'currentUser =', currentUser ? 'Present' : 'None');
-
   if (loading) {
-    console.log('ProtectedRoute: Showing loading state');
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -24,11 +21,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!currentUser) {
-    console.log('ProtectedRoute: Showing login page');
     return <LoginPage />;
   }
 
-  console.log('ProtectedRoute: Showing protected content');
   return <>{children}</>;
 };
 

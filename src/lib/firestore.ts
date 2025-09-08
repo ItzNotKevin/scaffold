@@ -12,7 +12,8 @@ import {
   limit,
   onSnapshot,
   serverTimestamp,
-  Timestamp 
+  Timestamp,
+  setDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Project, Task, Activity, TeamMember } from './types';
@@ -61,6 +62,11 @@ export const getProjects = async (userId?: string) => {
   
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+};
+
+// Create or update user doc helper
+export const setUserCompany = async (userId: string, companyId: string) => {
+  await setDoc(doc(db, 'users', userId), { companyId, updatedAt: serverTimestamp() }, { merge: true });
 };
 
 // Tasks Collection

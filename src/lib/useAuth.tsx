@@ -10,7 +10,8 @@ import {
   updateProfile,
   type User
 } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -45,6 +46,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (displayName) {
       await updateProfile(user, { displayName });
     }
+    await setDoc(
+      doc(db, 'users', user.uid),
+      {
+        email: user.email,
+        displayName: user.displayName || displayName || '',
+        createdAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
   };
 
   const login = async (email: string, password: string) => {
