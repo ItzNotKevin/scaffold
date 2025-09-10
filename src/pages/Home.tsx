@@ -135,17 +135,47 @@ const Home: React.FC = () => {
                 <p className="text-gray-400 text-xs">Create your first project to get started</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {projects.map((p: any) => (
-                  <button 
-                    key={p.id} 
-                    onClick={() => navigate(`/project/${p.id}`)} 
-                    className="w-full text-left p-4 rounded-xl border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-colors touch-manipulation"
-                  >
-                    <div className="font-medium text-gray-900 mb-1">{p.name}</div>
-                    <div className="text-xs text-gray-500">Phase: {p.phase || 'Sales'}</div>
-                  </button>
-                ))}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {projects.map((p: any) => {
+                  const getPhaseColor = (phase: string) => {
+                    switch (phase) {
+                      case 'Sales': return 'bg-blue-100 text-blue-800 border-blue-200';
+                      case 'Contract': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                      case 'Materials': return 'bg-purple-100 text-purple-800 border-purple-200';
+                      case 'Construction': return 'bg-green-100 text-green-800 border-green-200';
+                      case 'Completion': return 'bg-gray-100 text-gray-800 border-gray-200';
+                      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+                    }
+                  };
+
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => navigate(`/project/${p.id}`)}
+                      className="group cursor-pointer bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-200 touch-manipulation"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <h4 className="font-semibold text-gray-900 text-base group-hover:text-blue-600 transition-colors line-clamp-2">
+                          {p.name}
+                        </h4>
+                        <div className="text-gray-400 group-hover:text-blue-500 transition-colors">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getPhaseColor(p.phase || 'Sales')}`}>
+                          {p.phase || 'Sales'}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          View Details →
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

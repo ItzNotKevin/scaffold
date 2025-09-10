@@ -263,16 +263,23 @@ const ProjectPage: React.FC = () => {
             </div>
           ) : (
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Current Phase:</span>
-              <select 
-                value={phase} 
-                onChange={(e) => handlePhaseChange(e.target.value as Phase)} 
-                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {phases.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
+              <span className="text-sm font-medium text-gray-700">Current Phase:</span>
+              <div className="relative">
+                <select 
+                  value={phase} 
+                  onChange={(e) => handlePhaseChange(e.target.value as Phase)} 
+                  className="appearance-none bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl px-4 py-2.5 text-sm font-medium text-blue-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition-all duration-200 cursor-pointer min-w-[140px]"
+                >
+                  {phases.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -301,59 +308,89 @@ const ProjectPage: React.FC = () => {
 
           {activeTab === 'Staff' && (
             <div>
-              <div className="text-center py-4">
-                <div className="text-4xl mb-3">👷</div>
-                <p className="text-gray-500 text-sm mb-4">Staff Check-in/out</p>
-                <p className="text-gray-400 text-xs mb-4">Use the buttons below to check in or out</p>
-                
-                {checkinMessage && (
-                  <div className={`p-3 rounded-lg text-sm ${
-                    checkinMessage.includes('Successfully') 
-                      ? 'bg-green-50 text-green-700 border border-green-200' 
-                      : 'bg-red-50 text-red-700 border border-red-200'
-                  }`}>
-                    {checkinMessage}
+              {/* Check-in/out Section */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6 border border-blue-100">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
                   </div>
-                )}
+                  <h3 className="text-lg font-semibold text-blue-900 mb-2">Staff Check-in/out</h3>
+                  <p className="text-blue-700 text-sm mb-4">Use the buttons below to check in or out of this project</p>
+                  
+                  {checkinMessage && (
+                    <div className={`p-4 rounded-xl text-sm font-medium ${
+                      checkinMessage.includes('Successfully') 
+                        ? 'bg-green-100 text-green-800 border border-green-200' 
+                        : 'bg-red-100 text-red-800 border border-red-200'
+                    }`}>
+                      <div className="flex items-center justify-center space-x-2">
+                        {checkinMessage.includes('Successfully') ? (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        )}
+                        <span>{checkinMessage}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Check-ins List */}
-              <div className="mt-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Recent Check-ins</h3>
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+                  <div className="flex items-center space-x-2 text-sm text-gray-500">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span>Check In</span>
+                    <div className="w-2 h-2 bg-red-500 rounded-full ml-3"></div>
+                    <span>Check Out</span>
+                  </div>
+                </div>
                 
                 {checkinsLoading ? (
-                  <div className="text-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                    <p className="text-gray-500 text-sm">Loading check-ins...</p>
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                    <p className="text-gray-500 text-sm">Loading activity...</p>
                   </div>
                 ) : checkins.length === 0 ? (
-                  <div className="text-center py-8 bg-gray-50 rounded-xl">
-                    <div className="text-2xl mb-2">📝</div>
-                    <p className="text-gray-500 text-sm">No check-ins yet</p>
-                    <p className="text-gray-400 text-xs">Check in or out to see activity here</p>
+                  <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-600 font-medium mb-1">No activity yet</p>
+                    <p className="text-gray-400 text-sm">Check in or out to see activity here</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {checkins.map((checkin) => (
                       <div
                         key={checkin.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                        className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 transition-colors"
                       >
-                        <div className="flex items-center space-x-3">
-                          <div className={`w-2 h-2 rounded-full ${
+                        <div className="flex items-center space-x-4">
+                          <div className={`w-3 h-3 rounded-full ${
                             checkin.type === 'checkin' ? 'bg-green-500' : 'bg-red-500'
                           }`}></div>
                           <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {checkin.type === 'checkin' ? 'Check In' : 'Check Out'}
+                            <p className="text-sm font-semibold text-gray-900">
+                              {checkin.type === 'checkin' ? 'Checked In' : 'Checked Out'}
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-sm text-gray-600">
                               {checkin.userName || checkin.userEmail || 'Unknown User'}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-gray-500">
+                          <p className="text-sm font-medium text-gray-900">
                             {formatTimestamp(checkin.time)}
                           </p>
                         </div>
@@ -369,21 +406,49 @@ const ProjectPage: React.FC = () => {
 
       {/* Sticky Bottom Action Bar */}
       {activeTab === 'Staff' && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-safe">
+        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 p-4 pb-safe shadow-lg">
           <div className="flex space-x-3">
             <button 
               onClick={() => handleCheck('checkin')} 
               disabled={checkinLoading}
-              className="flex-1 bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
+              className="flex-1 bg-gradient-to-r from-green-600 to-green-700 text-white py-4 rounded-2xl font-semibold hover:from-green-700 hover:to-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-manipulation shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
             >
-              {checkinLoading ? 'Checking In...' : 'Check In'}
+              <div className="flex items-center justify-center space-x-2">
+                {checkinLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Checking In...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Check In</span>
+                  </>
+                )}
+              </div>
             </button>
             <button 
               onClick={() => handleCheck('checkout')} 
               disabled={checkinLoading}
-              className="flex-1 bg-red-600 text-white py-3 rounded-xl font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
+              className="flex-1 bg-gradient-to-r from-red-600 to-red-700 text-white py-4 rounded-2xl font-semibold hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-manipulation shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
             >
-              {checkinLoading ? 'Checking Out...' : 'Check Out'}
+              <div className="flex items-center justify-center space-x-2">
+                {checkinLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Checking Out...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Check Out</span>
+                  </>
+                )}
+              </div>
             </button>
           </div>
         </div>
