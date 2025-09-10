@@ -20,6 +20,8 @@ const ProjectPage: React.FC = () => {
   const [editPhase, setEditPhase] = useState<Phase>('Sales');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [checkinMessage, setCheckinMessage] = useState('');
+  const [checkinLoading, setCheckinLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -46,12 +48,29 @@ const ProjectPage: React.FC = () => {
 
   const handleCheck = async (type: 'checkin' | 'checkout') => {
     if (!id || !currentUser) return;
-    await addDoc(collection(db, 'checkins'), {
-      projectId: id,
-      userId: currentUser.uid,
-      type,
-      time: serverTimestamp(),
-    });
+    
+    setCheckinLoading(true);
+    setCheckinMessage('');
+    
+    try {
+      await addDoc(collection(db, 'checkins'), {
+        projectId: id,
+        userId: currentUser.uid,
+        type,
+        time: serverTimestamp(),
+      });
+      
+      const action = type === 'checkin' ? 'checked in' : 'checked out';
+      setCheckinMessage(`Successfully ${action}!`);
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setCheckinMessage(''), 3000);
+    } catch (err: any) {
+      setCheckinMessage(`Failed to ${type === 'checkin' ? 'check in' : 'check out'}: ${err.message}`);
+      setTimeout(() => setCheckinMessage(''), 5000);
+    } finally {
+      setCheckinLoading(false);
+    }
   };
 
   const handleEdit = () => {
@@ -211,7 +230,17 @@ const ProjectPage: React.FC = () => {
             <div className="text-center py-8">
               <div className="text-4xl mb-3">👷</div>
               <p className="text-gray-500 text-sm mb-4">Staff Check-in/out</p>
-              <p className="text-gray-400 text-xs">Use the buttons below to check in or out</p>
+              <p className="text-gray-400 text-xs mb-4">Use the buttons below to check in or out</p>
+              
+              {checkinMessage && (
+                <div className={`p-3 rounded-lg text-sm ${
+                  checkinMessage.includes('Successfully') 
+                    ? 'bg-green-50 text-green-700 border border-green-200' 
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}>
+                  {checkinMessage}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -223,15 +252,17 @@ const ProjectPage: React.FC = () => {
           <div className="flex space-x-3">
             <button 
               onClick={() => handleCheck('checkin')} 
-              className="flex-1 bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 transition-colors touch-manipulation"
+              disabled={checkinLoading}
+              className="flex-1 bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
             >
-              Check In
+              {checkinLoading ? 'Checking In...' : 'Check In'}
             </button>
             <button 
               onClick={() => handleCheck('checkout')} 
-              className="flex-1 bg-red-600 text-white py-3 rounded-xl font-medium hover:bg-red-700 transition-colors touch-manipulation"
+              disabled={checkinLoading}
+              className="flex-1 bg-red-600 text-white py-3 rounded-xl font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
             >
-              Check Out
+              {checkinLoading ? 'Checking Out...' : 'Check Out'}
             </button>
           </div>
         </div>
