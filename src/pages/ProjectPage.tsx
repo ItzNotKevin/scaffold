@@ -15,6 +15,11 @@ const ProjectPage: React.FC = () => {
   const [phase, setPhase] = useState<Phase>('Sales');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'Photos' | 'Staff'>('Photos');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhase, setEditPhase] = useState<Phase>('Sales');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -25,6 +30,8 @@ const ProjectPage: React.FC = () => {
         const data = snap.data() as any;
         setProjectName(data.name || 'Project');
         setPhase((data.phase as Phase) || 'Sales');
+        setEditName(data.name || 'Project');
+        setEditPhase((data.phase as Phase) || 'Sales');
       }
       setLoading(false);
     };
@@ -47,6 +54,46 @@ const ProjectPage: React.FC = () => {
     });
   };
 
+  const handleEdit = () => {
+    setIsEditing(true);
+    setEditName(projectName);
+    setEditPhase(phase);
+    setError('');
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditName(projectName);
+    setEditPhase(phase);
+    setError('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!id || !editName.trim()) {
+      setError('Project name is required');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await updateDoc(doc(db, 'projects', id), {
+        name: editName.trim(),
+        phase: editPhase,
+        updatedAt: serverTimestamp(),
+      });
+
+      setProjectName(editName.trim());
+      setPhase(editPhase);
+      setIsEditing(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update project');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -61,21 +108,81 @@ const ProjectPage: React.FC = () => {
   return (
     <Layout title={projectName}>
       <div className="space-y-4 pb-20">
-        {/* Header with phase dropdown */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">{projectName}</h2>
-            <p className="text-xs text-gray-500">Project ID: {id}</p>
+        {/* Header with phase dropdown and edit button */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">{projectName}</h2>
+              <p className="text-xs text-gray-500">Project ID: {id}</p>
+            </div>
+            <button
+              onClick={handleEdit}
+              className="px-3 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-colors touch-manipulation"
+            >
+              Edit
+            </button>
           </div>
-          <select 
-            value={phase} 
-            onChange={(e) => handlePhaseChange(e.target.value as Phase)} 
-            className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            {phases.map(p => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
+          
+          {isEditing ? (
+            <div className="space-y-3 p-3 bg-gray-50 rounded-xl">
+              {error && (
+                <div className="p-2 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-600">{error}</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  placeholder="Enter project name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phase</label>
+                <select
+                  value={editPhase}
+                  onChange={(e) => setEditPhase(e.target.value as Phase)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                >
+                  {phases.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={saving}
+                  className="flex-1 bg-blue-600 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2 px-3 rounded-lg text-sm font-medium hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Current Phase:</span>
+              <select 
+                value={phase} 
+                onChange={(e) => handlePhaseChange(e.target.value as Phase)} 
+                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {phases.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
