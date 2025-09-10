@@ -1,12 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 
 const phases = ['Sales','Contract','Materials','Construction','Completion'] as const;
 type Phase = typeof phases[number];
+
+interface Checkin {
+  id: string;
+  type: 'checkin' | 'checkout';
+  time: any;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+}
 
 const ProjectPage: React.FC = () => {
   const { id } = useParams();
@@ -22,6 +31,8 @@ const ProjectPage: React.FC = () => {
   const [error, setError] = useState('');
   const [checkinMessage, setCheckinMessage] = useState('');
   const [checkinLoading, setCheckinLoading] = useState(false);
+  const [checkins, setCheckins] = useState<Checkin[]>([]);
+  const [checkinsLoading, setCheckinsLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -40,10 +51,72 @@ const ProjectPage: React.FC = () => {
     load();
   }, [id]);
 
+  // Fetch check-ins with real-time updates
+  useEffect(() => {
+    if (!id) return;
+
+    const q = query(
+      collection(db, 'checkins'),
+      where('projectId', '==', id),
+      orderBy('time', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const checkinsData: Checkin[] = [];
+      
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+        const checkin: Checkin = {
+          id: doc.id,
+          type: data.type,
+          time: data.time,
+          userId: data.userId,
+        };
+
+        // Fetch user details
+        try {
+          const userRef = doc(db, 'users', data.userId);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            checkin.userName = userData.displayName || userData.name;
+            checkin.userEmail = userData.email;
+          }
+        } catch (err) {
+          console.error('Error fetching user data:', err);
+        }
+
+        checkinsData.push(checkin);
+      }
+
+      setCheckins(checkinsData);
+      setCheckinsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [id]);
+
   const handlePhaseChange = async (newPhase: Phase) => {
     if (!id) return;
     setPhase(newPhase);
     await updateDoc(doc(db, 'projects', id), { phase: newPhase, updatedAt: serverTimestamp() });
+  };
+
+  const formatTimestamp = (timestamp: any) => {
+    if (!timestamp) return 'Unknown time';
+    
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (err) {
+      return 'Invalid date';
+    }
   };
 
   const handleCheck = async (type: 'checkin' | 'checkout') => {
@@ -227,20 +300,68 @@ const ProjectPage: React.FC = () => {
           )}
 
           {activeTab === 'Staff' && (
-            <div className="text-center py-8">
-              <div className="text-4xl mb-3">👷</div>
-              <p className="text-gray-500 text-sm mb-4">Staff Check-in/out</p>
-              <p className="text-gray-400 text-xs mb-4">Use the buttons below to check in or out</p>
-              
-              {checkinMessage && (
-                <div className={`p-3 rounded-lg text-sm ${
-                  checkinMessage.includes('Successfully') 
-                    ? 'bg-green-50 text-green-700 border border-green-200' 
-                    : 'bg-red-50 text-red-700 border border-red-200'
-                }`}>
-                  {checkinMessage}
-                </div>
-              )}
+            <div>
+              <div className="text-center py-4">
+                <div className="text-4xl mb-3">👷</div>
+                <p className="text-gray-500 text-sm mb-4">Staff Check-in/out</p>
+                <p className="text-gray-400 text-xs mb-4">Use the buttons below to check in or out</p>
+                
+                {checkinMessage && (
+                  <div className={`p-3 rounded-lg text-sm ${
+                    checkinMessage.includes('Successfully') 
+                      ? 'bg-green-50 text-green-700 border border-green-200' 
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}>
+                    {checkinMessage}
+                  </div>
+                )}
+              </div>
+
+              {/* Check-ins List */}
+              <div className="mt-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Recent Check-ins</h3>
+                
+                {checkinsLoading ? (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-gray-500 text-sm">Loading check-ins...</p>
+                  </div>
+                ) : checkins.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-xl">
+                    <div className="text-2xl mb-2">📝</div>
+                    <p className="text-gray-500 text-sm">No check-ins yet</p>
+                    <p className="text-gray-400 text-xs">Check in or out to see activity here</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {checkins.map((checkin) => (
+                      <div
+                        key={checkin.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-2 h-2 rounded-full ${
+                            checkin.type === 'checkin' ? 'bg-green-500' : 'bg-red-500'
+                          }`}></div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {checkin.type === 'checkin' ? 'Check In' : 'Check Out'}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {checkin.userName || checkin.userEmail || 'Unknown User'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">
+                            {formatTimestamp(checkin.time)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
