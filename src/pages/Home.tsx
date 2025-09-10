@@ -7,7 +7,7 @@ import { db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
 
 const Home: React.FC = () => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const { isInstallable, installApp } = usePWAInstall();
   const navigate = useNavigate();
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -18,14 +18,6 @@ const Home: React.FC = () => {
 
   const handleMenuClick = () => {
     console.log('Menu clicked');
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch (error) {
-      console.error('Failed to log out:', error);
-    }
   };
 
   useEffect(() => {
@@ -88,19 +80,9 @@ const Home: React.FC = () => {
   return (
     <Layout title="Construction PM" onMenuClick={handleMenuClick}>
       <div className="space-y-6">
-        <div className="bg-white rounded-xl p-6 shadow-sm">
-          {currentUser && (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Signed in as</p>
-                <p className="font-medium text-gray-900">{currentUser.displayName || currentUser.email}</p>
-              </div>
-              <button onClick={handleLogout} className="px-3 py-1 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors">Sign Out</button>
-            </div>
-          )}
-          
-          {isInstallable && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        {isInstallable && (
+          <div className="bg-white rounded-xl p-6 shadow-sm">
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-blue-900">Install App</p>
@@ -114,8 +96,8 @@ const Home: React.FC = () => {
                 </button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {!companyId ? (
           <div className="bg-white rounded-xl p-6 shadow-sm">

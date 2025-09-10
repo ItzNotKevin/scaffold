@@ -1,4 +1,6 @@
 import React from 'react';
+import { useAuth } from '../lib/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 interface TopBarProps {
   title: string;
@@ -6,6 +8,21 @@ interface TopBarProps {
 }
 
 const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick }) => {
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogin = () => {
+    navigate('/auth');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Failed to log out:', error);
+    }
+  };
+
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 safe-area-inset sticky top-0 z-50">
       <div className="flex items-center justify-between px-4 py-3">
@@ -36,24 +53,30 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick }) => {
           </h1>
         </div>
         <div className="flex items-center space-x-2">
-          <button
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            aria-label="Notifications"
-          >
-            <svg
-              className="w-6 h-6 text-gray-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {currentUser ? (
+            <div className="flex items-center space-x-2">
+              <div className="hidden sm:flex items-center space-x-2 px-3 py-1 bg-blue-50 rounded-lg">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="text-sm font-medium text-blue-900 truncate max-w-32">
+                  {currentUser.displayName || currentUser.email}
+                </span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                aria-label="Logout"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleLogin}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 17h5l-5 5v-5zM4 19h6v-6H4v6z"
-              />
-            </svg>
-          </button>
+              Login
+            </button>
+          )}
         </div>
       </div>
     </header>
