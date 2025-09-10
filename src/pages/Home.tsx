@@ -5,6 +5,7 @@ import { usePWAInstall } from '../lib/usePWAInstall';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
+import { sendProjectCreatedEmails } from '../lib/emailNotifications';
 
 const Home: React.FC = () => {
   const { currentUser } = useAuth();
@@ -123,6 +124,18 @@ const Home: React.FC = () => {
         updatedAt: serverTimestamp(),
       });
       console.log('Home: Project created with ID:', projectDoc.id);
+      
+      // Send email notifications
+      try {
+        await sendProjectCreatedEmails({
+          name: newProjectName,
+          phase: 'Sales'
+        }, companyId);
+        console.log('Home: Email notifications sent');
+      } catch (emailError) {
+        console.error('Home: Error sending email notifications:', emailError);
+      }
+      
       console.log('Home: Navigating to project page...');
       navigate(`/project/${projectDoc.id}`);
     } catch (error) {
@@ -243,6 +256,17 @@ const Home: React.FC = () => {
                     }
                   };
 
+                  const getPhaseProgress = (phase: string) => {
+                    switch (phase) {
+                      case 'Sales': return { progress: 20, step: 1, total: 5 };
+                      case 'Contract': return { progress: 40, step: 2, total: 5 };
+                      case 'Materials': return { progress: 60, step: 3, total: 5 };
+                      case 'Construction': return { progress: 80, step: 4, total: 5 };
+                      case 'Completion': return { progress: 100, step: 5, total: 5 };
+                      default: return { progress: 20, step: 1, total: 5 };
+                    }
+                  };
+
                   return (
                     <div
                       key={p.id}
@@ -255,27 +279,31 @@ const Home: React.FC = () => {
                         >
                           {p.name}
                         </h4>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteConfirm(p.id);
-                            }}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete project"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteConfirm(p.id);
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete project"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      {/* Progress Bar */}
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                          <span>Progress</span>
+                          <span>{getPhaseProgress(p.phase || 'Sales').step}/{getPhaseProgress(p.phase || 'Sales').total}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
                           <div 
-                            onClick={() => navigate(`/project/${p.id}`)}
-                            className="text-gray-400 group-hover:text-blue-500 transition-colors cursor-pointer"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
+                            className="bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${getPhaseProgress(p.phase || 'Sales').progress}%` }}
+                          ></div>
                         </div>
                       </div>
                       
@@ -283,9 +311,12 @@ const Home: React.FC = () => {
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getPhaseColor(p.phase || 'Sales')}`}>
                           {p.phase || 'Sales'}
                         </span>
-                        <span className="text-xs text-gray-400">
+                        <button
+                          onClick={() => navigate(`/project/${p.id}`)}
+                          className="text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors touch-manipulation"
+                        >
                           View Details →
-                        </span>
+                        </button>
                       </div>
                     </div>
                   );

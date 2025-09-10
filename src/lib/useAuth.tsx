@@ -42,23 +42,42 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
 
   const signup = async (email: string, password: string, displayName?: string) => {
-    const { user } = await createUserWithEmailAndPassword(auth, email, password);
-    if (displayName) {
-      await updateProfile(user, { displayName });
+    try {
+      console.log('Signup: Starting signup process for', email);
+      const { user } = await createUserWithEmailAndPassword(auth, email, password);
+      console.log('Signup: User created successfully', user.uid);
+      
+      if (displayName) {
+        console.log('Signup: Updating profile with display name');
+        await updateProfile(user, { displayName });
+      }
+      
+      console.log('Signup: Creating user document in Firestore');
+      await setDoc(
+        doc(db, 'users', user.uid),
+        {
+          email: user.email,
+          displayName: user.displayName || displayName || '',
+          createdAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      console.log('Signup: User document created successfully');
+    } catch (error) {
+      console.error('Signup: Error during signup process', error);
+      throw error;
     }
-    await setDoc(
-      doc(db, 'users', user.uid),
-      {
-        email: user.email,
-        displayName: user.displayName || displayName || '',
-        createdAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
   };
 
   const login = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    try {
+      console.log('Login: Starting login process for', email);
+      await signInWithEmailAndPassword(auth, email, password);
+      console.log('Login: Login successful');
+    } catch (error) {
+      console.error('Login: Error during login process', error);
+      throw error;
+    }
   };
 
   const loginWithGoogle = async () => {

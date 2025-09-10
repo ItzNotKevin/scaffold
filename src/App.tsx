@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Home from './pages/Home';
 import AuthPage from './pages/AuthPage.tsx';
 import ProjectPage from './pages/ProjectPage.tsx';
+import DebugPage from './pages/DebugPage';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<AuthPage />} />
+            <Route path="/debug" element={<DebugPage />} />
             <Route
               path="/"
               element={
