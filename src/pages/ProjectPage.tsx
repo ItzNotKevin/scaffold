@@ -20,6 +20,8 @@ interface Checkin {
 const ProjectPage: React.FC = () => {
   const { id } = useParams();
   const { currentUser } = useAuth();
+  
+  console.log('ProjectPage: Rendered with project ID:', id);
   const [projectName, setProjectName] = useState('');
   const [phase, setPhase] = useState<Phase>('Sales');
   const [loading, setLoading] = useState(true);
@@ -57,8 +59,7 @@ const ProjectPage: React.FC = () => {
 
     const q = query(
       collection(db, 'checkins'),
-      where('projectId', '==', id),
-      orderBy('time', 'desc')
+      where('projectId', '==', id)
     );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
@@ -88,6 +89,13 @@ const ProjectPage: React.FC = () => {
 
         checkinsData.push(checkin);
       }
+
+      // Sort by time (newest first) on the client side
+      checkinsData.sort((a, b) => {
+        const timeA = a.time?.toDate ? a.time.toDate() : new Date(a.time);
+        const timeB = b.time?.toDate ? b.time.toDate() : new Date(b.time);
+        return timeB.getTime() - timeA.getTime();
+      });
 
       setCheckins(checkinsData);
       setCheckinsLoading(false);
