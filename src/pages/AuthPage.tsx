@@ -60,19 +60,19 @@ const AuthPage: React.FC = () => {
 
   return (
     <Layout title={isSignUp ? 'Sign Up' : 'Sign In'}>
-      <div className="max-w-md mx-auto">
-        <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div className="max-w-sm mx-auto">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               {isSignUp ? 'Create Account' : 'Welcome Back'}
             </h2>
-            <p className="text-gray-600">
+            <p className="text-gray-600 text-sm">
               {isSignUp ? 'Sign up to start managing your projects' : 'Sign in to continue'}
             </p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl">
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
@@ -80,22 +80,49 @@ const AuthPage: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
               <div>
-                <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <input id="displayName" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter your full name" />
+                <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                <input 
+                  id="displayName" 
+                  type="text" 
+                  value={displayName} 
+                  onChange={(e) => setDisplayName(e.target.value)} 
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" 
+                  placeholder="Enter your full name" 
+                />
               </div>
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter your email" required />
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+              <input 
+                id="email" 
+                type="email" 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" 
+                placeholder="Enter your email" 
+                required 
+              />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter your password" required />
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+              <input 
+                id="password" 
+                type="password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" 
+                placeholder="Enter your password" 
+                required 
+              />
             </div>
 
-            <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            <button 
+              type="submit" 
+              disabled={loading} 
+              className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
+            >
               {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
             </button>
           </form>
@@ -103,27 +130,39 @@ const AuthPage: React.FC = () => {
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
+                <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center text-sm">
                 <span className="px-2 bg-white text-gray-500">Or continue with</span>
               </div>
             </div>
 
-            <button onClick={handleGoogleLogin} disabled={loading} className="mt-4 w-full bg-white border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2">
+            <button 
+              onClick={handleGoogleLogin} 
+              disabled={loading} 
+              className="mt-4 w-full bg-white border border-gray-200 text-gray-700 py-3 px-4 rounded-xl hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 touch-manipulation"
+            >
               <span>Continue with Google</span>
             </button>
           </div>
 
           <div className="mt-6 text-center">
-            <button onClick={() => setIsSignUp(!isSignUp)} className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+            <button 
+              onClick={() => setIsSignUp(!isSignUp)} 
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium touch-manipulation"
+            >
               {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
           </div>
 
           {!isSignUp && (
             <div className="mt-4 text-center">
-              <button onClick={handleResetPassword} className="text-sm text-gray-600 hover:text-gray-700">Forgot your password?</button>
+              <button 
+                onClick={handleResetPassword} 
+                className="text-sm text-gray-600 hover:text-gray-700 touch-manipulation"
+              >
+                Forgot your password?
+              </button>
             </div>
           )}
         </div>
