@@ -76,7 +76,10 @@ const ProjectPage: React.FC = () => {
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<'Low' | 'Medium' | 'High' | 'Urgent'>('Medium');
+  const [newTaskAssignedTo, setNewTaskAssignedTo] = useState('');
   const [submittingTask, setSubmittingTask] = useState(false);
+  const [companyUsers, setCompanyUsers] = useState<Array<{id: string, name: string, email: string}>>([]);
+  const [companyId, setCompanyId] = useState<string>('');
 
   useEffect(() => {
     const load = async () => {
@@ -91,6 +94,7 @@ const ProjectPage: React.FC = () => {
         setEditName(data.name || 'Project');
         setEditDescription(data.description || '');
         setEditPhase((data.phase as Phase) || 'Sales');
+        setCompanyId(data.companyId || '');
       }
       setLoading(false);
     };
@@ -209,7 +213,56 @@ const ProjectPage: React.FC = () => {
 
     loadFeedback();
     loadTasks();
-  }, [id]);
+    loadCompanyUsers();
+  }, [id, companyId]);
+
+  // Load company users for task assignment
+  const loadCompanyUsers = async () => {
+    if (!companyId) {
+      console.log('No companyId available for loading users');
+      return;
+    }
+
+    try {
+      console.log('Loading company users for company:', companyId);
+      const companyDoc = await getDoc(doc(db, 'companies', companyId));
+      if (!companyDoc.exists()) {
+        console.log('Company document not found:', companyId);
+        return;
+      }
+
+      const companyData = companyDoc.data();
+      const memberIds = companyData?.members || [];
+      const ownerId = companyData?.ownerId;
+      
+      // Include owner in members list
+      if (ownerId && !memberIds.includes(ownerId)) {
+        memberIds.push(ownerId);
+      }
+
+      const users: Array<{id: string, name: string, email: string}> = [];
+      for (const userId of memberIds) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', userId));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            users.push({
+              id: userId,
+              name: userData.displayName || userData.name || 'Unknown User',
+              email: userData.email || 'No email'
+            });
+          }
+        } catch (err) {
+          console.error('Error loading user:', userId, err);
+        }
+      }
+
+      setCompanyUsers(users);
+      console.log('Loaded company users:', users);
+    } catch (error) {
+      console.error('Error loading company users:', error);
+    }
+  };
 
   // Load tasks for this project
   const loadTasks = async () => {
@@ -296,6 +349,7 @@ const ProjectPage: React.FC = () => {
         description: newTaskDescription.trim(),
         dueDate: newTaskDueDate ? new Date(newTaskDueDate) : null,
         priority: newTaskPriority,
+        assignedTo: newTaskAssignedTo || null,
         completed: false,
         createdAt: serverTimestamp(),
       });
@@ -307,6 +361,7 @@ const ProjectPage: React.FC = () => {
       setNewTaskDescription('');
       setNewTaskDueDate('');
       setNewTaskPriority('Medium');
+      setNewTaskAssignedTo('');
       setShowTaskForm(false);
 
       // Refresh task list
@@ -938,6 +993,21 @@ const ProjectPage: React.FC = () => {
                           </select>
                         </div>
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium text-blue-900 mb-2">Assign To</label>
+                        <select
+                          value={newTaskAssignedTo}
+                          onChange={(e) => setNewTaskAssignedTo(e.target.value)}
+                          className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        >
+                          <option value="">No assignment</option>
+                          {companyUsers.map((user) => (
+                            <option key={user.id} value={user.id}>
+                              {user.name} ({user.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <div className="flex space-x-3">
                         <button
                           onClick={() => {
@@ -946,6 +1016,7 @@ const ProjectPage: React.FC = () => {
                             setNewTaskDescription('');
                             setNewTaskDueDate('');
                             setNewTaskPriority('Medium');
+                            setNewTaskAssignedTo('');
                           }}
                           disabled={submittingTask}
                           className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-xl font-medium hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
