@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './lib/useAuth';
-import FCMProvider from './components/FCMProvider';
+import { PushNotificationProvider } from './lib/usePushNotifications';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import Home from './pages/Home';
@@ -14,7 +14,7 @@ function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <FCMProvider>
+          <PushNotificationProvider>
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/debug" element={<DebugPage />} />
@@ -36,7 +36,7 @@ function App() {
               />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </FCMProvider>
+          </PushNotificationProvider>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>

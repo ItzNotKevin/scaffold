@@ -5,6 +5,7 @@ import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, whe
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import { sendPhaseUpdateEmails } from '../lib/emailNotifications';
+import { usePushNotifications } from '../lib/usePushNotifications';
 
 const phases = ['Sales','Contract','Materials','Construction','Completion'] as const;
 type Phase = typeof phases[number];
@@ -43,10 +44,34 @@ interface Task {
   assignedToEmail?: string;
 }
 
+interface Comment {
+  id: string;
+  taskId: string;
+  comment: string;
+  userId: string;
+  timestamp: any;
+  userName?: string;
+  userEmail?: string;
+  parentCommentId?: string; // For replies
+  replies?: Comment[]; // Nested replies
+}
+
+interface Reply {
+  id: string;
+  commentId: string;
+  taskId: string;
+  reply: string;
+  userId: string;
+  timestamp: any;
+  userName?: string;
+  userEmail?: string;
+}
+
 const ProjectPage: React.FC = () => {
   const { id } = useParams();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { showTaskNotification, showProjectNotification, showCommentNotification } = usePushNotifications();
   
   console.log('ProjectPage: Rendered with project ID:', id);
   const [projectName, setProjectName] = useState('');
@@ -81,6 +106,14 @@ const ProjectPage: React.FC = () => {
   const [companyUsers, setCompanyUsers] = useState<Array<{id: string, name: string, email: string}>>([]);
   const [companyId, setCompanyId] = useState<string>('');
   const [taskFilter, setTaskFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [newComment, setNewComment] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [commentingTaskId, setCommentingTaskId] = useState<string | null>(null);
+  const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
+  const [newReply, setNewReply] = useState('');
+  const [submittingReply, setSubmittingReply] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -217,6 +250,13 @@ const ProjectPage: React.FC = () => {
     loadCompanyUsers();
   }, [id, companyId]);
 
+  // Load comments when tasks change
+  useEffect(() => {
+    if (tasks.length > 0) {
+      loadComments();
+    }
+  }, [tasks]);
+
   // Load company users for task assignment
   const loadCompanyUsers = async () => {
     if (!companyId) {
@@ -262,6 +302,82 @@ const ProjectPage: React.FC = () => {
       console.log('Loaded company users:', users);
     } catch (error) {
       console.error('Error loading company users:', error);
+    }
+  };
+
+  // Load comments for all tasks in this project
+  const loadComments = async () => {
+    if (!id || tasks.length === 0) return;
+    
+    try {
+      console.log('Loading comments for project:', id, 'with tasks:', tasks.map(t => t.id));
+      const q = query(
+        collection(db, 'comments'),
+        where('taskId', 'in', tasks.map(task => task.id))
+      );
+      const snapshot = await getDocs(q);
+      console.log('Found', snapshot.docs.length, 'comment documents');
+      
+      const commentsData: Comment[] = [];
+      const repliesData: Comment[] = [];
+      
+      for (const docSnapshot of snapshot.docs) {
+        const data = docSnapshot.data();
+        const commentItem: Comment = {
+          id: docSnapshot.id,
+          taskId: data.taskId,
+          comment: data.comment,
+          userId: data.userId,
+          timestamp: data.timestamp,
+          parentCommentId: data.parentCommentId || null,
+        };
+
+        // Load user details for the comment
+        try {
+          const userRef = doc(db, 'users', data.userId);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            commentItem.userName = userData.displayName || userData.name || 'Unknown User';
+            commentItem.userEmail = userData.email;
+          }
+        } catch (err) {
+          console.error('Error fetching user data for comment:', err);
+        }
+
+        // Separate main comments from replies
+        if (data.parentCommentId) {
+          repliesData.push(commentItem);
+        } else {
+          commentsData.push(commentItem);
+        }
+      }
+
+      // Sort main comments by timestamp (newest first)
+      commentsData.sort((a, b) => {
+        const timeA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+        const timeB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+        return timeB.getTime() - timeA.getTime();
+      });
+
+      // Sort replies by timestamp (oldest first for better reading flow)
+      repliesData.sort((a, b) => {
+        const timeA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+        const timeB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+        return timeA.getTime() - timeB.getTime();
+      });
+
+      // Attach replies to their parent comments
+      commentsData.forEach(comment => {
+        comment.replies = repliesData.filter(reply => reply.parentCommentId === comment.id);
+      });
+
+      console.log('Setting comments data:', commentsData);
+      setComments(commentsData);
+    } catch (error) {
+      console.error('Error loading comments:', error);
+    } finally {
+      setCommentsLoading(false);
     }
   };
 
@@ -387,6 +503,16 @@ const ProjectPage: React.FC = () => {
 
       // Refresh task list
       await loadTasks();
+      
+      // Show notification
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        showTaskNotification(
+          task.title,
+          !currentStatus ? 'completed' : 'marked as in-progress',
+          projectName
+        );
+      }
     } catch (error) {
       console.error('Error updating task completion:', error);
     }
@@ -408,6 +534,88 @@ const ProjectPage: React.FC = () => {
     return tasks.filter(task => taskFilter === 'completed' ? task.completed : !task.completed);
   };
 
+  // Submit a new comment
+  const handleSubmitComment = async (taskId: string) => {
+    if (!currentUser || !newComment.trim()) return;
+
+    setSubmittingComment(true);
+    try {
+      console.log('Submitting comment for task:', taskId);
+      await addDoc(collection(db, 'comments'), {
+        taskId: taskId,
+        comment: newComment.trim(),
+        userId: currentUser.uid,
+        timestamp: serverTimestamp(),
+      });
+
+      console.log('Comment submitted successfully');
+      
+      // Clear form
+      setNewComment('');
+      setCommentingTaskId(null);
+      
+      // Refresh comments
+      await loadComments();
+      
+      // Show notification
+      const task = tasks.find(t => t.id === taskId);
+      if (task && currentUser) {
+        showCommentNotification(
+          currentUser.displayName || currentUser.email || 'Someone',
+          task.title
+        );
+      }
+    } catch (error) {
+      console.error('Error submitting comment:', error);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  // Get comments for a specific task
+  const getTaskComments = (taskId: string) => {
+    return comments.filter(comment => comment.taskId === taskId);
+  };
+
+  // Submit a reply to a comment
+  const handleSubmitReply = async (commentId: string, taskId: string) => {
+    if (!currentUser || !newReply.trim()) return;
+
+    setSubmittingReply(true);
+    try {
+      console.log('Submitting reply for comment:', commentId);
+      await addDoc(collection(db, 'comments'), {
+        taskId: taskId,
+        comment: newReply.trim(),
+        userId: currentUser.uid,
+        parentCommentId: commentId,
+        timestamp: serverTimestamp(),
+      });
+
+      console.log('Reply submitted successfully');
+      
+      // Clear form
+      setNewReply('');
+      setReplyingToCommentId(null);
+      
+      // Refresh comments
+      await loadComments();
+      
+      // Show notification
+      const task = tasks.find(t => t.id === taskId);
+      if (task && currentUser) {
+        showCommentNotification(
+          currentUser.displayName || currentUser.email || 'Someone',
+          task.title
+        );
+      }
+    } catch (error) {
+      console.error('Error submitting reply:', error);
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
+
   const handlePhaseChange = async (newPhase: Phase) => {
     if (!id) return;
     const oldPhase = phase;
@@ -424,6 +632,9 @@ const ProjectPage: React.FC = () => {
     } catch (emailError) {
       console.error('ProjectPage: Error sending phase update emails:', emailError);
     }
+    
+    // Show notification
+    showProjectNotification(projectName, `moved to ${newPhase} phase`);
   };
 
   const formatTimestamp = (timestamp: any) => {
@@ -1243,6 +1454,142 @@ const ProjectPage: React.FC = () => {
                                 </button>
                               )}
                             </div>
+                          </div>
+
+                          {/* Comments Section */}
+                          <div className="mt-4 border-t border-gray-100 pt-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="text-sm font-medium text-gray-700">
+                                Comments ({getTaskComments(task.id).length})
+                              </h5>
+                              <button
+                                onClick={() => setCommentingTaskId(commentingTaskId === task.id ? null : task.id)}
+                                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                              >
+                                {commentingTaskId === task.id ? 'Cancel' : 'Add Comment'}
+                              </button>
+                            </div>
+
+                            {/* Comments List */}
+                            {getTaskComments(task.id).length > 0 && (
+                              <div className="space-y-4 mb-4">
+                                {getTaskComments(task.id).map((comment) => (
+                                  <div key={comment.id} className="bg-gray-50 rounded-lg p-4">
+                                    {/* Main Comment */}
+                                    <div className="flex items-start justify-between mb-2">
+                                      <span className="text-sm font-medium text-gray-900">
+                                        {comment.userName || 'Unknown User'}
+                                      </span>
+                                      <span className="text-xs text-gray-500">
+                                        {comment.timestamp?.toDate ? 
+                                          comment.timestamp.toDate().toLocaleDateString() + ' ' + 
+                                          comment.timestamp.toDate().toLocaleTimeString() :
+                                          'Unknown time'
+                                        }
+                                      </span>
+                                    </div>
+                                    <p className="text-sm text-gray-700 leading-relaxed mb-3">
+                                      {comment.comment}
+                                    </p>
+                                    
+                                    {/* Reply Button */}
+                                    <button
+                                      onClick={() => setReplyingToCommentId(replyingToCommentId === comment.id ? null : comment.id)}
+                                      className="text-xs text-blue-600 hover:text-blue-700 font-medium mb-3"
+                                    >
+                                      {replyingToCommentId === comment.id ? 'Cancel Reply' : `Reply (${comment.replies?.length || 0})`}
+                                    </button>
+
+                                    {/* Replies */}
+                                    {comment.replies && comment.replies.length > 0 && (
+                                      <div className="ml-4 space-y-3 border-l-2 border-gray-200 pl-4">
+                                        {comment.replies.map((reply) => (
+                                          <div key={reply.id} className="bg-white rounded-lg p-3 border border-gray-200">
+                                            <div className="flex items-start justify-between mb-1">
+                                              <span className="text-xs font-medium text-gray-800">
+                                                {reply.userName || 'Unknown User'}
+                                              </span>
+                                              <span className="text-xs text-gray-400">
+                                                {reply.timestamp?.toDate ? 
+                                                  reply.timestamp.toDate().toLocaleDateString() + ' ' + 
+                                                  reply.timestamp.toDate().toLocaleTimeString() :
+                                                  'Unknown time'
+                                                }
+                                              </span>
+                                            </div>
+                                            <p className="text-xs text-gray-600 leading-relaxed">
+                                              {reply.comment}
+                                            </p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {/* Reply Form */}
+                                    {replyingToCommentId === comment.id && (
+                                      <div className="mt-3 bg-blue-50 rounded-lg p-3 border border-blue-200">
+                                        <textarea
+                                          value={newReply}
+                                          onChange={(e) => setNewReply(e.target.value)}
+                                          placeholder="Write a reply..."
+                                          className="w-full px-3 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none mb-2"
+                                          rows={2}
+                                        />
+                                        <div className="flex items-center justify-end space-x-2">
+                                          <button
+                                            onClick={() => {
+                                              setReplyingToCommentId(null);
+                                              setNewReply('');
+                                            }}
+                                            className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800 font-medium"
+                                          >
+                                            Cancel
+                                          </button>
+                                          <button
+                                            onClick={() => handleSubmitReply(comment.id, task.id)}
+                                            disabled={submittingReply || !newReply.trim()}
+                                            className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                          >
+                                            {submittingReply ? 'Posting...' : 'Post Reply'}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Add Comment Form */}
+                            {commentingTaskId === task.id && (
+                              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                <textarea
+                                  value={newComment}
+                                  onChange={(e) => setNewComment(e.target.value)}
+                                  placeholder="Write a comment..."
+                                  className="w-full px-3 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none mb-3"
+                                  rows={3}
+                                />
+                                <div className="flex items-center justify-end space-x-2">
+                                  <button
+                                    onClick={() => {
+                                      setCommentingTaskId(null);
+                                      setNewComment('');
+                                    }}
+                                    className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 font-medium"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => handleSubmitComment(task.id)}
+                                    disabled={submittingComment || !newComment.trim()}
+                                    className="px-4 py-1 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    {submittingComment ? 'Posting...' : 'Post Comment'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );

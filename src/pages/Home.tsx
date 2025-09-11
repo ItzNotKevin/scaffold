@@ -6,6 +6,7 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc
 import { db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
 import { sendProjectCreatedEmails } from '../lib/emailNotifications';
+import NotificationPermission from '../components/NotificationPermission';
 
 const Home: React.FC = () => {
   const { currentUser } = useAuth();
@@ -189,6 +190,8 @@ const Home: React.FC = () => {
   return (
     <Layout title="Construction PM" onMenuClick={handleMenuClick}>
       <div className="space-y-4">
+        <NotificationPermission />
+        
         {isInstallable && (
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
             <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">

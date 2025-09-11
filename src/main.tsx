@@ -9,28 +9,16 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Register service worker for PWA (only in production)
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then((registration) => {
-        console.log('SW registered: ', registration);
-      })
-      .catch((registrationError) => {
-        console.log('SW registration failed: ', registrationError);
-      });
-  });
-}
-
-// Register Firebase Cloud Messaging service worker
+// Register service worker for PWA and Push Notifications
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/firebase-messaging-sw.js')
+    // Register main service worker
+    navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
-        console.log('FCM SW registered: ', registration);
+        console.log('Service Worker registered: ', registration);
       })
       .catch((registrationError) => {
-        console.log('FCM SW registration failed: ', registrationError);
+        console.log('Service Worker registration failed: ', registrationError);
       });
   });
 }
