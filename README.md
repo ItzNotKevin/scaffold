@@ -13,6 +13,8 @@ A modern, mobile-first Progressive Web App (PWA) for construction project manage
 - **📱 Mobile-First Design** - Optimized for mobile devices
 - **⚡ Real-time Updates** - Live data synchronization with Firestore
 - **🔒 Protected Routes** - Secure access to private pages
+- **📧 Email Notifications** - Project updates via SendGrid
+- **🔔 Push Notifications** - FCM ready (disabled by default)
 
 ## 🛠️ Tech Stack
 

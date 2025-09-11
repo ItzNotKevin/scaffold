@@ -11,6 +11,13 @@ if (SENDGRID_API_KEY) {
   sgMail.setApiKey(SENDGRID_API_KEY);
 }
 
+// Get FCM VAPID configuration
+const FCM_VAPID_PRIVATE_KEY = functions.config().fcm?.vapid_private_key;
+const FCM_VAPID_PUBLIC_KEY = functions.config().fcm?.vapid_public_key;
+
+// FCM Feature Flag - Set to true when ready to enable FCM
+const FCM_ENABLED = false;
+
 // Email templates
 const getProjectCreatedEmail = (projectName: string, companyName: string, phase: string) => ({
   to: '', // Will be set dynamically
@@ -125,6 +132,61 @@ async function sendEmail(emailData: any, recipientEmail: string) {
   }
 }
 
+// Helper function to get user FCM tokens
+async function getUserFCMTokens(userId: string): Promise<string[]> {
+  try {
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    if (!userDoc.exists) return [];
+    
+    const userData = userDoc.data();
+    const fcmToken = userData?.fcmToken;
+    
+    return fcmToken ? [fcmToken] : [];
+  } catch (error) {
+    console.error('Error getting user FCM tokens:', error);
+    return [];
+  }
+}
+
+// Helper function to send FCM notification
+async function sendFCMNotification(tokens: string[], title: string, body: string, data: any = {}) {
+  // Skip FCM if disabled
+  if (!FCM_ENABLED) {
+    console.log('FCM is disabled. Set FCM_ENABLED = true to enable push notifications.');
+    return;
+  }
+
+  if (tokens.length === 0) {
+    console.log('No FCM tokens available for notification');
+    return;
+  }
+
+  try {
+    const message = {
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        ...data,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+      },
+      tokens,
+    };
+
+    const response = await admin.messaging().sendMulticast(message);
+    console.log(`FCM notification sent to ${response.successCount}/${tokens.length} devices`);
+    
+    if (response.failureCount > 0) {
+      console.log('FCM failures:', response.responses
+        .map((resp, idx) => resp.success ? null : `Token ${idx}: ${resp.error}`)
+        .filter(Boolean));
+    }
+  } catch (error) {
+    console.error('Error sending FCM notification:', error);
+  }
+}
+
 // Trigger when a new project is created
 export const onProjectCreated = functions.firestore
   .document('projects/{projectId}')
@@ -165,8 +227,25 @@ export const onProjectCreated = functions.firestore
         }
       });
       
-      await Promise.all(emailPromises);
-      console.log(`Sent project creation emails to ${memberIds.length} members`);
+      // Send FCM notifications to all company members
+      const fcmPromises = memberIds.map(async (memberId) => {
+        const tokens = await getUserFCMTokens(memberId);
+        if (tokens.length > 0) {
+          await sendFCMNotification(
+            tokens,
+            'New Project Created',
+            `${projectData.name || 'Unnamed Project'} has been created in ${companyName}`,
+            {
+              projectId,
+              type: 'project_created',
+              companyId: projectData.companyId
+            }
+          );
+        }
+      });
+      
+      await Promise.all([...emailPromises, ...fcmPromises]);
+      console.log(`Sent project creation notifications to ${memberIds.length} members`);
       
     } catch (error) {
       console.error('Error in onProjectCreated:', error);
@@ -220,10 +299,97 @@ export const onProjectPhaseUpdated = functions.firestore
         }
       });
       
-      await Promise.all(emailPromises);
-      console.log(`Sent phase update emails to ${memberIds.length} members`);
+      // Send FCM notifications to all company members
+      const fcmPromises = memberIds.map(async (memberId) => {
+        const tokens = await getUserFCMTokens(memberId);
+        if (tokens.length > 0) {
+          await sendFCMNotification(
+            tokens,
+            'Project Phase Updated',
+            `${afterData.name || 'Unnamed Project'} moved from ${beforeData.phase || 'Unknown'} to ${afterData.phase || 'Unknown'}`,
+            {
+              projectId,
+              type: 'phase_updated',
+              companyId: afterData.companyId,
+              oldPhase: beforeData.phase || 'Unknown',
+              newPhase: afterData.phase || 'Unknown'
+            }
+          );
+        }
+      });
+      
+      await Promise.all([...emailPromises, ...fcmPromises]);
+      console.log(`Sent phase update notifications to ${memberIds.length} members`);
       
     } catch (error) {
       console.error('Error in onProjectPhaseUpdated:', error);
+    }
+  });
+
+// Trigger when client feedback is added
+export const onFeedbackAdded = functions.firestore
+  .document('feedback/{feedbackId}')
+  .onCreate(async (snap, context) => {
+    const feedbackData = snap.data();
+    const feedbackId = context.params.feedbackId;
+    const projectId = feedbackData.projectId;
+    
+    console.log('New feedback added:', feedbackId, 'for project:', projectId);
+    
+    try {
+      // Get project details
+      const projectDoc = await admin.firestore()
+        .collection('projects')
+        .doc(projectId)
+        .get();
+      
+      if (!projectDoc.exists) {
+        console.log('Project not found for feedback:', projectId);
+        return;
+      }
+      
+      const projectData = projectDoc.data();
+      const projectName = projectData?.name || 'Unnamed Project';
+      
+      // Get company details
+      const companyDoc = await admin.firestore()
+        .collection('companies')
+        .doc(projectData.companyId)
+        .get();
+      
+      if (!companyDoc.exists) {
+        console.log('Company not found for project:', projectData.companyId);
+        return;
+      }
+      
+      const companyData = companyDoc.data();
+      const companyName = companyData?.name || 'Unknown Company';
+      
+      // Get company members
+      const memberIds = await getCompanyMembers(projectData.companyId);
+      
+      // Send FCM notifications to all company members
+      const fcmPromises = memberIds.map(async (memberId) => {
+        const tokens = await getUserFCMTokens(memberId);
+        if (tokens.length > 0) {
+          await sendFCMNotification(
+            tokens,
+            'New Client Feedback',
+            `New feedback received for ${projectName}`,
+            {
+              projectId,
+              type: 'feedback_added',
+              companyId: projectData.companyId,
+              feedbackId
+            }
+          );
+        }
+      });
+      
+      await Promise.all(fcmPromises);
+      console.log(`Sent feedback notifications to ${memberIds.length} members`);
+      
+    } catch (error) {
+      console.error('Error in onFeedbackAdded:', error);
     }
   });

@@ -127,8 +127,9 @@ const Home: React.FC = () => {
       
       // Send email notifications
       try {
+        const projectName = `New Project ${projects.length + 1}`;
         await sendProjectCreatedEmails({
-          name: newProjectName,
+          name: projectName,
           phase: 'Sales'
         }, companyId);
         console.log('Home: Email notifications sent');
