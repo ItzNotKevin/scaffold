@@ -80,6 +80,7 @@ const ProjectPage: React.FC = () => {
   const [submittingTask, setSubmittingTask] = useState(false);
   const [companyUsers, setCompanyUsers] = useState<Array<{id: string, name: string, email: string}>>([]);
   const [companyId, setCompanyId] = useState<string>('');
+  const [taskFilter, setTaskFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
 
   useEffect(() => {
     const load = async () => {
@@ -389,6 +390,22 @@ const ProjectPage: React.FC = () => {
     } catch (error) {
       console.error('Error updating task completion:', error);
     }
+  };
+
+  // Calculate task statistics
+  const getTaskStats = () => {
+    const total = tasks.length;
+    const completed = tasks.filter(task => task.completed).length;
+    const inProgress = tasks.filter(task => !task.completed).length;
+    const progressPercentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    
+    return { total, completed, inProgress, progressPercentage };
+  };
+
+  // Filter tasks based on current filter
+  const getFilteredTasks = () => {
+    if (taskFilter === 'all') return tasks;
+    return tasks.filter(task => taskFilter === 'completed' ? task.completed : !task.completed);
   };
 
   const handlePhaseChange = async (newPhase: Phase) => {
@@ -1045,7 +1062,67 @@ const ProjectPage: React.FC = () => {
 
               {/* Tasks List */}
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Tasks</h3>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">Project Tasks</h3>
+                  {!tasksLoading && tasks.length > 0 && (
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm text-gray-500">
+                        {getTaskStats().completed}/{getTaskStats().total} completed
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${getTaskStats().progressPercentage}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-xs text-gray-500 font-medium">
+                          {getTaskStats().progressPercentage}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Task Filter */}
+                {!tasksLoading && tasks.length > 0 && (
+                  <div className="flex items-center space-x-2 mb-6">
+                    <span className="text-sm font-medium text-gray-700">Filter:</span>
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                      <button
+                        onClick={() => setTaskFilter('all')}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                          taskFilter === 'all'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        All ({getTaskStats().total})
+                      </button>
+                      <button
+                        onClick={() => setTaskFilter('in-progress')}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                          taskFilter === 'in-progress'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        In Progress ({getTaskStats().inProgress})
+                      </button>
+                      <button
+                        onClick={() => setTaskFilter('completed')}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                          taskFilter === 'completed'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Completed ({getTaskStats().completed})
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {tasksLoading ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -1057,9 +1134,15 @@ const ProjectPage: React.FC = () => {
                     <p className="text-gray-600 font-medium mb-1">No tasks yet</p>
                     <p className="text-gray-400 text-sm">Create your first task to get started</p>
                   </div>
+                ) : getFilteredTasks().length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="text-4xl mb-3">🔍</div>
+                    <p className="text-gray-600 font-medium mb-1">No {taskFilter} tasks</p>
+                    <p className="text-gray-400 text-sm">Try changing the filter or create a new task</p>
+                  </div>
                 ) : (
-                  <div className="space-y-3">
-                    {tasks.map((task) => {
+                  <div className="space-y-4">
+                    {getFilteredTasks().map((task) => {
                       const getPriorityColor = (priority: string) => {
                         switch (priority) {
                           case 'Urgent': return 'bg-red-100 text-red-800 border-red-200';
@@ -1093,27 +1176,47 @@ const ProjectPage: React.FC = () => {
                       return (
                         <div
                           key={task.id}
-                          className={`bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-all duration-200 ${
-                            task.completed ? 'opacity-60' : ''
+                          className={`bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-all duration-200 ${
+                            task.completed ? 'opacity-60 bg-gray-50' : 'hover:border-gray-300'
                           }`}
                         >
-                          <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-start justify-between mb-4">
                             <div className="flex-1">
-                              <h4 className={`font-medium text-gray-900 mb-1 ${task.completed ? 'line-through' : ''}`}>
-                                {task.title}
-                              </h4>
-                              {task.description && (
-                                <p className="text-sm text-gray-600 mb-2">{task.description}</p>
-                              )}
-                              <div className="flex items-center space-x-3 text-xs text-gray-500">
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full font-medium border ${getPriorityColor(task.priority)}`}>
+                              <div className="flex items-center space-x-3 mb-2">
+                                <h4 className={`text-lg font-semibold text-gray-900 ${task.completed ? 'line-through' : ''}`}>
+                                  {task.title}
+                                </h4>
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(task.priority)}`}>
                                   {task.priority}
                                 </span>
-                                <span className={isOverdue(task.dueDate) ? 'text-red-600 font-medium' : ''}>
-                                  Due: {formatDueDate(task.dueDate)}
-                                </span>
+                                {task.completed && (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                                    ✓ Completed
+                                  </span>
+                                )}
+                              </div>
+
+                              {task.description && (
+                                <p className="text-sm text-gray-600 mb-3 leading-relaxed">{task.description}</p>
+                              )}
+
+                              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                                <div className="flex items-center space-x-1">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                  <span className={isOverdue(task.dueDate) ? 'text-red-600 font-medium' : ''}>
+                                    {formatDueDate(task.dueDate)}
+                                  </span>
+                                </div>
+
                                 {task.assignedToName && (
-                                  <span>Assigned to: {task.assignedToName}</span>
+                                  <div className="flex items-center space-x-1">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    </svg>
+                                    <span className="text-gray-600">{task.assignedToName}</span>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1122,7 +1225,7 @@ const ProjectPage: React.FC = () => {
                                 <button
                                   onClick={() => handleToggleTaskCompletion(task.id, task.completed)}
                                   className="bg-green-100 hover:bg-green-200 text-green-700 hover:text-green-800 p-2 rounded-full border-2 border-green-300 hover:border-green-400 transition-all duration-200 shadow-sm hover:shadow-md"
-                                  title="Mark as incomplete"
+                                  title="Mark as in-progress"
                                 >
                                   <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
