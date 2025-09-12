@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../lib/useAuth';
 import { useNavigate } from 'react-router-dom';
+// import TaskReminderSettings from './TaskReminderSettings';
 
 interface TopBarProps {
   title: string;
@@ -66,6 +67,7 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick }) => {
                 </svg>
                 <span>Dashboard</span>
               </button>
+              {/* <TaskReminderSettings /> */}
               <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-blue-50 rounded-xl">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span className="text-sm font-medium text-blue-900 truncate max-w-32">

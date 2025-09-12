@@ -32,6 +32,8 @@ export interface Task {
   dueDate: Date;
   createdAt: Date;
   updatedAt: Date;
+  recurrence?: 'none' | 'daily' | 'weekly' | 'monthly';
+  parentTaskId?: string; // Reference to the original task for recurring tasks
 }
 
 export interface Activity {

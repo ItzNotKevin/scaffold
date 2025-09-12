@@ -101,6 +101,7 @@ const ProjectPage: React.FC = () => {
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<'Low' | 'Medium' | 'High' | 'Urgent'>('Medium');
+  const [newTaskRecurrence, setNewTaskRecurrence] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none');
   const [newTaskAssignedTo, setNewTaskAssignedTo] = useState('');
   const [submittingTask, setSubmittingTask] = useState(false);
   const [companyUsers, setCompanyUsers] = useState<Array<{id: string, name: string, email: string}>>([]);
@@ -114,6 +115,8 @@ const ProjectPage: React.FC = () => {
   const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
   const [newReply, setNewReply] = useState('');
   const [submittingReply, setSubmittingReply] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [reportData, setReportData] = useState<any>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -466,6 +469,7 @@ const ProjectPage: React.FC = () => {
         description: newTaskDescription.trim(),
         dueDate: newTaskDueDate ? new Date(newTaskDueDate) : null,
         priority: newTaskPriority,
+        recurrence: newTaskRecurrence,
         assignedTo: newTaskAssignedTo || null,
         completed: false,
         createdAt: serverTimestamp(),
@@ -478,6 +482,7 @@ const ProjectPage: React.FC = () => {
       setNewTaskDescription('');
       setNewTaskDueDate('');
       setNewTaskPriority('Medium');
+      setNewTaskRecurrence('none');
       setNewTaskAssignedTo('');
       setShowTaskForm(false);
 
@@ -496,16 +501,24 @@ const ProjectPage: React.FC = () => {
 
     try {
       console.log('Toggling task completion:', taskId, 'from', currentStatus, 'to', !currentStatus);
+      
+      // Find the task to check for recurrence
+      const task = tasks.find(t => t.id === taskId);
+      
       await updateDoc(doc(db, 'tasks', taskId), {
         completed: !currentStatus,
         updatedAt: serverTimestamp(),
       });
 
+      // If task is being completed and has recurrence, create a new recurring task
+      if (!currentStatus && task && task.recurrence && task.recurrence !== 'none') {
+        await createRecurringTask(task);
+      }
+
       // Refresh task list
       await loadTasks();
       
       // Show notification
-      const task = tasks.find(t => t.id === taskId);
       if (task) {
         showTaskNotification(
           task.title,
@@ -518,6 +531,65 @@ const ProjectPage: React.FC = () => {
     }
   };
 
+  // Create a new recurring task based on the completed task
+  const createRecurringTask = async (originalTask: any) => {
+    if (!id || !currentUser || !originalTask.recurrence || originalTask.recurrence === 'none') return;
+
+    try {
+      console.log('Creating recurring task for:', originalTask.title, 'with recurrence:', originalTask.recurrence);
+      
+      // Calculate the new due date based on recurrence
+      let newDueDate = new Date();
+      if (originalTask.dueDate) {
+        const originalDueDate = originalTask.dueDate.toDate ? originalTask.dueDate.toDate() : new Date(originalTask.dueDate);
+        newDueDate = new Date(originalDueDate);
+        
+        if (originalTask.recurrence === 'daily') {
+          newDueDate.setDate(newDueDate.getDate() + 1);
+        } else if (originalTask.recurrence === 'weekly') {
+          newDueDate.setDate(newDueDate.getDate() + 7);
+        } else if (originalTask.recurrence === 'monthly') {
+          newDueDate.setMonth(newDueDate.getMonth() + 1);
+        }
+      } else {
+        // If no original due date, set based on recurrence
+        if (originalTask.recurrence === 'daily') {
+          newDueDate.setDate(newDueDate.getDate() + 1);
+        } else if (originalTask.recurrence === 'weekly') {
+          newDueDate.setDate(newDueDate.getDate() + 7);
+        } else if (originalTask.recurrence === 'monthly') {
+          newDueDate.setMonth(newDueDate.getMonth() + 1);
+        }
+      }
+
+      // Create the new recurring task
+      const recurringTaskDoc = await addDoc(collection(db, 'tasks'), {
+        projectId: id,
+        userId: currentUser.uid,
+        title: originalTask.title,
+        description: originalTask.description,
+        dueDate: newDueDate,
+        priority: originalTask.priority,
+        recurrence: originalTask.recurrence,
+        assignedTo: originalTask.assignedTo || null,
+        completed: false,
+        parentTaskId: originalTask.id, // Reference to the original task
+        createdAt: serverTimestamp(),
+      });
+
+      console.log('Recurring task created with ID:', recurringTaskDoc.id);
+      
+      // Show notification about the new recurring task
+      showTaskNotification(
+        originalTask.title,
+        `recurring task created (${originalTask.recurrence})`,
+        projectName
+      );
+    } catch (error) {
+      console.error('Error creating recurring task:', error);
+    }
+  };
+
   // Calculate task statistics
   const getTaskStats = () => {
     const total = tasks.length;
@@ -526,6 +598,195 @@ const ProjectPage: React.FC = () => {
     const progressPercentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     
     return { total, completed, inProgress, progressPercentage };
+  };
+
+  // Generate task completion report
+  const generateTaskReport = () => {
+    const stats = getTaskStats();
+    const completedTasks = tasks.filter(task => task.completed);
+    const incompleteTasks = tasks.filter(task => !task.completed);
+    
+    // Calculate additional metrics
+    const overdueTasks = incompleteTasks.filter(task => {
+      if (!task.dueDate) return false;
+      try {
+        const dueDate = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
+        return dueDate < new Date();
+      } catch {
+        return false;
+      }
+    });
+
+    const priorityBreakdown = {
+      low: tasks.filter(task => task.priority === 'Low').length,
+      medium: tasks.filter(task => task.priority === 'Medium').length,
+      high: tasks.filter(task => task.priority === 'High').length,
+      urgent: tasks.filter(task => task.priority === 'Urgent').length,
+    };
+
+    const recurrenceBreakdown = {
+      none: tasks.filter(task => !task.recurrence || task.recurrence === 'none').length,
+      daily: tasks.filter(task => task.recurrence === 'daily').length,
+      weekly: tasks.filter(task => task.recurrence === 'weekly').length,
+      monthly: tasks.filter(task => task.recurrence === 'monthly').length,
+    };
+
+    const report = {
+      projectName,
+      generatedAt: new Date().toISOString(),
+      summary: {
+        totalTasks: stats.total,
+        completedTasks: stats.completed,
+        incompleteTasks: stats.inProgress,
+        completionPercentage: stats.progressPercentage,
+        overdueTasks: overdueTasks.length,
+      },
+      priorityBreakdown,
+      recurrenceBreakdown,
+      completedTasks: completedTasks.map(task => ({
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        assignedTo: task.assignedTo,
+        dueDate: task.dueDate ? (task.dueDate.toDate ? task.dueDate.toDate().toISOString() : new Date(task.dueDate).toISOString()) : null,
+        completedAt: task.updatedAt ? (task.updatedAt.toDate ? task.updatedAt.toDate().toISOString() : new Date(task.updatedAt).toISOString()) : null,
+        recurrence: task.recurrence || 'none',
+      })),
+      incompleteTasks: incompleteTasks.map(task => ({
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        assignedTo: task.assignedTo,
+        dueDate: task.dueDate ? (task.dueDate.toDate ? task.dueDate.toDate().toISOString() : new Date(task.dueDate).toISOString()) : null,
+        isOverdue: overdueTasks.includes(task),
+        recurrence: task.recurrence || 'none',
+      })),
+    };
+
+    setReportData(report);
+    setShowReport(true);
+  };
+
+  // Export report as CSV
+  const exportToCSV = () => {
+    if (!reportData) return;
+
+    const csvContent = [
+      // Header
+      ['Project Task Completion Report', ''],
+      ['Project Name', reportData.projectName],
+      ['Generated At', new Date(reportData.generatedAt).toLocaleString()],
+      [''],
+      ['Summary', ''],
+      ['Total Tasks', reportData.summary.totalTasks],
+      ['Completed Tasks', reportData.summary.completedTasks],
+      ['Incomplete Tasks', reportData.summary.incompleteTasks],
+      ['Completion Percentage', `${reportData.summary.completionPercentage}%`],
+      ['Overdue Tasks', reportData.summary.overdueTasks],
+      [''],
+      ['Priority Breakdown', ''],
+      ['Low Priority', reportData.priorityBreakdown.low],
+      ['Medium Priority', reportData.priorityBreakdown.medium],
+      ['High Priority', reportData.priorityBreakdown.high],
+      ['Urgent Priority', reportData.priorityBreakdown.urgent],
+      [''],
+      ['Recurrence Breakdown', ''],
+      ['None', reportData.recurrenceBreakdown.none],
+      ['Daily', reportData.recurrenceBreakdown.daily],
+      ['Weekly', reportData.recurrenceBreakdown.weekly],
+      ['Monthly', reportData.recurrenceBreakdown.monthly],
+      [''],
+      ['Completed Tasks', ''],
+      ['Title', 'Description', 'Priority', 'Assigned To', 'Due Date', 'Completed At', 'Recurrence'],
+      ...reportData.completedTasks.map(task => [
+        task.title,
+        task.description || '',
+        task.priority,
+        task.assignedTo || 'Unassigned',
+        task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date',
+        task.completedAt ? new Date(task.completedAt).toLocaleDateString() : 'Unknown',
+        task.recurrence,
+      ]),
+      [''],
+      ['Incomplete Tasks', ''],
+      ['Title', 'Description', 'Priority', 'Assigned To', 'Due Date', 'Is Overdue', 'Recurrence'],
+      ...reportData.incompleteTasks.map(task => [
+        task.title,
+        task.description || '',
+        task.priority,
+        task.assignedTo || 'Unassigned',
+        task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date',
+        task.isOverdue ? 'Yes' : 'No',
+        task.recurrence,
+      ]),
+    ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${reportData.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_task_report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Export report as PDF (simple text-based PDF)
+  const exportToPDF = () => {
+    if (!reportData) return;
+
+    const pdfContent = `
+Project Task Completion Report
+============================
+
+Project: ${reportData.projectName}
+Generated: ${new Date(reportData.generatedAt).toLocaleString()}
+
+SUMMARY
+-------
+Total Tasks: ${reportData.summary.totalTasks}
+Completed Tasks: ${reportData.summary.completedTasks}
+Incomplete Tasks: ${reportData.summary.incompleteTasks}
+Completion Percentage: ${reportData.summary.completionPercentage}%
+Overdue Tasks: ${reportData.summary.overdueTasks}
+
+PRIORITY BREAKDOWN
+------------------
+Low Priority: ${reportData.priorityBreakdown.low}
+Medium Priority: ${reportData.priorityBreakdown.medium}
+High Priority: ${reportData.priorityBreakdown.high}
+Urgent Priority: ${reportData.priorityBreakdown.urgent}
+
+RECURRENCE BREAKDOWN
+--------------------
+None: ${reportData.recurrenceBreakdown.none}
+Daily: ${reportData.recurrenceBreakdown.daily}
+Weekly: ${reportData.recurrenceBreakdown.weekly}
+Monthly: ${reportData.recurrenceBreakdown.monthly}
+
+COMPLETED TASKS
+---------------
+${reportData.completedTasks.map(task => 
+  `• ${task.title} (${task.priority}) - ${task.assignedTo || 'Unassigned'} - ${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}`
+).join('\n')}
+
+INCOMPLETE TASKS
+----------------
+${reportData.incompleteTasks.map(task => 
+  `• ${task.title} (${task.priority}) - ${task.assignedTo || 'Unassigned'} - ${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}${task.isOverdue ? ' - OVERDUE' : ''}`
+).join('\n')}
+    `.trim();
+
+    const blob = new Blob([pdfContent], { type: 'text/plain' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${reportData.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_task_report_${new Date().toISOString().split('T')[0]}.txt`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Filter tasks based on current filter
@@ -1220,6 +1481,19 @@ const ProjectPage: React.FC = () => {
                             <option value="Urgent">Urgent</option>
                           </select>
                         </div>
+                        <div>
+                          <label className="block text-sm font-medium text-blue-900 mb-2">Recurrence</label>
+                          <select
+                            value={newTaskRecurrence}
+                            onChange={(e) => setNewTaskRecurrence(e.target.value as any)}
+                            className="w-full px-4 py-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                          >
+                            <option value="none">None</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                          </select>
+                        </div>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-blue-900 mb-2">Assign To</label>
@@ -1244,6 +1518,7 @@ const ProjectPage: React.FC = () => {
                             setNewTaskDescription('');
                             setNewTaskDueDate('');
                             setNewTaskPriority('Medium');
+                            setNewTaskRecurrence('none');
                             setNewTaskAssignedTo('');
                           }}
                           disabled={submittingTask}
@@ -1291,6 +1566,15 @@ const ProjectPage: React.FC = () => {
                           {getTaskStats().progressPercentage}%
                         </span>
                       </div>
+                      <button
+                        onClick={generateTaskReport}
+                        className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-1"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Report</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1400,6 +1684,11 @@ const ProjectPage: React.FC = () => {
                                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(task.priority)}`}>
                                   {task.priority}
                                 </span>
+                                {task.recurrence && task.recurrence !== 'none' && (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                                    🔄 {task.recurrence === 'daily' ? 'Daily' : task.recurrence === 'weekly' ? 'Weekly' : 'Monthly'}
+                                  </span>
+                                )}
                                 {task.completed && (
                                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
                                     ✓ Completed
@@ -1648,6 +1937,246 @@ const ProjectPage: React.FC = () => {
                 )}
               </div>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Task Completion Report Modal */}
+      {showReport && reportData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Task Completion Report</h2>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={exportToCSV}
+                  className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Export CSV</span>
+                </button>
+                <button
+                  onClick={exportToPDF}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Export PDF</span>
+                </button>
+                <button
+                  onClick={() => setShowReport(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              {/* Project Info */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{reportData.projectName}</h3>
+                <p className="text-sm text-gray-500">
+                  Generated on {new Date(reportData.generatedAt).toLocaleString()}
+                </p>
+              </div>
+
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <div className="text-2xl font-bold text-blue-600">{reportData.summary.totalTasks}</div>
+                  <div className="text-sm text-blue-800">Total Tasks</div>
+                </div>
+                <div className="bg-green-50 rounded-xl p-4">
+                  <div className="text-2xl font-bold text-green-600">{reportData.summary.completedTasks}</div>
+                  <div className="text-sm text-green-800">Completed</div>
+                </div>
+                <div className="bg-orange-50 rounded-xl p-4">
+                  <div className="text-2xl font-bold text-orange-600">{reportData.summary.incompleteTasks}</div>
+                  <div className="text-sm text-orange-800">In Progress</div>
+                </div>
+                <div className="bg-red-50 rounded-xl p-4">
+                  <div className="text-2xl font-bold text-red-600">{reportData.summary.overdueTasks}</div>
+                  <div className="text-sm text-red-800">Overdue</div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">Completion Progress</span>
+                  <span className="text-sm font-bold text-gray-900">{reportData.summary.completionPercentage}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-gradient-to-r from-blue-500 to-green-500 h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${reportData.summary.completionPercentage}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Breakdown Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                {/* Priority Breakdown */}
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Priority Breakdown</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Low</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-green-500 h-2 rounded-full"
+                            style={{ width: `${(reportData.priorityBreakdown.low / reportData.summary.totalTasks) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{reportData.priorityBreakdown.low}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Medium</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-yellow-500 h-2 rounded-full"
+                            style={{ width: `${(reportData.priorityBreakdown.medium / reportData.summary.totalTasks) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{reportData.priorityBreakdown.medium}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">High</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-orange-500 h-2 rounded-full"
+                            style={{ width: `${(reportData.priorityBreakdown.high / reportData.summary.totalTasks) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{reportData.priorityBreakdown.high}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Urgent</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-red-500 h-2 rounded-full"
+                            style={{ width: `${(reportData.priorityBreakdown.urgent / reportData.summary.totalTasks) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{reportData.priorityBreakdown.urgent}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recurrence Breakdown */}
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Recurrence Breakdown</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">None</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-gray-500 h-2 rounded-full"
+                            style={{ width: `${(reportData.recurrenceBreakdown.none / reportData.summary.totalTasks) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{reportData.recurrenceBreakdown.none}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Daily</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-purple-500 h-2 rounded-full"
+                            style={{ width: `${(reportData.recurrenceBreakdown.daily / reportData.summary.totalTasks) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{reportData.recurrenceBreakdown.daily}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Weekly</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-500 h-2 rounded-full"
+                            style={{ width: `${(reportData.recurrenceBreakdown.weekly / reportData.summary.totalTasks) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{reportData.recurrenceBreakdown.weekly}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Monthly</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-indigo-500 h-2 rounded-full"
+                            style={{ width: `${(reportData.recurrenceBreakdown.monthly / reportData.summary.totalTasks) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium text-gray-900">{reportData.recurrenceBreakdown.monthly}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Task Lists */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Completed Tasks */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Completed Tasks ({reportData.completedTasks.length})</h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {reportData.completedTasks.map((task, index) => (
+                      <div key={index} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-green-900">{task.title}</span>
+                          <span className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded-full">{task.priority}</span>
+                        </div>
+                        <div className="text-xs text-green-700">
+                          {task.assignedTo && <span>Assigned to: {task.assignedTo}</span>}
+                          {task.dueDate && <span> • Due: {new Date(task.dueDate).toLocaleDateString()}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Incomplete Tasks */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Incomplete Tasks ({reportData.incompleteTasks.length})</h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {reportData.incompleteTasks.map((task, index) => (
+                      <div key={index} className={`border rounded-lg p-3 ${task.isOverdue ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-sm font-medium ${task.isOverdue ? 'text-red-900' : 'text-orange-900'}`}>{task.title}</span>
+                          <div className="flex items-center space-x-1">
+                            <span className={`text-xs px-2 py-1 rounded-full ${task.isOverdue ? 'text-red-700 bg-red-100' : 'text-orange-700 bg-orange-100'}`}>{task.priority}</span>
+                            {task.isOverdue && <span className="text-xs text-red-600 font-medium">OVERDUE</span>}
+                          </div>
+                        </div>
+                        <div className={`text-xs ${task.isOverdue ? 'text-red-700' : 'text-orange-700'}`}>
+                          {task.assignedTo && <span>Assigned to: {task.assignedTo}</span>}
+                          {task.dueDate && <span> • Due: {new Date(task.dueDate).toLocaleDateString()}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
