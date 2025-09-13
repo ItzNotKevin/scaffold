@@ -19,7 +19,7 @@ const LoginPage: React.FC = () => {
 
     try {
       if (isSignUp) {
-        await signup(email, password, displayName);
+        await signup(email, password, displayName, 'client');
       } else {
         await login(email, password);
       }

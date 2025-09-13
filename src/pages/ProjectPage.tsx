@@ -117,6 +117,24 @@ const ProjectPage: React.FC = () => {
   const [submittingReply, setSubmittingReply] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [reportData, setReportData] = useState<any>(null);
+  const [showFinancialForm, setShowFinancialForm] = useState(false);
+  const [showFinancialReport, setShowFinancialReport] = useState(false);
+  const [budget, setBudget] = useState<number>(0);
+  const [actualCost, setActualCost] = useState<number>(0);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [submittingFinancial, setSubmittingFinancial] = useState(false);
+  
+  // Expense management state
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [expensesLoading, setExpensesLoading] = useState(true);
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [newExpenseCategory, setNewExpenseCategory] = useState<'materials' | 'labor' | 'equipment' | 'permits' | 'utilities' | 'other'>('materials');
+  const [newExpenseDescription, setNewExpenseDescription] = useState('');
+  const [newExpenseAmount, setNewExpenseAmount] = useState<number>(0);
+  const [newExpenseDate, setNewExpenseDate] = useState<string>('');
+  const [submittingExpense, setSubmittingExpense] = useState(false);
+  const [expenseFilter, setExpenseFilter] = useState<'all' | 'materials' | 'labor' | 'equipment' | 'permits' | 'utilities' | 'other'>('all');
 
   useEffect(() => {
     const load = async () => {
@@ -132,10 +150,55 @@ const ProjectPage: React.FC = () => {
         setEditDescription(data.description || '');
         setEditPhase((data.phase as Phase) || 'Sales');
         setCompanyId(data.companyId || '');
+        
+        // Load financial data
+        setBudget(data.budget || 0);
+        setActualCost(data.actualCost || 0);
+        setStartDate(data.startDate ? (data.startDate.toDate ? data.startDate.toDate().toISOString().split('T')[0] : new Date(data.startDate).toISOString().split('T')[0]) : '');
+        setEndDate(data.endDate ? (data.endDate.toDate ? data.endDate.toDate().toISOString().split('T')[0] : new Date(data.endDate).toISOString().split('T')[0]) : '');
       }
       setLoading(false);
     };
     load();
+  }, [id]);
+
+  // Fetch expenses with real-time updates
+  useEffect(() => {
+    if (!id) return;
+
+    const expensesRef = collection(db, 'expenses');
+    const q = query(expensesRef, where('projectId', '==', id));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log('Expenses snapshot received:', snapshot.docs.length, 'documents');
+      const expensesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log('Expenses data:', expensesData);
+      
+      // Sort by date in descending order (newest first)
+      expensesData.sort((a, b) => {
+        const dateA = a.date ? (a.date.toDate ? a.date.toDate() : new Date(a.date)) : new Date(0);
+        const dateB = b.date ? (b.date.toDate ? b.date.toDate() : new Date(b.date)) : new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      setExpenses(expensesData);
+      setExpensesLoading(false);
+      
+      // Calculate total actual cost from expenses
+      const totalExpenses = expensesData.reduce((sum, expense) => sum + (expense.amount || 0), 0);
+      setActualCost(totalExpenses);
+      
+      console.log('Expenses loading completed, total:', totalExpenses);
+    }, (error) => {
+      console.error('Error fetching expenses:', error);
+      setExpensesLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [id]);
 
   // Fetch check-ins with real-time updates
@@ -795,6 +858,214 @@ ${reportData.incompleteTasks.map(task =>
     return tasks.filter(task => taskFilter === 'completed' ? task.completed : !task.completed);
   };
 
+  // Financial management functions
+  const handleUpdateFinancials = async () => {
+    if (!id || !currentUser) return;
+
+    setSubmittingFinancial(true);
+    try {
+      await updateDoc(doc(db, 'projects', id), {
+        budget: budget,
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
+        updatedAt: serverTimestamp(),
+      });
+
+      setShowFinancialForm(false);
+      showProjectNotification('Financial information updated successfully', projectName);
+    } catch (error) {
+      console.error('Error updating financial information:', error);
+    } finally {
+      setSubmittingFinancial(false);
+    }
+  };
+
+  const generateFinancialReport = () => {
+    const variance = budget - actualCost;
+    const variancePercentage = budget > 0 ? ((variance / budget) * 100) : 0;
+    const isOverBudget = actualCost > budget;
+
+    const report = {
+      projectName,
+      generatedAt: new Date().toISOString(),
+      budget,
+      actualCost,
+      variance,
+      variancePercentage: Math.round(variancePercentage * 100) / 100,
+      isOverBudget,
+      startDate: startDate ? new Date(startDate).toLocaleDateString() : 'Not set',
+      endDate: endDate ? new Date(endDate).toLocaleDateString() : 'Not set',
+      remainingBudget: Math.max(0, budget - actualCost),
+      budgetUtilization: budget > 0 ? Math.round((actualCost / budget) * 100) : 0,
+    };
+
+    setReportData(report);
+    setShowFinancialReport(true);
+  };
+
+  const exportFinancialToCSV = () => {
+    if (!reportData) return;
+
+    const csvContent = [
+      ['Project Financial Report', ''],
+      ['Project Name', reportData.projectName],
+      ['Generated At', new Date(reportData.generatedAt).toLocaleString()],
+      [''],
+      ['Financial Summary', ''],
+      ['Budget', `$${reportData.budget.toLocaleString()}`],
+      ['Actual Cost', `$${reportData.actualCost.toLocaleString()}`],
+      ['Variance', `$${reportData.variance.toLocaleString()}`],
+      ['Variance Percentage', `${reportData.variancePercentage}%`],
+      ['Remaining Budget', `$${reportData.remainingBudget.toLocaleString()}`],
+      ['Budget Utilization', `${reportData.budgetUtilization}%`],
+      ['Status', reportData.isOverBudget ? 'Over Budget' : 'Within Budget'],
+      [''],
+      ['Project Timeline', ''],
+      ['Start Date', reportData.startDate],
+      ['End Date', reportData.endDate],
+    ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${reportData.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_financial_report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportFinancialToPDF = () => {
+    if (!reportData) return;
+
+    const pdfContent = `
+Project Financial Report
+======================
+
+Project: ${reportData.projectName}
+Generated: ${new Date(reportData.generatedAt).toLocaleString()}
+
+FINANCIAL SUMMARY
+-----------------
+Budget: $${reportData.budget.toLocaleString()}
+Actual Cost: $${reportData.actualCost.toLocaleString()}
+Variance: $${reportData.variance.toLocaleString()} (${reportData.variancePercentage}%)
+Remaining Budget: $${reportData.remainingBudget.toLocaleString()}
+Budget Utilization: ${reportData.budgetUtilization}%
+Status: ${reportData.isOverBudget ? 'OVER BUDGET' : 'Within Budget'}
+
+PROJECT TIMELINE
+----------------
+Start Date: ${reportData.startDate}
+End Date: ${reportData.endDate}
+
+ANALYSIS
+--------
+${reportData.isOverBudget 
+  ? `⚠️  WARNING: Project is over budget by $${Math.abs(reportData.variance).toLocaleString()} (${Math.abs(reportData.variancePercentage)}%)`
+  : `✅ Project is within budget with $${reportData.remainingBudget.toLocaleString()} remaining`
+}
+    `.trim();
+
+    const blob = new Blob([pdfContent], { type: 'text/plain' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${reportData.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_financial_report_${new Date().toISOString().split('T')[0]}.txt`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Expense management functions
+  const handleAddExpense = async () => {
+    if (!id || !currentUser || !newExpenseDescription.trim() || newExpenseAmount <= 0) return;
+
+    setSubmittingExpense(true);
+    try {
+      await addDoc(collection(db, 'expenses'), {
+        projectId: id,
+        category: newExpenseCategory,
+        description: newExpenseDescription.trim(),
+        amount: newExpenseAmount,
+        date: newExpenseDate ? new Date(newExpenseDate) : new Date(),
+        userId: currentUser.uid,
+        userName: currentUser.displayName || currentUser.email || 'Unknown User',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Reset form
+      setNewExpenseCategory('materials');
+      setNewExpenseDescription('');
+      setNewExpenseAmount(0);
+      setNewExpenseDate('');
+      setShowExpenseForm(false);
+      
+      showProjectNotification('Expense added successfully', projectName);
+    } catch (error) {
+      console.error('Error adding expense:', error);
+    } finally {
+      setSubmittingExpense(false);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!id || !currentUser) return;
+
+    try {
+      await deleteDoc(doc(db, 'expenses', expenseId));
+      showProjectNotification('Expense deleted successfully', projectName);
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+    }
+  };
+
+  const getExpenseCategoryColor = (category: string) => {
+    const colors = {
+      materials: 'bg-blue-100 text-blue-800 border-blue-200',
+      labor: 'bg-green-100 text-green-800 border-green-200',
+      equipment: 'bg-orange-100 text-orange-800 border-orange-200',
+      permits: 'bg-purple-100 text-purple-800 border-purple-200',
+      utilities: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      other: 'bg-gray-100 text-gray-800 border-gray-200',
+    };
+    return colors[category as keyof typeof colors] || colors.other;
+  };
+
+  const getExpenseCategoryIcon = (category: string) => {
+    const icons = {
+      materials: '🔨',
+      labor: '👷',
+      equipment: '🚜',
+      permits: '📋',
+      utilities: '⚡',
+      other: '💰',
+    };
+    return icons[category as keyof typeof icons] || icons.other;
+  };
+
+  const getFilteredExpenses = () => {
+    if (expenseFilter === 'all') return expenses;
+    return expenses.filter(expense => expense.category === expenseFilter);
+  };
+
+  const getExpensesByCategory = () => {
+    const categories = ['materials', 'labor', 'equipment', 'permits', 'utilities', 'other'];
+    return categories.map(category => {
+      const categoryExpenses = expenses.filter(expense => expense.category === category);
+      const total = categoryExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
+      return {
+        category,
+        count: categoryExpenses.length,
+        total,
+        percentage: actualCost > 0 ? (total / actualCost) * 100 : 0
+      };
+    }).filter(item => item.count > 0);
+  };
+
   // Submit a new comment
   const handleSubmitComment = async (taskId: string) => {
     if (!currentUser || !newComment.trim()) return;
@@ -1184,6 +1455,242 @@ ${reportData.incompleteTasks.map(task =>
               </div>
             </div>
           )}
+        </div>
+
+        {/* Financial Tracking Section */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Financial Tracking</h3>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowExpenseForm(true)}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                <span>Add Expense</span>
+              </button>
+              <button
+                onClick={() => setShowFinancialForm(true)}
+                className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors flex items-center space-x-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span>Update Budget</span>
+              </button>
+              <button
+                onClick={generateFinancialReport}
+                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Financial Report</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Financial Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 rounded-xl p-4">
+              <div className="text-2xl font-bold text-blue-600">${budget.toLocaleString()}</div>
+              <div className="text-sm text-blue-800">Total Budget</div>
+            </div>
+            <div className="bg-orange-50 rounded-xl p-4">
+              <div className="text-2xl font-bold text-orange-600">${actualCost.toLocaleString()}</div>
+              <div className="text-sm text-orange-800">Actual Cost</div>
+            </div>
+            <div className={`rounded-xl p-4 ${(budget - actualCost) >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+              <div className={`text-2xl font-bold ${(budget - actualCost) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                ${Math.abs(budget - actualCost).toLocaleString()}
+              </div>
+              <div className={`text-sm ${(budget - actualCost) >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+                {budget >= actualCost ? 'Remaining' : 'Over Budget'}
+              </div>
+            </div>
+            <div className="bg-purple-50 rounded-xl p-4">
+              <div className="text-2xl font-bold text-purple-600">
+                {budget > 0 ? Math.round((actualCost / budget) * 100) : 0}%
+              </div>
+              <div className="text-sm text-purple-800">Budget Used</div>
+            </div>
+          </div>
+
+          {/* Budget vs Actual Progress Bar */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-700">Budget Utilization</span>
+              <span className="text-sm font-bold text-gray-900">
+                {budget > 0 ? Math.round((actualCost / budget) * 100) : 0}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div
+                className={`h-3 rounded-full transition-all duration-300 ${
+                  actualCost > budget 
+                    ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                    : 'bg-gradient-to-r from-blue-500 to-green-500'
+                }`}
+                style={{ 
+                  width: `${budget > 0 ? Math.min((actualCost / budget) * 100, 100) : 0}%` 
+                }}
+              ></div>
+            </div>
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>$0</span>
+              <span>${budget.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* Project Timeline */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-gray-50 rounded-xl p-4">
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">Project Timeline</h4>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Start Date:</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {startDate ? new Date(startDate).toLocaleDateString() : 'Not set'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">End Date:</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {endDate ? new Date(endDate).toLocaleDateString() : 'Not set'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">Financial Status</h4>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Status:</span>
+                  <span className={`text-sm font-medium ${budget >= actualCost ? 'text-green-600' : 'text-red-600'}`}>
+                    {budget >= actualCost ? 'Within Budget' : 'Over Budget'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Variance:</span>
+                  <span className={`text-sm font-medium ${budget >= actualCost ? 'text-green-600' : 'text-red-600'}`}>
+                    {budget >= actualCost ? '+' : '-'}${Math.abs(budget - actualCost).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Expenses List */}
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-lg font-semibold text-gray-900">Expenses ({expenses.length})</h4>
+              {expenses.length > 0 && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-500">Filter by category:</span>
+                  <select
+                    value={expenseFilter}
+                    onChange={(e) => setExpenseFilter(e.target.value as any)}
+                    className="px-3 py-1 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Categories</option>
+                    <option value="materials">Materials</option>
+                    <option value="labor">Labor</option>
+                    <option value="equipment">Equipment</option>
+                    <option value="permits">Permits</option>
+                    <option value="utilities">Utilities</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {expensesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : expenses.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="text-gray-400 mb-2">
+                  <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                  </svg>
+                </div>
+                <p className="text-gray-500 mb-4">No expenses recorded yet</p>
+                <button
+                  onClick={() => setShowExpenseForm(true)}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Add First Expense
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {getFilteredExpenses().map((expense) => (
+                  <div key={expense.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="text-2xl">{getExpenseCategoryIcon(expense.category)}</div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <h5 className="text-sm font-medium text-gray-900">{expense.description}</h5>
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getExpenseCategoryColor(expense.category)}`}>
+                              {expense.category.charAt(0).toUpperCase() + expense.category.slice(1)}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-4 text-xs text-gray-500">
+                            <span>${expense.amount.toLocaleString()}</span>
+                            <span>{expense.date ? new Date(expense.date.toDate ? expense.date.toDate() : expense.date).toLocaleDateString() : 'No date'}</span>
+                            <span>by {expense.userName || 'Unknown User'}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteExpense(expense.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        title="Delete expense"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Expense Categories Breakdown */}
+            {expenses.length > 0 && (
+              <div className="mt-6">
+                <h5 className="text-sm font-semibold text-gray-900 mb-3">Expenses by Category</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {getExpensesByCategory().map((category) => (
+                    <div key={category.category} className="bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-lg">{getExpenseCategoryIcon(category.category)}</span>
+                          <span className="text-sm font-medium text-gray-900 capitalize">{category.category}</span>
+                        </div>
+                        <span className="text-sm font-bold text-gray-900">${category.total.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>{category.count} expense{category.count !== 1 ? 's' : ''}</span>
+                        <span>{category.percentage.toFixed(1)}% of total</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+                        <div
+                          className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${category.percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Tabs */}
@@ -2175,6 +2682,331 @@ ${reportData.incompleteTasks.map(task =>
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Financial Form Modal */}
+      {showFinancialForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Update Budget & Timeline</h2>
+              <button
+                onClick={() => setShowFinancialForm(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Budget ($)</label>
+                  <input
+                    type="number"
+                    value={budget}
+                    onChange={(e) => setBudget(Number(e.target.value))}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    placeholder="Enter project budget"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-sm text-blue-800">
+                      Actual costs are automatically calculated from your expenses. Add expenses using the "Add Expense" button.
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowFinancialForm(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateFinancials}
+                  disabled={submittingFinancial}
+                  className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {submittingFinancial && (
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  <span>{submittingFinancial ? 'Updating...' : 'Update Financials'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Expense Modal */}
+      {showExpenseForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Add Expense</h2>
+              <button
+                onClick={() => setShowExpenseForm(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <select
+                    value={newExpenseCategory}
+                    onChange={(e) => setNewExpenseCategory(e.target.value as any)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  >
+                    <option value="materials">🔨 Materials</option>
+                    <option value="labor">👷 Labor</option>
+                    <option value="equipment">🚜 Equipment</option>
+                    <option value="permits">📋 Permits</option>
+                    <option value="utilities">⚡ Utilities</option>
+                    <option value="other">💰 Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <input
+                    type="text"
+                    value={newExpenseDescription}
+                    onChange={(e) => setNewExpenseDescription(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    placeholder="Enter expense description"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Amount ($)</label>
+                  <input
+                    type="number"
+                    value={newExpenseAmount}
+                    onChange={(e) => setNewExpenseAmount(Number(e.target.value))}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    placeholder="Enter expense amount"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                  <input
+                    type="date"
+                    value={newExpenseDate}
+                    onChange={(e) => setNewExpenseDate(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowExpenseForm(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddExpense}
+                  disabled={submittingExpense || !newExpenseDescription.trim() || newExpenseAmount <= 0}
+                  className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {submittingExpense && (
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  <span>{submittingExpense ? 'Adding...' : 'Add Expense'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Financial Report Modal */}
+      {showFinancialReport && reportData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Financial Report</h2>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={exportFinancialToCSV}
+                  className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Export CSV</span>
+                </button>
+                <button
+                  onClick={exportFinancialToPDF}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Export PDF</span>
+                </button>
+                <button
+                  onClick={() => setShowFinancialReport(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              {/* Project Info */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{reportData.projectName}</h3>
+                <p className="text-sm text-gray-500">
+                  Generated on {new Date(reportData.generatedAt).toLocaleString()}
+                </p>
+              </div>
+
+              {/* Financial Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <div className="text-2xl font-bold text-blue-600">${reportData.budget.toLocaleString()}</div>
+                  <div className="text-sm text-blue-800">Total Budget</div>
+                </div>
+                <div className="bg-orange-50 rounded-xl p-4">
+                  <div className="text-2xl font-bold text-orange-600">${reportData.actualCost.toLocaleString()}</div>
+                  <div className="text-sm text-orange-800">Actual Cost</div>
+                </div>
+                <div className={`rounded-xl p-4 ${reportData.isOverBudget ? 'bg-red-50' : 'bg-green-50'}`}>
+                  <div className={`text-2xl font-bold ${reportData.isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                    ${Math.abs(reportData.variance).toLocaleString()}
+                  </div>
+                  <div className={`text-sm ${reportData.isOverBudget ? 'text-red-800' : 'text-green-800'}`}>
+                    {reportData.isOverBudget ? 'Over Budget' : 'Remaining'}
+                  </div>
+                </div>
+                <div className="bg-purple-50 rounded-xl p-4">
+                  <div className="text-2xl font-bold text-purple-600">{reportData.budgetUtilization}%</div>
+                  <div className="text-sm text-purple-800">Budget Used</div>
+                </div>
+              </div>
+
+              {/* Budget vs Actual Progress Bar */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">Budget Utilization</span>
+                  <span className="text-sm font-bold text-gray-900">{reportData.budgetUtilization}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className={`h-3 rounded-full transition-all duration-300 ${
+                      reportData.isOverBudget 
+                        ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                        : 'bg-gradient-to-r from-blue-500 to-green-500'
+                    }`}
+                    style={{ width: `${Math.min(reportData.budgetUtilization, 100)}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>$0</span>
+                  <span>${reportData.budget.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Financial Analysis */}
+              <div className="bg-gray-50 rounded-xl p-6 mb-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Financial Analysis</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-700 mb-3">Budget Performance</h5>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Variance:</span>
+                        <span className={`text-sm font-medium ${reportData.isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                          ${reportData.variance.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Variance %:</span>
+                        <span className={`text-sm font-medium ${reportData.isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                          {reportData.variancePercentage}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Status:</span>
+                        <span className={`text-sm font-medium ${reportData.isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                          {reportData.isOverBudget ? 'Over Budget' : 'Within Budget'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-700 mb-3">Project Timeline</h5>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Start Date:</span>
+                        <span className="text-sm font-medium text-gray-900">{reportData.startDate}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">End Date:</span>
+                        <span className="text-sm font-medium text-gray-900">{reportData.endDate}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recommendations */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                <h5 className="text-sm font-semibold text-yellow-800 mb-2">Recommendations</h5>
+                <p className="text-sm text-yellow-700">
+                  {reportData.isOverBudget 
+                    ? `⚠️ This project is over budget by $${Math.abs(reportData.variance).toLocaleString()}. Consider reviewing expenses and identifying cost-saving opportunities.`
+                    : `✅ This project is within budget with $${reportData.remainingBudget.toLocaleString()} remaining. Continue monitoring costs to maintain budget compliance.`
+                  }
+                </p>
               </div>
             </div>
           </div>

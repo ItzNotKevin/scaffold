@@ -11,12 +11,14 @@ import ProjectPage from './pages/ProjectPage.tsx';
 import DebugPage from './pages/DebugPage';
 
 function App() {
+  console.log('App: Rendering');
+  
   return (
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
           <PushNotificationProvider>
-            {/* <TaskReminderProvider> */}
+            <div className="min-h-screen bg-gray-50">
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/debug" element={<DebugPage />} />
@@ -38,7 +40,7 @@ function App() {
                 />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
-            {/* </TaskReminderProvider> */}
+            </div>
           </PushNotificationProvider>
         </AuthProvider>
       </BrowserRouter>

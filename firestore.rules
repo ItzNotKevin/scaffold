@@ -1,58 +1,156 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can read/write their own user document
+    // Helper functions for role-based access
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    function isStaff() {
+      return isAuthenticated() && getUserRole() == 'staff';
+    }
+    
+    function isClient() {
+      return isAuthenticated() && getUserRole() == 'client';
+    }
+    
+    function isAdminOrStaff() {
+      return isAdmin() || isStaff();
+    }
+    
+    function getUserCompanyId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId;
+    }
+    
+    function belongsToCompany(companyId) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/companies/$(companyId)) &&
+        (get(/databases/$(database)/documents/companies/$(companyId)).data.ownerId == request.auth.uid ||
+         request.auth.uid in get(/databases/$(database)/documents/companies/$(companyId)).data.members);
+    }
+    
+    function isSameCompany(userId) {
+      return isAuthenticated() && 
+        getUserCompanyId() != null &&
+        getUserCompanyId() == get(/databases/$(database)/documents/users/$(userId)).data.companyId;
+    }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserCompanyId() == 'super-admin';
+    }
+    
+    function belongsToProject(projectId) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/projects/$(projectId)) &&
+        belongsToCompany(get(/databases/$(database)/documents/projects/$(projectId)).data.companyId);
+    }
+    
+    // Users collection
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Users can read their own document
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Admins can read users from their own company
+      allow read: if isAdmin() && isSameCompany(userId);
+      
+      // Super admin can read all users
+      allow read: if isSuperAdmin();
+      
+      // Only admins can create/update user documents (for role assignment)
+      allow create: if isAdmin() && isSameCompany(userId);
+      allow create: if isSuperAdmin();
+      
+      // Users can update their own profile, admins can update users in their company
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAdmin() && isSameCompany(userId);
+      allow update: if isSuperAdmin();
+      
+      // Only admins can delete users in their company
+      allow delete: if isAdmin() && isSameCompany(userId);
+      allow delete: if isSuperAdmin();
     }
     
-    // Companies: users can read/write if they're the owner or a member
+    // Companies collection
     match /companies/{companyId} {
-      allow read, write: if request.auth != null && 
-        (resource.data.ownerId == request.auth.uid || 
-         request.auth.uid in resource.data.members);
-      allow create: if request.auth != null && 
-        request.auth.uid == request.resource.data.ownerId;
+      // Super admin can do everything with all companies
+      allow read, write: if isSuperAdmin();
+      
+      // Admins can manage their own company
+      allow read, write: if isAdmin() && belongsToCompany(companyId);
+      
+      // Staff and clients can read their own company info
+      allow read: if belongsToCompany(companyId);
+      
+      // Only admins can create companies
+      allow create: if isAdmin();
     }
     
-    // Projects: users can read/write if they belong to the project's company
+    // Projects collection
     match /projects/{projectId} {
-      allow read, write: if request.auth != null && 
-        exists(/databases/$(database)/documents/companies/$(resource.data.companyId)) &&
-        (get(/databases/$(database)/documents/companies/$(resource.data.companyId)).data.ownerId == request.auth.uid ||
-         request.auth.uid in get(/databases/$(database)/documents/companies/$(resource.data.companyId)).data.members);
-      allow create: if request.auth != null && 
-        exists(/databases/$(database)/documents/companies/$(request.resource.data.companyId)) &&
-        (get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.ownerId == request.auth.uid ||
-         request.auth.uid in get(/databases/$(database)/documents/companies/$(request.resource.data.companyId)).data.members);
+      // Super admin can do everything with all projects
+      allow read, write: if isSuperAdmin();
+      
+      // Admins can manage projects in their company
+      allow read, write: if isAdmin() && belongsToProject(projectId);
+      
+      // Staff can read/write projects they have access to
+      allow read, write: if isStaff() && belongsToProject(projectId);
+      
+      // Clients can only read projects they have access to
+      allow read: if isClient() && belongsToProject(projectId);
+      
+      // Only admins and staff can create projects in their company
+      allow create: if isAdminOrStaff() && belongsToCompany(request.resource.data.companyId);
     }
     
-    // Check-ins: users can read/write if they belong to the project's company
+    // Check-ins collection
     match /checkins/{checkinId} {
-      allow read, write: if request.auth != null && 
-        exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        exists(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.companyId)) &&
-        (get(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.companyId)).data.ownerId == request.auth.uid ||
-         request.auth.uid in get(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.companyId)).data.members);
-      allow create: if request.auth != null && 
-        exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
-        exists(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.companyId)) &&
-        (get(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.companyId)).data.ownerId == request.auth.uid ||
-         request.auth.uid in get(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.companyId)).data.members);
+      // Admins can do everything with check-ins
+      allow read, write: if isAdmin();
+      
+      // Staff can read/write check-ins for projects they have access to
+      allow read, write: if isStaff() && belongsToProject(resource.data.projectId);
+      allow create: if isStaff() && belongsToProject(request.resource.data.projectId);
+      
+      // Clients can only read check-ins for projects they have access to
+      allow read: if isClient() && belongsToProject(resource.data.projectId);
     }
     
-    // Feedback: users can read/write if they belong to the project's company
+    // Feedback collection
     match /feedback/{feedbackId} {
-      allow read, write: if request.auth != null && 
-        exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        exists(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.companyId)) &&
-        (get(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.companyId)).data.ownerId == request.auth.uid ||
-         request.auth.uid in get(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.companyId)).data.members);
-      allow create: if request.auth != null && 
-        exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) &&
-        exists(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.companyId)) &&
-        (get(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.companyId)).data.ownerId == request.auth.uid ||
-         request.auth.uid in get(/databases/$(database)/documents/companies/$(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.companyId)).data.members);
+      // Admins can do everything with feedback
+      allow read, write: if isAdmin();
+      
+      // Staff can read/write feedback for projects they have access to
+      allow read, write: if isStaff() && belongsToProject(resource.data.projectId);
+      allow create: if isStaff() && belongsToProject(request.resource.data.projectId);
+      
+      // Clients can read feedback and create their own feedback for projects they have access to
+      allow read: if isClient() && belongsToProject(resource.data.projectId);
+      allow create: if isClient() && 
+        belongsToProject(request.resource.data.projectId) && 
+        request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Expenses collection (if it exists)
+    match /expenses/{expenseId} {
+      // Admins can do everything with expenses
+      allow read, write: if isAdmin();
+      
+      // Staff can read/write expenses for projects they have access to
+      allow read, write: if isStaff() && belongsToProject(resource.data.projectId);
+      allow create: if isStaff() && belongsToProject(request.resource.data.projectId);
+      
+      // Clients can only read expenses for projects they have access to
+      allow read: if isClient() && belongsToProject(resource.data.projectId);
     }
   }
 }

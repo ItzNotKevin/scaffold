@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import Layout from '../components/Layout';
 import { useAuth } from '../lib/useAuth';
 import { useNavigate } from 'react-router-dom';
+// Define UserRole type locally
+type UserRole = 'admin' | 'staff' | 'client';
 
 const AuthPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [displayName, setDisplayName] = useState('');
+  const [companyId, setCompanyId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,11 +21,11 @@ const AuthPage: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      if (isSignUp) {
-        await signup(email, password, displayName);
-      } else {
-        await login(email, password);
-      }
+        if (isSignUp) {
+          await signup(email, password, displayName, 'client', companyId || undefined);
+        } else {
+          await login(email, password);
+        }
       navigate('/');
     } catch (err: any) {
       setError(err.message);
@@ -59,10 +61,15 @@ const AuthPage: React.FC = () => {
   };
 
   return (
-    <Layout title={isSignUp ? 'Sign Up' : 'Sign In'}>
-      <div className="max-w-sm mx-auto">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="max-w-sm w-full">
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               {isSignUp ? 'Create Account' : 'Welcome Back'}
             </h2>
@@ -79,17 +86,53 @@ const AuthPage: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
-              <div>
-                <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                <input 
-                  id="displayName" 
-                  type="text" 
-                  value={displayName} 
-                  onChange={(e) => setDisplayName(e.target.value)} 
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" 
-                  placeholder="Enter your full name" 
-                />
-              </div>
+              <>
+                <div>
+                  <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                  <input 
+                    id="displayName" 
+                    type="text" 
+                    value={displayName} 
+                    onChange={(e) => setDisplayName(e.target.value)} 
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" 
+                    placeholder="Enter your full name" 
+                  />
+                </div>
+                
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="flex items-start space-x-3">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-blue-900">How Roles Work</h4>
+                      <ul className="text-xs text-blue-800 mt-1 space-y-1">
+                        <li>• <strong>Create a company:</strong> You become the admin</li>
+                        <li>• <strong>Join a company:</strong> You become staff</li>
+                        <li>• <strong>Invited to a project:</strong> You become a client for that project</li>
+                        <li>• <strong>New accounts:</strong> Start as clients until you join a company</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <label htmlFor="companyId" className="block text-sm font-medium text-gray-700 mb-2">Company ID (Optional)</label>
+                  <input 
+                    id="companyId" 
+                    type="text" 
+                    value={companyId} 
+                    onChange={(e) => setCompanyId(e.target.value)} 
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" 
+                    placeholder="Enter company ID if you have one" 
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    If you don't have a company ID, leave this blank and an admin can add you later.
+                  </p>
+                </div>
+              </>
             )}
 
             <div>
@@ -167,7 +210,7 @@ const AuthPage: React.FC = () => {
           )}
         </div>
       </div>
-    </Layout>
+    </div>
   );
 };
 

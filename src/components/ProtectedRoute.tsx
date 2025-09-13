@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../lib/useAuth';
-import LoginPage from '../pages/LoginPage';
+import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -8,8 +9,16 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { currentUser, loading } = useAuth();
+  const navigate = useNavigate();
 
   console.log('ProtectedRoute: Render', { loading, currentUser: currentUser ? 'logged in' : 'logged out' });
+
+  useEffect(() => {
+    if (!loading && !currentUser) {
+      console.log('ProtectedRoute: No user, redirecting to auth');
+      navigate('/auth');
+    }
+  }, [currentUser, loading, navigate]);
 
   if (loading) {
     console.log('ProtectedRoute: Showing loading state');
@@ -24,8 +33,15 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!currentUser) {
-    console.log('ProtectedRoute: No user, showing login page');
-    return <LoginPage />;
+    console.log('ProtectedRoute: No user, showing loading while redirecting');
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-sm">Redirecting to login...</p>
+        </div>
+      </div>
+    );
   }
 
   console.log('ProtectedRoute: User authenticated, showing children');

@@ -9,7 +9,7 @@ interface TopBarProps {
 }
 
 const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick }) => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, userProfile, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = () => {
@@ -70,9 +70,16 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick }) => {
               {/* <TaskReminderSettings /> */}
               <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-blue-50 rounded-xl">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-sm font-medium text-blue-900 truncate max-w-32">
-                  {currentUser.displayName || currentUser.email}
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-blue-900 truncate max-w-32">
+                    {currentUser.displayName || currentUser.email}
+                  </span>
+                  {userProfile?.role && (
+                    <span className="text-xs text-blue-700 capitalize">
+                      {userProfile.role}
+                    </span>
+                  )}
+                </div>
               </div>
               <button
                 onClick={handleLogout}
