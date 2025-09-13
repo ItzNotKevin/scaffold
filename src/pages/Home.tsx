@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../lib/useAuth';
+import { useTranslation } from 'react-i18next';
+import { useAuth, type UserRole } from '../lib/useAuth';
 import { getRolePermissions } from '../lib/useAuth';
 import { usePWAInstall } from '../lib/usePWAInstall';
+import { useLanguage } from '../lib/LanguageContext';
 import Layout from '../components/Layout';
 import NotificationPermission from '../components/NotificationPermission';
 import CompanyManagementDashboard from '../components/CompanyManagementDashboard';
 import AdminDashboard from '../components/AdminDashboard';
 import StaffDashboard from '../components/StaffDashboard';
 import ClientDashboard from '../components/ClientDashboard';
+import BackButton from '../components/ui/BackButton';
+import PageHeader from '../components/ui/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { sendProjectCreatedEmails } from '../lib/emailNotifications';
 
 const Home: React.FC = () => {
+  const { t } = useTranslation();
   const { currentUser, userProfile, permissions, createCompany, joinCompany } = useAuth();
   const { isInstallable, installApp } = usePWAInstall();
+  const { languageKey } = useLanguage();
   const navigate = useNavigate();
   
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
@@ -28,6 +34,11 @@ const Home: React.FC = () => {
 
   const handleMenuClick = () => {
     // Menu click handler
+  };
+
+  const handleNavigateToProject = (projectId: string) => {
+    // Navigate to project page
+    window.location.href = `/project/${projectId}`;
   };
 
   const loadCompanyData = async (companyId: string) => {
@@ -64,7 +75,7 @@ const Home: React.FC = () => {
       }
       
       // Set permissions based on role
-      const rolePermissions = getRolePermissions(userRole);
+      const rolePermissions = getRolePermissions(userRole as UserRole);
       setSelectedCompanyPermissions(rolePermissions);
       
       // Load projects for this company
@@ -90,8 +101,10 @@ const Home: React.FC = () => {
     setProjects([]);
   };
 
-  const handleCreateCompany = async (companyName: string) => {
-    if (!currentUser || !companyName.trim()) return;
+  const handleCreateCompany = async (companyName: string): Promise<string> => {
+    if (!currentUser || !companyName.trim()) {
+      throw new Error('Invalid user or company name');
+    }
     
     try {
       const newCompanyId = await createCompany(companyName.trim());
@@ -188,6 +201,7 @@ const Home: React.FC = () => {
       onNewProject: handleNewProject,
       onDeleteProject: handleDeleteProject,
       onEditProject: (projectId: string) => navigate(`/project/${projectId}`),
+      onNavigateToProject: handleNavigateToProject,
       companyName: selectedCompanyName,
       companyId: selectedCompanyId,
       permissions: selectedCompanyPermissions
@@ -209,23 +223,19 @@ const Home: React.FC = () => {
     const userRole = getUserRole();
 
     return (
-      <Layout title={`${selectedCompanyName} - Construction PM`} onMenuClick={handleMenuClick}>
-        <div className="space-y-4">
+      <Layout title={`${selectedCompanyName} - ${t('app.title')}`} onMenuClick={handleMenuClick}>
+        <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
           <NotificationPermission />
           
-          {/* Back button */}
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleBackToCompanies}
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to Companies
-            </button>
-            <h1 className="text-xl font-semibold text-gray-900">{selectedCompanyName}</h1>
-          </div>
+          <PageHeader
+            title={selectedCompanyName}
+            subtitle={t('app.title')}
+            className="flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-0"
+          >
+            <BackButton onClick={handleBackToCompanies} className="w-full sm:w-auto">
+              {t('common.backToCompanies')}
+            </BackButton>
+          </PageHeader>
           
           
           {loading ? (
@@ -247,8 +257,8 @@ const Home: React.FC = () => {
 
   // Show company management dashboard if no company is selected
   return (
-    <Layout title="Construction PM" onMenuClick={handleMenuClick}>
-      <div className="space-y-4">
+    <Layout title={t('app.title')} onMenuClick={handleMenuClick}>
+      <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
         <NotificationPermission />
         
         

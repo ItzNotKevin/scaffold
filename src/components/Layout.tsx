@@ -15,7 +15,7 @@ const Layout: React.FC<LayoutProps> = ({
   return (
     <div className="min-h-screen bg-gray-50">
       <TopBar title={title} onMenuClick={onMenuClick} />
-      <main className="px-3 py-4 pb-safe">
+      <main className="px-4 sm:px-6 py-4 pb-safe">
         {children}
       </main>
     </div>

@@ -42,7 +42,7 @@ interface UserPreferences {
   language: string;
 }
 
-type UserRole = 'admin' | 'staff' | 'client';
+export type UserRole = 'admin' | 'staff' | 'client';
 
 interface RolePermissions {
   canManageUsers: boolean;
@@ -139,6 +139,7 @@ interface AuthContextType {
   refreshUserProfile: () => Promise<void>;
   createCompany: (companyName: string, companyDescription?: string) => Promise<string>;
   joinCompany: (companyId: string) => Promise<void>;
+  updateUserProfile: (updatedProfile: Partial<AppUser>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -506,6 +507,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return unsubscribe;
   }, []);
 
+  const updateUserProfile = async (updatedProfile: Partial<AppUser>) => {
+    try {
+      if (!currentUser) {
+        throw new Error('User not authenticated');
+      }
+
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        ...updatedProfile,
+        updatedAt: serverTimestamp()
+      });
+
+      // Update local state
+      setUserProfile(prev => prev ? { ...prev, ...updatedProfile } : null);
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      throw error;
+    }
+  };
+
   const value: AuthContextType = {
     currentUser,
     userProfile,
@@ -520,6 +540,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     refreshUserProfile,
     createCompany,
     joinCompany,
+    updateUserProfile,
   };
 
 

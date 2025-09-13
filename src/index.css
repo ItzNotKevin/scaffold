@@ -23,6 +23,38 @@
   touch-action: manipulation;
 }
 
+/* Mobile-specific improvements */
+@media (max-width: 640px) {
+  /* Prevent zoom on input focus */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  
+  /* Better tap targets */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Prevent horizontal scroll */
+  body {
+    overflow-x: hidden;
+  }
+  
+  /* Better spacing for mobile */
+  .space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+  
+  .space-y-6 > * + * {
+    margin-top: 1.5rem;
+  }
+}
+
 /* Better focus states for mobile */
 @media (hover: none) and (pointer: coarse) {
   .hover\:bg-gray-50:hover {

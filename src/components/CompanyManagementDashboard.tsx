@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { collection, query, where, getDocs, orderBy, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
+import Card from './ui/Card';
+import Button from './ui/Button';
+import Input from './ui/Input';
+import PageHeader from './ui/PageHeader';
 
 interface Company {
   id: string;
@@ -26,6 +31,7 @@ const CompanyManagementDashboard: React.FC<CompanyManagementDashboardProps> = ({
   onSelectCompany,
   userProfile
 }) => {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,79 +156,70 @@ const CompanyManagementDashboard: React.FC<CompanyManagementDashboardProps> = ({
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="text-gray-500 text-sm mt-2">Loading companies...</p>
+        <p className="text-gray-500 text-sm mt-2">{t('company.loadingCompanies')}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Company Management</h1>
-        <p className="text-gray-600">Manage your companies and access projects</p>
-      </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader
+        title={t('company.title')}
+        subtitle="Manage your companies and access projects"
+        className="text-center sm:text-left"
+      />
 
       {/* Create Company Section */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Create New Company</h2>
+      <Card>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('company.createNewCompany')}</h2>
         <form onSubmit={handleCreateCompany} className="space-y-4">
-          <div>
-            <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-2">
-              Company Name
-            </label>
-            <input
-              type="text"
-              id="companyName"
-              value={newCompanyName}
-              onChange={(e) => setNewCompanyName(e.target.value)}
-              placeholder="Enter company name"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-            />
-          </div>
-          <button
+          <Input
+            id="companyName"
+            label={t('company.companyName')}
+            value={newCompanyName}
+            onChange={(e) => setNewCompanyName(e.target.value)}
+            placeholder={t('company.enterCompanyName')}
+            required
+          />
+          <Button
             type="submit"
             disabled={creating || !newCompanyName.trim()}
-            className="w-full px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            loading={creating}
+            className="w-full"
           >
-            {creating ? 'Creating...' : 'Create Company & Become Admin'}
-          </button>
+            {t('company.createCompanyAndBecomeAdmin')}
+          </Button>
         </form>
-      </div>
+      </Card>
 
       {/* Join Company Section */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Join Existing Company</h2>
+      <Card>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('company.joinExistingCompany')}</h2>
         <form onSubmit={handleJoinCompany} className="space-y-4">
-          <div>
-            <label htmlFor="companyId" className="block text-sm font-medium text-gray-700 mb-2">
-              Company ID
-            </label>
-            <input
-              type="text"
-              id="companyId"
-              value={joinCompanyId}
-              onChange={(e) => setJoinCompanyId(e.target.value)}
-              placeholder="Enter company ID"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-            />
-          </div>
-          <button
+          <Input
+            id="companyId"
+            label={t('company.companyId')}
+            value={joinCompanyId}
+            onChange={(e) => setJoinCompanyId(e.target.value)}
+            placeholder={t('company.enterCompanyId')}
+            required
+          />
+          <Button
             type="submit"
+            variant="secondary"
             disabled={joining || !joinCompanyId.trim()}
-            className="w-full px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            loading={joining}
+            className="w-full"
           >
-            {joining ? 'Joining...' : 'Join Company as Staff'}
-          </button>
+            {t('company.joinCompanyAsStaff')}
+          </Button>
         </form>
-      </div>
+      </Card>
 
       {/* User's Companies */}
       {companies.length > 0 && (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Companies</h2>
+        <Card>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('company.myCompanies')}</h2>
           <div className="space-y-3">
             {companies.map((company) => (
               <div
@@ -256,16 +253,16 @@ const CompanyManagementDashboard: React.FC<CompanyManagementDashboardProps> = ({
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Empty State */}
       {companies.length === 0 && (
-        <div className="text-center py-8">
+        <Card className="text-center py-8">
           <div className="text-4xl mb-4">🏢</div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Companies Yet</h3>
-          <p className="text-gray-500 mb-4">Create a new company or join an existing one to get started</p>
-        </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">{t('company.noCompaniesYet')}</h3>
+          <p className="text-gray-500 mb-4">{t('company.createOrJoinToGetStarted')}</p>
+        </Card>
       )}
     </div>
   );

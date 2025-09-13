@@ -1,10 +1,20 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/useAuth';
+import { useLanguage } from '../lib/LanguageContext';
 import { useNavigate } from 'react-router-dom';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
 // Define UserRole type locally
 type UserRole = 'admin' | 'staff' | 'client';
 
 const AuthPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { languageKey } = useLanguage();
+  
+  // Force re-initialization of useTranslation when language changes
+  const translationKey = `auth-${languageKey}`;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -61,9 +71,9 @@ const AuthPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div key={languageKey} className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8 px-safe">
       <div className="max-w-sm w-full">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <Card>
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto mb-4 flex items-center justify-center">
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,10 +81,10 @@ const AuthPage: React.FC = () => {
               </svg>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {isSignUp ? 'Create Account' : 'Welcome Back'}
+              {isSignUp ? t('auth.createAccount') : t('auth.login')}
             </h2>
             <p className="text-gray-600 text-sm">
-              {isSignUp ? 'Sign up to start managing your projects' : 'Sign in to continue'}
+              {isSignUp ? t('auth.signupSuccess') : t('auth.loginSuccess')}
             </p>
           </div>
 
@@ -87,17 +97,14 @@ const AuthPage: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
               <>
-                <div>
-                  <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                  <input 
-                    id="displayName" 
-                    type="text" 
-                    value={displayName} 
-                    onChange={(e) => setDisplayName(e.target.value)} 
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" 
-                    placeholder="Enter your full name" 
-                  />
-                </div>
+                <Input
+                  id="displayName"
+                  label={t('auth.displayName')}
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder={t('auth.displayName')}
+                />
                 
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
                   <div className="flex items-start space-x-3">
@@ -118,56 +125,46 @@ const AuthPage: React.FC = () => {
                   </div>
                 </div>
                 
-                <div>
-                  <label htmlFor="companyId" className="block text-sm font-medium text-gray-700 mb-2">Company ID (Optional)</label>
-                  <input 
-                    id="companyId" 
-                    type="text" 
-                    value={companyId} 
-                    onChange={(e) => setCompanyId(e.target.value)} 
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" 
-                    placeholder="Enter company ID if you have one" 
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    If you don't have a company ID, leave this blank and an admin can add you later.
-                  </p>
-                </div>
+                <Input
+                  id="companyId"
+                  label="Company ID (Optional)"
+                  type="text"
+                  value={companyId}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                  placeholder="Enter company ID if you have one"
+                  helperText="If you don't have a company ID, leave this blank and an admin can add you later."
+                />
               </>
             )}
 
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-              <input 
-                id="email" 
-                type="email" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" 
-                placeholder="Enter your email" 
-                required 
-              />
-            </div>
+            <Input
+              id="email"
+              label={t('auth.email')}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={t('auth.email')}
+              required
+            />
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-              <input 
-                id="password" 
-                type="password" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" 
-                placeholder="Enter your password" 
-                required 
-              />
-            </div>
+            <Input
+              id="password"
+              label={t('auth.password')}
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t('auth.password')}
+              required
+            />
 
-            <button 
-              type="submit" 
-              disabled={loading} 
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
+            <Button
+              type="submit"
+              disabled={loading}
+              loading={loading}
+              className="w-full"
             >
-              {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
-            </button>
+              {isSignUp ? t('auth.signup') : t('auth.login')}
+            </Button>
           </form>
 
           <div className="mt-6">
@@ -180,35 +177,40 @@ const AuthPage: React.FC = () => {
               </div>
             </div>
 
-            <button 
-              onClick={handleGoogleLogin} 
-              disabled={loading} 
-              className="mt-4 w-full bg-white border border-gray-200 text-gray-700 py-3 px-4 rounded-xl hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 touch-manipulation"
+            <Button
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              variant="outline"
+              className="mt-4 w-full"
             >
-              <span>Continue with Google</span>
-            </button>
+              {t('auth.loginWithGoogle')}
+            </Button>
           </div>
 
           <div className="mt-6 text-center">
-            <button 
-              onClick={() => setIsSignUp(!isSignUp)} 
-              className="text-blue-600 hover:text-blue-700 text-sm font-medium touch-manipulation"
+            <Button
+              onClick={() => setIsSignUp(!isSignUp)}
+              variant="ghost"
+              size="sm"
+              className="text-blue-600 hover:text-blue-700"
             >
-              {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-            </button>
+              {isSignUp ? t('auth.alreadyHaveAccount') : t('auth.dontHaveAccount')}
+            </Button>
           </div>
 
           {!isSignUp && (
             <div className="mt-4 text-center">
-              <button 
-                onClick={handleResetPassword} 
-                className="text-sm text-gray-600 hover:text-gray-700 touch-manipulation"
+              <Button
+                onClick={handleResetPassword}
+                variant="ghost"
+                size="sm"
+                className="text-gray-600 hover:text-gray-700"
               >
-                Forgot your password?
-              </button>
+                {t('auth.forgotPassword')}
+              </Button>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );
