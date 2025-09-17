@@ -9,13 +9,23 @@ export const useFCM = () => {
   const [fcmToken, setFcmToken] = useState<string | null>(null);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isSupported, setIsSupported] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuth();
 
   // Check if notifications are supported
   useEffect(() => {
+    console.log('FCM: Checking notification support...');
+    console.log('Notification in window:', 'Notification' in window);
+    console.log('ServiceWorker in navigator:', 'serviceWorker' in navigator);
+    console.log('Current permission:', Notification.permission);
+    
     if ('Notification' in window && 'serviceWorker' in navigator) {
       setIsSupported(true);
       setPermission(Notification.permission);
+      console.log('FCM: Notifications supported, permission:', Notification.permission);
+    } else {
+      console.log('FCM: Notifications not supported');
     }
   }, []);
 
@@ -23,8 +33,12 @@ export const useFCM = () => {
   const requestPermission = async () => {
     if (!isSupported) {
       console.log('Notifications not supported');
+      setError('Notifications not supported in this browser');
       return false;
     }
+
+    setIsLoading(true);
+    setError(null);
 
     try {
       const permission = await Notification.requestPermission();
@@ -35,34 +49,43 @@ export const useFCM = () => {
         return true;
       } else {
         console.log('Notification permission denied');
+        setError('Notification permission denied');
         return false;
       }
     } catch (error) {
       console.error('Error requesting notification permission:', error);
+      setError('Failed to request notification permission');
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   // Get FCM token
   const getFCMToken = async () => {
-    if (!currentUser || !isSupported) return;
+    if (!currentUser || !isSupported) {
+      console.log('FCM: Cannot get token - currentUser:', !!currentUser, 'isSupported:', isSupported);
+      return;
+    }
 
     try {
+      console.log('FCM: Attempting to get token with VAPID key:', import.meta.env.VITE_FIREBASE_VAPID_KEY);
       const token = await getToken(messaging, {
         vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
       });
       
       if (token) {
         setFcmToken(token);
-        console.log('FCM Token:', token);
+        console.log('FCM Token obtained:', token);
         
         // Save token to user document
         await saveTokenToUser(token);
       } else {
-        console.log('No registration token available');
+        console.log('FCM: No registration token available');
       }
     } catch (error) {
-      console.error('An error occurred while retrieving token:', error);
+      console.error('FCM: Error retrieving token:', error);
+      setError('Failed to get FCM token: ' + error.message);
     }
   };
 
@@ -125,6 +148,8 @@ export const useFCM = () => {
     fcmToken,
     permission,
     isSupported,
+    isLoading,
+    error,
     requestPermission,
     getFCMToken
   };

@@ -11,12 +11,12 @@ if (SENDGRID_API_KEY) {
   sgMail.setApiKey(SENDGRID_API_KEY);
 }
 
-// Get FCM VAPID configuration
-const FCM_VAPID_PRIVATE_KEY = functions.config().fcm?.vapid_private_key;
-const FCM_VAPID_PUBLIC_KEY = functions.config().fcm?.vapid_public_key;
+// Get FCM VAPID configuration (unused for now)
+// const FCM_VAPID_PRIVATE_KEY = functions.config().fcm?.vapid_private_key;
+// const FCM_VAPID_PUBLIC_KEY = functions.config().fcm?.vapid_public_key;
 
 // FCM Feature Flag - Set to true when ready to enable FCM
-const FCM_ENABLED = false;
+const FCM_ENABLED = true;
 
 // Email templates
 const getProjectCreatedEmail = (projectName: string, companyName: string, phase: string) => ({
@@ -392,19 +392,19 @@ export const onFeedbackAdded = functions.firestore
       // Get company details
       const companyDoc = await admin.firestore()
         .collection('companies')
-        .doc(projectData.companyId)
+        .doc(projectData?.companyId || '')
         .get();
       
       if (!companyDoc.exists) {
-        console.log('Company not found for project:', projectData.companyId);
+        console.log('Company not found for project:', projectData?.companyId);
         return;
       }
       
-      const companyData = companyDoc.data();
-      const companyName = companyData?.name || 'Unknown Company';
+      // const companyData = companyDoc.data();
+      // const companyName = companyData?.name || 'Unknown Company';
       
       // Get company members
-      const memberIds = await getCompanyMembers(projectData.companyId);
+      const memberIds = await getCompanyMembers(projectData?.companyId || '');
       
       // Send FCM notifications to all company members
       const fcmPromises = memberIds.map(async (memberId) => {
@@ -417,7 +417,7 @@ export const onFeedbackAdded = functions.firestore
             {
               projectId,
               type: 'feedback_added',
-              companyId: projectData.companyId,
+              companyId: projectData?.companyId || '',
               feedbackId
             }
           );
