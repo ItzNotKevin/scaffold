@@ -110,6 +110,24 @@ const NotificationPermission: React.FC = () => {
             >
               Test FCM (No VAPID)
             </button>
+            <button
+              onClick={() => {
+                console.log('Testing fallback notification system...');
+                // Test fallback notification
+                if (Notification.permission === 'granted') {
+                  new Notification('Fallback Test', {
+                    body: 'This is a test of the fallback notification system',
+                    icon: '/scaffold-logo.png',
+                    tag: 'fallback-test'
+                  });
+                } else {
+                  console.log('Notification permission not granted');
+                }
+              }}
+              className="text-xs text-green-600 hover:text-green-700 font-medium underline"
+            >
+              Test Fallback
+            </button>
           </div>
         </div>
       </div>

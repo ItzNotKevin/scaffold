@@ -104,6 +104,19 @@ const ProjectPage: React.FC = () => {
   // FCM Notification functions
   const showTaskNotification = (taskTitle: string, action: string, projectName: string) => {
     if (fcmToken) {
+      // Check if it's a fallback token
+      if (fcmToken.startsWith('fallback-')) {
+        // Use basic browser notification as fallback
+        if (Notification.permission === 'granted') {
+          new Notification('Task Update', {
+            body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
+            icon: '/scaffold-logo.png',
+            tag: `task-${id}-${Date.now()}`
+          });
+        }
+        return;
+      }
+      
       // Send FCM notification via Cloud Function
       fetch(`${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`, {
         method: 'POST',
@@ -128,6 +141,19 @@ const ProjectPage: React.FC = () => {
 
   const showProjectNotification = (projectName: string, action: string) => {
     if (fcmToken) {
+      // Check if it's a fallback token
+      if (fcmToken.startsWith('fallback-')) {
+        // Use basic browser notification as fallback
+        if (Notification.permission === 'granted') {
+          new Notification('Project Update', {
+            body: `Project "${projectName}" was ${action}`,
+            icon: '/scaffold-logo.png',
+            tag: `project-${id}-${Date.now()}`
+          });
+        }
+        return;
+      }
+      
       // Send FCM notification via Cloud Function
       fetch(`${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`, {
         method: 'POST',
@@ -151,6 +177,19 @@ const ProjectPage: React.FC = () => {
 
   const showCommentNotification = (commenterName: string, taskTitle: string) => {
     if (fcmToken) {
+      // Check if it's a fallback token
+      if (fcmToken.startsWith('fallback-')) {
+        // Use basic browser notification as fallback
+        if (Notification.permission === 'granted') {
+          new Notification('New Comment', {
+            body: `${commenterName} commented on task "${taskTitle}"`,
+            icon: '/scaffold-logo.png',
+            tag: `comment-${id}-${Date.now()}`
+          });
+        }
+        return;
+      }
+      
       // Send FCM notification via Cloud Function
       fetch(`${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`, {
         method: 'POST',
