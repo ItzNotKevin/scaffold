@@ -147,8 +147,8 @@ const ProjectPage: React.FC = () => {
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
   
-  // Temporary flag to disable photo uploads while waiting for Firebase support
-  const PHOTO_UPLOAD_ENABLED = false;
+  // Photo upload feature enabled - Firebase Storage bucket is now available
+  const PHOTO_UPLOAD_ENABLED = true;
   const [showFinancialForm, setShowFinancialForm] = useState(false);
   const [showFinancialReport, setShowFinancialReport] = useState(false);
   const [budget, setBudget] = useState<number>(0);
