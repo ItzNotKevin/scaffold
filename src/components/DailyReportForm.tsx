@@ -317,20 +317,21 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
+        <div className="mb-6">
+          <div className="mb-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
               {existingReport ? 'Edit Daily Report' : 'Create Daily Report'}
             </h2>
-            <p className="text-gray-600 mt-1">
+            <p className="text-gray-600 mt-1 text-sm sm:text-base">
               {existingReport ? 'Update your daily report details' : 'Document today\'s progress and activities'}
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button
               variant="outline"
               onClick={onCancel}
               disabled={saving}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
@@ -338,12 +339,14 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
               onClick={() => handleSave('draft')}
               disabled={saving}
               variant="outline"
+              className="w-full sm:w-auto"
             >
               {saving ? 'Saving...' : 'Save Draft'}
             </Button>
             <Button
               onClick={() => handleSave('submitted')}
               disabled={saving}
+              className="w-full sm:w-auto"
             >
               {saving ? 'Submitting...' : 'Submit Report'}
             </Button>
@@ -428,95 +431,106 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
             Add Entry
           </Button>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-6">
           {workLog.map((entry) => (
-            <div key={entry.id} className="border border-gray-200 rounded-lg p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div key={entry.id} className="border border-gray-200 rounded-xl p-4 sm:p-6">
+              <div className="space-y-4">
                 {/* Row 1: Crew Member and Work Performed */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Crew Member</label>
-                  <Input
-                    placeholder="Enter crew member name"
-                    value={entry.crewMember}
-                    onChange={(e) => updateWorkLogEntry(entry.id, 'crewMember', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Work Performed</label>
-                  <select
-                    value={entry.workPerformed}
-                    onChange={(e) => updateWorkLogEntry(entry.id, 'workPerformed', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation min-h-[44px]"
-                  >
-                    <option value="">Select work performed...</option>
-                    {projectTasks.map((task) => (
-                      <option key={task.id} value={task.title}>
-                        {task.title} ({task.status})
-                      </option>
-                    ))}
-                    <option value="other">Other (specify in notes)</option>
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Crew Member</label>
+                    <Input
+                      placeholder="Enter crew member name"
+                      value={entry.crewMember}
+                      onChange={(e) => updateWorkLogEntry(entry.id, 'crewMember', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Work Performed</label>
+                    <select
+                      value={entry.workPerformed}
+                      onChange={(e) => updateWorkLogEntry(entry.id, 'workPerformed', e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation min-h-[48px]"
+                    >
+                      <option value="">Select work performed...</option>
+                      {projectTasks.map((task) => (
+                        <option key={task.id} value={task.title}>
+                          {task.title} ({task.status})
+                        </option>
+                      ))}
+                      <option value="other">Other (specify in notes)</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Row 2: Start Time and End Time */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
-                  <Input
-                    type="time"
-                    placeholder="Start Time"
-                    value={entry.startTime}
-                    onChange={(e) => updateWorkLogEntry(entry.id, 'startTime', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
-                  <Input
-                    type="time"
-                    placeholder="End Time"
-                    value={entry.endTime}
-                    onChange={(e) => updateWorkLogEntry(entry.id, 'endTime', e.target.value)}
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                    <Input
+                      type="time"
+                      placeholder="Start Time"
+                      value={entry.startTime}
+                      onChange={(e) => updateWorkLogEntry(entry.id, 'startTime', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                    <Input
+                      type="time"
+                      placeholder="End Time"
+                      value={entry.endTime}
+                      onChange={(e) => updateWorkLogEntry(entry.id, 'endTime', e.target.value)}
+                    />
+                  </div>
                 </div>
 
                 {/* Row 3: Hours Worked and Location */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Hours Worked (Auto-calculated)</label>
-                  <input
-                    type="number"
-                    value={entry.hoursWorked || ''}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base touch-manipulation min-h-[44px] bg-gray-100"
-                    readOnly
-                    placeholder="Auto-calculated"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Hours Worked (Auto-calculated)</label>
+                    <input
+                      type="number"
+                      value={entry.hoursWorked || ''}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base touch-manipulation min-h-[48px] bg-gray-100"
+                      readOnly
+                      placeholder="Auto-calculated"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                    <Input
+                      placeholder="Work location"
+                      value={entry.location}
+                      onChange={(e) => updateWorkLogEntry(entry.id, 'location', e.target.value)}
+                    />
+                  </div>
                 </div>
+
+                {/* Notes */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
                   <Input
-                    placeholder="Work location"
-                    value={entry.location}
-                    onChange={(e) => updateWorkLogEntry(entry.id, 'location', e.target.value)}
+                    placeholder="Additional work details..."
+                    value={entry.notes || ''}
+                    onChange={(e) => updateWorkLogEntry(entry.id, 'notes', e.target.value)}
                   />
                 </div>
-              </div>
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                <Input
-                  placeholder="Additional work details..."
-                  value={entry.notes || ''}
-                  onChange={(e) => updateWorkLogEntry(entry.id, 'notes', e.target.value)}
-                />
-              </div>
-              <div className="flex justify-end mt-4">
-                <Button
-                  onClick={() => removeWorkLogEntry(entry.id)}
-                  variant="danger"
-                  size="sm"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Remove Entry
-                </Button>
+
+                {/* Remove Button */}
+                <div className="flex justify-end pt-2">
+                  <Button
+                    onClick={() => removeWorkLogEntry(entry.id)}
+                    variant="danger"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Remove Entry
+                  </Button>
+                </div>
               </div>
             </div>
           ))}

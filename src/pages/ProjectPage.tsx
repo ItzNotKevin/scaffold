@@ -2053,12 +2053,12 @@ ${reportData.isOverBudget
 
         {/* Tabs */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-4">
             {['Photos','Staff','Feedback','Tasks'].map(t => (
               <button 
                 key={t} 
                 onClick={() => setActiveTab(t as any)} 
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[44px] flex-1 sm:flex-none ${activeTab===t?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                className={`px-3 py-3 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[48px] flex items-center justify-center ${activeTab===t?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
               >
                 {t}
               </button>
@@ -2066,7 +2066,7 @@ ${reportData.isOverBudget
             {permissions?.canViewDailyReports && (
               <button 
                 onClick={() => setActiveTab('Daily Reports')} 
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[44px] flex-1 sm:flex-none ${activeTab==='Daily Reports'?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                className={`px-3 py-3 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[48px] flex items-center justify-center col-span-2 sm:col-span-1 ${activeTab==='Daily Reports'?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
               >
                 Daily Reports
               </button>
@@ -2975,8 +2975,8 @@ ${reportData.isOverBudget
 
       {/* Sticky Bottom Action Bar */}
       {activeTab === 'Staff' && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 p-4 pb-safe shadow-lg">
-          <div className="flex space-x-3">
+        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 p-3 sm:p-4 pb-safe shadow-lg">
+          <div className="flex flex-col sm:flex-row gap-3">
             <button 
               onClick={() => handleCheck('checkin')} 
               disabled={checkinLoading}

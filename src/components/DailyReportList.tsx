@@ -249,79 +249,82 @@ const DailyReportList: React.FC<DailyReportListProps> = ({
           {filteredReports.map((report) => (
             <Card key={report.id} className="p-6 hover:shadow-md transition-shadow duration-200">
               {/* Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <div className="mb-4">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                     <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <h3 className="text-lg font-semibold text-gray-900">
                       Daily Report - {formatDate(report.reportDate)}
                     </h3>
                     <p className="text-sm text-gray-500">by {report.userName}</p>
+                    <div className="mt-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(report.status)}`}>
+                        {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(report.status)}`}>
-                    {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                  </span>
-                  <div className="flex gap-2">
+                
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => setViewingReport(report)}
+                    size="sm"
+                    variant="outline"
+                    className="text-blue-600 border-blue-600 hover:bg-blue-50 flex-1 sm:flex-none"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    View Details
+                  </Button>
+                  
+                  {canEdit && report.status === 'draft' && (
                     <Button
-                      onClick={() => setViewingReport(report)}
+                      onClick={() => onEditReport(report)}
                       size="sm"
                       variant="outline"
-                      className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                      className="flex-1 sm:flex-none"
                     >
-                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                      View Details
+                      Edit
                     </Button>
-                    
-                    {canEdit && report.status === 'draft' && (
+                  )}
+                  
+                  {canApprove && report.status === 'submitted' && (
+                    <>
                       <Button
-                        onClick={() => onEditReport(report)}
+                        onClick={() => handleApprove(report.id)}
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none"
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        onClick={() => handleReject(report.id)}
                         size="sm"
                         variant="outline"
+                        className="text-red-600 border-red-600 hover:bg-red-50 flex-1 sm:flex-none"
                       >
-                        Edit
+                        Reject
                       </Button>
-                    )}
-                    
-                    {canApprove && report.status === 'submitted' && (
-                      <>
-                        <Button
-                          onClick={() => handleApprove(report.id)}
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          onClick={() => handleReject(report.id)}
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 border-red-600 hover:bg-red-50"
-                        >
-                          Reject
-                        </Button>
-                      </>
-                    )}
+                    </>
+                  )}
 
-                    {canDelete && (
-                      <Button
-                        onClick={() => handleDelete(report.id)}
-                        size="sm"
-                        variant="outline"
-                        className="text-red-600 border-red-600 hover:bg-red-50"
-                      >
-                        Delete
-                      </Button>
-                    )}
-                  </div>
+                  {canDelete && (
+                    <Button
+                      onClick={() => handleDelete(report.id)}
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 border-red-600 hover:bg-red-50 flex-1 sm:flex-none"
+                    >
+                      Delete
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -437,19 +440,19 @@ const DailyReportList: React.FC<DailyReportListProps> = ({
 
       {/* Detailed Report Modal */}
       {viewingReport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <div className="mb-6">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                     <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Daily Report Details</h2>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Daily Report Details</h2>
                     <p className="text-sm text-gray-600">
                       {new Date(viewingReport.reportDate).toLocaleDateString('en-CA', {
                         weekday: 'long',
@@ -460,16 +463,19 @@ const DailyReportList: React.FC<DailyReportListProps> = ({
                     </p>
                   </div>
                 </div>
-                <Button
-                  onClick={() => setViewingReport(null)}
-                  variant="outline"
-                  size="sm"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  Close
-                </Button>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => setViewingReport(null)}
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Close
+                  </Button>
+                </div>
               </div>
 
               {/* Report Content */}
