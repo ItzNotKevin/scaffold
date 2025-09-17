@@ -6,9 +6,9 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-comp
 // Initialize Firebase in the service worker
 const firebaseConfig = {
   apiKey: "AIzaSyDjZPSI4YQrQJnJrrco_B4u8fEz8FPMpTk",
-  authDomain: "scaffold.firebaseapp.com",
-  projectId: "scaffold",
-  storageBucket: "scaffold.firebasestorage.app",
+  authDomain: "construction-pm.firebaseapp.com",
+  projectId: "construction-pm",
+  storageBucket: "construction-pm.firebasestorage.app",
   messagingSenderId: "123323892546",
   appId: "1:123323892546:web:0b2a618a72fc91c5017edb"
 };

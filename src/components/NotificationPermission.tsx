@@ -92,6 +92,24 @@ const NotificationPermission: React.FC = () => {
             >
               Test FCM Token
             </button>
+            <button
+              onClick={() => {
+                console.log('Testing FCM without VAPID key...');
+                // Test basic FCM without VAPID key
+                import('firebase/messaging').then(({ getToken }) => {
+                  import('../lib/firebase').then(({ messaging }) => {
+                    getToken(messaging).then(token => {
+                      console.log('FCM token without VAPID:', token);
+                    }).catch(error => {
+                      console.error('FCM error without VAPID:', error);
+                    });
+                  });
+                });
+              }}
+              className="text-xs text-green-600 hover:text-green-700 font-medium underline"
+            >
+              Test FCM (No VAPID)
+            </button>
           </div>
         </div>
       </div>

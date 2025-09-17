@@ -13,7 +13,7 @@ export const useFCM = () => {
   const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuth();
 
-  // Check if notifications are supported
+  // Check if notifications are supported and register service worker
   useEffect(() => {
     console.log('FCM: Checking notification support...');
     console.log('Notification in window:', 'Notification' in window);
@@ -24,6 +24,17 @@ export const useFCM = () => {
       setIsSupported(true);
       setPermission(Notification.permission);
       console.log('FCM: Notifications supported, permission:', Notification.permission);
+      
+      // Register service worker for FCM
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/firebase-messaging-sw.js')
+          .then((registration) => {
+            console.log('FCM: Service worker registered successfully:', registration);
+          })
+          .catch((error) => {
+            console.error('FCM: Service worker registration failed:', error);
+          });
+      }
     } else {
       console.log('FCM: Notifications not supported');
     }
@@ -75,9 +86,17 @@ export const useFCM = () => {
       console.log('FCM: VAPID key ends with:', vapidKey?.substring(vapidKey.length - 10));
       console.log('FCM: Attempting to get token with VAPID key:', vapidKey);
       
-      const token = await getToken(messaging, {
-        vapidKey: vapidKey
-      });
+      // Try to get token with VAPID key first
+      let token;
+      if (vapidKey && vapidKey.length === 87) {
+        console.log('FCM: Using VAPID key for token generation');
+        token = await getToken(messaging, {
+          vapidKey: vapidKey
+        });
+      } else {
+        console.log('FCM: VAPID key invalid, trying without VAPID key');
+        token = await getToken(messaging);
+      }
       
       if (token) {
         setFcmToken(token);
