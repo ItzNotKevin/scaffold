@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     // Create email message
     const msg = {
       to,
-      from: process.env.SENDGRID_SENDER_EMAIL || 'noreply@construction-pm.com',
+      from: process.env.SENDGRID_SENDER_EMAIL || 'noreply@scaffold.com',
       subject,
       html,
     };

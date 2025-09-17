@@ -6,9 +6,9 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-comp
 // Initialize Firebase in the service worker
 const firebaseConfig = {
   apiKey: "AIzaSyDjZPSI4YQrQJnJrrco_B4u8fEz8FPMpTk",
-  authDomain: "construction-pm.firebaseapp.com",
-  projectId: "construction-pm",
-  storageBucket: "construction-pm.firebasestorage.app",
+  authDomain: "scaffold.firebaseapp.com",
+  projectId: "scaffold",
+  storageBucket: "scaffold.firebasestorage.app",
   messagingSenderId: "123323892546",
   appId: "1:123323892546:web:0b2a618a72fc91c5017edb"
 };
@@ -25,8 +25,8 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification?.title || 'Construction PM Update';
   const notificationOptions = {
     body: payload.notification?.body || 'You have a new project update',
-    icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
+    icon: '/scaffold-logo.png',
+    badge: '/scaffold-logo.png',
     tag: payload.data?.projectId || 'project-update',
     data: payload.data
   };

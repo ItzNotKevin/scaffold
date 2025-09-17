@@ -21,7 +21,7 @@ const FCM_ENABLED = false;
 // Email templates
 const getProjectCreatedEmail = (projectName: string, companyName: string, phase: string) => ({
   to: '', // Will be set dynamically
-  from: 'noreply@construction-pm.com', // Replace with your verified sender
+  from: 'noreply@scaffold.com', // Replace with your verified sender
   subject: `New Project Created: ${projectName}`,
   html: `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -49,7 +49,7 @@ const getProjectCreatedEmail = (projectName: string, companyName: string, phase:
 
 const getPhaseUpdateEmail = (projectName: string, companyName: string, oldPhase: string, newPhase: string) => ({
   to: '', // Will be set dynamically
-  from: 'noreply@construction-pm.com', // Replace with your verified sender
+  from: 'noreply@scaffold.com', // Replace with your verified sender
   subject: `Project Phase Updated: ${projectName}`,
   html: `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

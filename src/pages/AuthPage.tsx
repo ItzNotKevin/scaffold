@@ -84,7 +84,7 @@ const AuthPage: React.FC = () => {
               {isSignUp ? t('auth.createAccount') : t('auth.login')}
             </h2>
             <p className="text-gray-600 text-sm">
-              {isSignUp ? t('auth.signupSuccess') : t('auth.loginSuccess')}
+              {isSignUp ? t('auth.signupDescription') : t('auth.loginDescription')}
             </p>
           </div>
 

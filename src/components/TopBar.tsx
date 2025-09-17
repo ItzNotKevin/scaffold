@@ -7,9 +7,10 @@ import LanguageSwitcher from './LanguageSwitcher';
 interface TopBarProps {
   title: string;
   onMenuClick?: () => void;
+  currentRole?: string;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick }) => {
+const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick, currentRole }) => {
   const { currentUser, userProfile, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -50,9 +51,25 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick }) => {
               </svg>
             </button>
           )}
-          <h1 className="text-lg font-semibold text-gray-900 truncate min-w-0">
-            {title}
-          </h1>
+          {/* Logo and Title */}
+          <div className="flex items-center space-x-2 min-w-0 flex-1">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center space-x-2 hover:opacity-80 transition-opacity touch-manipulation"
+            >
+              <div className="w-8 h-8 flex-shrink-0 bg-gray-100 rounded-lg p-0.5">
+                <img 
+                  src="/scaffold-logo.png" 
+                  alt="Scaffold" 
+                  className="w-full h-full border-0 outline-none rounded-md"
+                  style={{ border: 'none', outline: 'none' }}
+                />
+              </div>
+              <h1 className="text-lg font-semibold text-gray-900 truncate min-w-0">
+                {title}
+              </h1>
+            </button>
+          </div>
         </div>
         <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
           {currentUser ? (
@@ -67,19 +84,32 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick }) => {
                     <span className="text-sm font-medium text-blue-900 truncate max-w-32">
                       {currentUser.displayName || currentUser.email}
                     </span>
-                    {userProfile?.role && (
+                    {currentRole && (
                       <span className="text-xs text-blue-700 capitalize">
-                        {userProfile.role}
+                        {currentRole}
                       </span>
                     )}
                   </div>
                 </div>
                 {/* Mobile user indicator */}
-                <div className="sm:hidden w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <button
+                  onClick={() => navigate('/profile')}
+                  className="sm:hidden w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center hover:bg-blue-200 transition-colors touch-manipulation"
+                >
                   <span className="text-xs font-medium text-blue-700">
                     {(currentUser.displayName || currentUser.email).charAt(0).toUpperCase()}
                   </span>
-                </div>
+                </button>
+                {/* Desktop profile link */}
+                <button
+                  onClick={() => navigate('/profile')}
+                  className="hidden sm:flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors touch-manipulation"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span>Profile</span>
+                </button>
                 <button
                   onClick={handleLogout}
                   className="px-2 sm:px-3 py-2 text-sm text-red-600 hover:text-red-700 active:text-red-800 hover:bg-red-50 active:bg-red-100 rounded-xl transition-colors touch-manipulation"

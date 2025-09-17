@@ -12,10 +12,10 @@ export default defineConfig({
       devOptions: {
         enabled: true
       },
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: ['favicon.ico', 'scaffold-logo.png', 'masked-icon.svg'],
       manifest: {
-        name: 'Construction PM',
-        short_name: 'Construction PM',
+        name: 'Scaffold',
+        short_name: 'Scaffold',
         description: 'Construction Project Management App',
         theme_color: '#3b82f6',
         background_color: '#ffffff',
@@ -25,17 +25,17 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: 'scaffold-logo.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'scaffold-logo.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'scaffold-logo.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'

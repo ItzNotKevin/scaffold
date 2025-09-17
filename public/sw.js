@@ -1,5 +1,5 @@
 // Service Worker for Push Notifications
-const CACHE_NAME = 'construction-pm-v1';
+const CACHE_NAME = 'scaffold-v1';
 const urlsToCache = [
   '/',
   '/static/js/bundle.js',
@@ -20,11 +20,11 @@ self.addEventListener('push', (event) => {
   console.log('Push event received:', event);
   
   let notificationData = {
-    title: 'Construction PM',
+    title: 'Scaffold',
     body: 'You have a new notification',
-    icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
-    tag: 'construction-pm-notification',
+    icon: '/scaffold-logo.png',
+    badge: '/scaffold-logo.png',
+    tag: 'scaffold-notification',
     requireInteraction: true,
     actions: [
       {

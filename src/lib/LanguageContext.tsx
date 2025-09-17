@@ -49,9 +49,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
 
   return (
     <LanguageContext.Provider value={{ currentLanguage, setLanguage, forceUpdate, languageKey: updateKey }}>
-      <div key={updateKey}>
-        {children}
-      </div>
+      {children}
     </LanguageContext.Provider>
   );
 };

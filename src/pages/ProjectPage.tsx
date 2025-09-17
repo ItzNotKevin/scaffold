@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot, getDocs, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from 'firebase/storage';
+import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import { sendPhaseUpdateEmails } from '../lib/emailNotifications';
 import { usePushNotifications } from '../lib/usePushNotifications';
@@ -39,6 +40,8 @@ interface Task {
   priority: 'Low' | 'Medium' | 'High' | 'Urgent';
   completed: boolean;
   createdAt: any;
+  updatedAt?: any;
+  recurrence?: 'none' | 'daily' | 'weekly' | 'monthly';
   assignedTo?: string;
   assignedToName?: string;
   assignedToEmail?: string;
@@ -63,6 +66,27 @@ interface Reply {
   reply: string;
   userId: string;
   timestamp: any;
+  userName?: string;
+  userEmail?: string;
+}
+
+interface ProjectPhoto {
+  id: string;
+  url: string;
+  name: string;
+  uploadedBy: string;
+  uploadedAt: any;
+  size: number;
+}
+
+interface Expense {
+  id: string;
+  projectId: string;
+  description: string;
+  amount: number;
+  category: 'materials' | 'labor' | 'equipment' | 'permits' | 'utilities' | 'other';
+  date: any;
+  userId: string;
   userName?: string;
   userEmail?: string;
 }
@@ -117,6 +141,14 @@ const ProjectPage: React.FC = () => {
   const [submittingReply, setSubmittingReply] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [reportData, setReportData] = useState<any>(null);
+  const [photos, setPhotos] = useState<ProjectPhoto[]>([]);
+  const [photosLoading, setPhotosLoading] = useState(true);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
+  
+  // Temporary flag to disable photo uploads while waiting for Firebase support
+  const PHOTO_UPLOAD_ENABLED = false;
   const [showFinancialForm, setShowFinancialForm] = useState(false);
   const [showFinancialReport, setShowFinancialReport] = useState(false);
   const [budget, setBudget] = useState<number>(0);
@@ -171,10 +203,10 @@ const ProjectPage: React.FC = () => {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       console.log('Expenses snapshot received:', snapshot.docs.length, 'documents');
-      const expensesData = snapshot.docs.map(doc => ({
+      const expensesData: Expense[] = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      } as Expense));
       
       console.log('Expenses data:', expensesData);
       
@@ -322,6 +354,23 @@ const ProjectPage: React.FC = () => {
       loadComments();
     }
   }, [tasks]);
+
+  // Load photos when component mounts
+  useEffect(() => {
+    loadPhotos();
+  }, [id]);
+
+  // Add timeout for photo loading
+  useEffect(() => {
+    if (photosLoading) {
+      const timeout = setTimeout(() => {
+        console.warn('Photo loading timeout - setting loading to false');
+        setPhotosLoading(false);
+      }, 10000); // 10 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [photosLoading]);
 
   // Load company users for task assignment
   const loadCompanyUsers = async () => {
@@ -761,7 +810,7 @@ const ProjectPage: React.FC = () => {
       [''],
       ['Completed Tasks', ''],
       ['Title', 'Description', 'Priority', 'Assigned To', 'Due Date', 'Completed At', 'Recurrence'],
-      ...reportData.completedTasks.map(task => [
+      ...reportData.completedTasks.map((task: any) => [
         task.title,
         task.description || '',
         task.priority,
@@ -773,7 +822,7 @@ const ProjectPage: React.FC = () => {
       [''],
       ['Incomplete Tasks', ''],
       ['Title', 'Description', 'Priority', 'Assigned To', 'Due Date', 'Is Overdue', 'Recurrence'],
-      ...reportData.incompleteTasks.map(task => [
+      ...reportData.incompleteTasks.map((task: any) => [
         task.title,
         task.description || '',
         task.priority,
@@ -782,7 +831,7 @@ const ProjectPage: React.FC = () => {
         task.isOverdue ? 'Yes' : 'No',
         task.recurrence,
       ]),
-    ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    ].map(row => row.map((cell: any) => `"${cell}"`).join(',')).join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -830,13 +879,13 @@ Monthly: ${reportData.recurrenceBreakdown.monthly}
 
 COMPLETED TASKS
 ---------------
-${reportData.completedTasks.map(task => 
+${reportData.completedTasks.map((task: any) => 
   `• ${task.title} (${task.priority}) - ${task.assignedTo || 'Unassigned'} - ${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}`
 ).join('\n')}
 
 INCOMPLETE TASKS
 ----------------
-${reportData.incompleteTasks.map(task => 
+${reportData.incompleteTasks.map((task: any) => 
   `• ${task.title} (${task.priority}) - ${task.assignedTo || 'Unassigned'} - ${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}${task.isOverdue ? ' - OVERDUE' : ''}`
 ).join('\n')}
     `.trim();
@@ -923,7 +972,7 @@ ${reportData.incompleteTasks.map(task =>
       ['Project Timeline', ''],
       ['Start Date', reportData.startDate],
       ['End Date', reportData.endDate],
-    ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    ].map(row => row.map((cell: any) => `"${cell}"`).join(',')).join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -1324,6 +1373,306 @@ ${reportData.isOverBudget
     }
   };
 
+  // Photo management functions
+  const loadPhotos = async () => {
+    if (!id) {
+      console.log('No project ID available for loading photos');
+      setPhotosLoading(false);
+      return;
+    }
+    
+    try {
+      console.log('Loading photos for project:', id);
+      setPhotosLoading(true);
+      const photosRef = ref(storage, `projects/${id}/photos`);
+      console.log('Photos ref:', photosRef.fullPath);
+      
+      const result = await listAll(photosRef);
+      console.log('Found', result.items.length, 'photos');
+      
+      const photosData: ProjectPhoto[] = [];
+      for (const itemRef of result.items) {
+        try {
+          console.log('Loading photo:', itemRef.name);
+          const url = await getDownloadURL(itemRef);
+          const metadata = await getMetadata(itemRef);
+          photosData.push({
+            id: itemRef.name,
+            url,
+            name: metadata.name,
+            uploadedBy: metadata.customMetadata?.uploadedBy || 'Unknown',
+            uploadedAt: metadata.timeCreated,
+            size: metadata.size
+          });
+          console.log('Successfully loaded photo:', itemRef.name);
+        } catch (error) {
+          console.error('Error loading photo metadata for', itemRef.name, ':', error);
+        }
+      }
+      
+      // Sort by upload date (newest first)
+      photosData.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+      setPhotos(photosData);
+      console.log('Photos loaded successfully:', photosData.length);
+    } catch (error) {
+      console.error('Error loading photos:', error);
+      setPhotos([]);
+    } finally {
+      setPhotosLoading(false);
+    }
+  };
+
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0 || !id || !currentUser) {
+      console.log('No files selected or missing project ID/user');
+      return;
+    }
+
+    console.log('Starting photo upload for', files.length, 'files');
+    setUploadingPhoto(true);
+    
+    // Test Firebase Storage connection first (with timeout)
+    console.log('Testing Firebase Storage connection...');
+    try {
+      const connectionOk = await Promise.race([
+        testStorageConnection(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection test timeout')), 15000)
+        )
+      ]);
+      
+      if (!connectionOk) {
+        console.warn('Firebase Storage connection test failed, but proceeding with upload...');
+      } else {
+        console.log('Firebase Storage connection test successful');
+      }
+    } catch (error) {
+      console.warn('Firebase Storage connection test failed, but proceeding with upload:', error);
+    }
+    
+    // Add overall timeout protection
+    const uploadTimeout = setTimeout(() => {
+      console.error('Overall upload timeout - stopping upload process');
+      setUploadingPhoto(false);
+      setShowPhotoUpload(false);
+      alert('Upload timed out. Please check your internet connection and try again.');
+    }, 60000); // 60 second overall timeout
+    
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      const fileArray = Array.from(files);
+      
+      // Validate files first
+      console.log('Total files selected:', fileArray.length);
+      const validationErrors: string[] = [];
+      const validFiles = fileArray.filter(file => {
+        const fileSizeMB = file.size / (1024 * 1024);
+        const maxSizeMB = 10;
+        const maxSizeBytes = maxSizeMB * 1024 * 1024;
+        
+        console.log('Validating file:', {
+          name: file.name,
+          type: file.type,
+          sizeBytes: file.size,
+          sizeMB: fileSizeMB.toFixed(2),
+          maxSizeMB: maxSizeMB,
+          maxSizeBytes: maxSizeBytes,
+          isImage: file.type.startsWith('image/'),
+          isWithinSizeLimit: file.size <= maxSizeBytes
+        });
+        
+        if (!file.type.startsWith('image/')) {
+          console.error('Invalid file type:', file.type);
+          validationErrors.push(`${file.name} is not an image file (type: ${file.type})`);
+          return false;
+        }
+        
+        if (file.size > maxSizeBytes) {
+          console.error('File too large:', {
+            actualSize: file.size,
+            actualSizeMB: fileSizeMB.toFixed(2),
+            maxSize: maxSizeBytes,
+            maxSizeMB: maxSizeMB
+          });
+          validationErrors.push(`${file.name} is too large (${fileSizeMB.toFixed(2)}MB). Maximum size is ${maxSizeMB}MB.`);
+          return false;
+        }
+        
+        // Temporary: Allow larger files for debugging
+        if (file.size > 50 * 1024 * 1024) { // 50MB limit for debugging
+          console.warn('File is very large, but allowing for debugging:', fileSizeMB.toFixed(2), 'MB');
+        }
+        
+        console.log('File is valid:', file.name);
+        return true;
+      });
+      
+      console.log('Valid files after filtering:', validFiles.length);
+      
+      // Show validation errors if any
+      if (validationErrors.length > 0) {
+        const errorMessage = `Please fix the following issues:\n\n${validationErrors.join('\n')}\n\nNote: File sizes are shown in MB (1MB = 1,048,576 bytes)`;
+        alert(errorMessage);
+        errorCount += validationErrors.length;
+      }
+      
+      // Set initial progress with valid files only
+      setUploadProgress({current: 0, total: validFiles.length});
+      
+      if (validFiles.length === 0) {
+        console.log('No valid files to upload');
+        setUploadingPhoto(false);
+        setShowPhotoUpload(false);
+        setUploadProgress({current: 0, total: 0});
+        return;
+      }
+      
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
+        console.log('Processing file:', file.name, 'Size:', file.size, 'Type:', file.type);
+        
+        // Update progress
+        setUploadProgress({current: i, total: validFiles.length});
+        
+        try {
+          // Create unique filename
+          const timestamp = Date.now();
+          const fileName = `${timestamp}_${file.name}`;
+          const photoRef = ref(storage, `projects/${id}/photos/${fileName}`);
+          console.log('Uploading to:', photoRef.fullPath);
+          console.log('File details for upload:', {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            lastModified: file.lastModified
+          });
+          
+          // Add individual file timeout
+          const uploadPromise = uploadBytes(photoRef, file, {
+            customMetadata: {
+              uploadedBy: currentUser.uid,
+              uploadedAt: new Date().toISOString()
+            }
+          });
+          
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Upload timeout for ${file.name}`)), 120000) // 2 minutes
+          );
+          
+          console.log('Starting upload for:', file.name, `(${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
+          
+          // Add upload progress monitoring
+          const startTime = Date.now();
+          const progressInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            console.log(`Upload in progress for ${file.name}: ${Math.round(elapsed / 1000)}s elapsed`);
+          }, 10000); // Log every 10 seconds
+          
+          try {
+            // Race between upload and timeout
+            const snapshot = await Promise.race([uploadPromise, timeoutPromise]);
+            clearInterval(progressInterval);
+            const uploadTime = Date.now() - startTime;
+            console.log('Upload successful for:', file.name, `in ${Math.round(uploadTime / 1000)}s`, 'Snapshot:', snapshot);
+            successCount++;
+          } catch (error) {
+            clearInterval(progressInterval);
+            throw error;
+          }
+        } catch (uploadError: any) {
+          console.error('Upload failed for', file.name, ':', uploadError);
+          console.error('Upload error details:', {
+            message: uploadError.message,
+            code: uploadError.code,
+            stack: uploadError.stack
+          });
+          if (uploadError.message.includes('timeout')) {
+            alert(`Upload timed out for ${file.name}. Please try again with a smaller file.`);
+          } else {
+            alert(`Upload failed for ${file.name}: ${uploadError.message}`);
+          }
+          errorCount++;
+        }
+        
+        // Update progress after each file
+        setUploadProgress({current: i + 1, total: validFiles.length});
+      }
+      
+      console.log('Upload complete. Success:', successCount, 'Errors:', errorCount);
+      
+      // Reload photos
+      await loadPhotos();
+      
+      if (successCount > 0) {
+        showProjectNotification(`${successCount} photo(s) uploaded successfully`, projectName);
+      }
+      if (errorCount > 0) {
+        alert(`${errorCount} file(s) failed to upload. Please check the console for details.`);
+      }
+    } catch (error: any) {
+      console.error('Error uploading photos:', error);
+      alert(`Failed to upload photos: ${error.message || 'Unknown error'}`);
+    } finally {
+      clearTimeout(uploadTimeout);
+      setUploadingPhoto(false);
+      setShowPhotoUpload(false);
+      // Reset the file input
+      event.target.value = '';
+    }
+  };
+
+  const handleDeletePhoto = async (photoId: string) => {
+    if (!id || !currentUser) return;
+    
+    if (!confirm('Are you sure you want to delete this photo?')) return;
+    
+    try {
+      const photoRef = ref(storage, `projects/${id}/photos/${photoId}`);
+      await deleteObject(photoRef);
+      
+      // Reload photos
+      await loadPhotos();
+      showProjectNotification('Photo deleted successfully', projectName);
+    } catch (error) {
+      console.error('Error deleting photo:', error);
+      alert('Failed to delete photo. Please try again.');
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Test Firebase Storage connection
+  const testStorageConnection = async () => {
+    try {
+      console.log('Testing Firebase Storage connection...');
+      const testRef = ref(storage, 'test/connection-test.txt');
+      const testBlob = new Blob(['test'], { type: 'text/plain' });
+      
+      // Add timeout to connection test
+      const uploadPromise = uploadBytes(testRef, testBlob);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection test timeout')), 10000)
+      );
+      
+      await Promise.race([uploadPromise, timeoutPromise]);
+      console.log('Firebase Storage connection test successful');
+      // Clean up test file
+      await deleteObject(testRef);
+      return true;
+    } catch (error) {
+      console.error('Firebase Storage connection test failed:', error);
+      return false;
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1336,7 +1685,7 @@ ${reportData.isOverBudget
   }
 
   return (
-    <Layout title={projectName}>
+    <Layout title={projectName} currentRole={undefined}>
       <div className="space-y-4 pb-20">
         {/* Header with project name, description, and phase */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -1459,12 +1808,12 @@ ${reportData.isOverBudget
 
         {/* Financial Tracking Section */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 space-y-4 sm:space-y-0">
             <h3 className="text-lg font-semibold text-gray-900">Financial Tracking</h3>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
               <button
                 onClick={() => setShowExpenseForm(true)}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2 min-h-[44px] touch-manipulation"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -1473,7 +1822,7 @@ ${reportData.isOverBudget
               </button>
               <button
                 onClick={() => setShowFinancialForm(true)}
-                className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors flex items-center space-x-2"
+                className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center space-x-2 min-h-[44px] touch-manipulation"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1482,7 +1831,7 @@ ${reportData.isOverBudget
               </button>
               <button
                 onClick={generateFinancialReport}
-                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2 min-h-[44px] touch-manipulation"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1695,12 +2044,12 @@ ${reportData.isOverBudget
 
         {/* Tabs */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex space-x-2 mb-4">
+          <div className="flex flex-wrap gap-2 mb-4">
             {['Photos','Staff','Feedback','Tasks'].map(t => (
               <button 
                 key={t} 
                 onClick={() => setActiveTab(t as any)} 
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors touch-manipulation ${activeTab===t?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[44px] flex-1 sm:flex-none ${activeTab===t?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
               >
                 {t}
               </button>
@@ -1708,10 +2057,178 @@ ${reportData.isOverBudget
           </div>
 
           {activeTab === 'Photos' && (
-            <div className="text-center py-12">
-              <div className="text-4xl mb-3">📸</div>
-              <p className="text-gray-500 text-sm">Photos coming soon</p>
-              <p className="text-gray-400 text-xs">Upload and manage project photos</p>
+            <div>
+              {/* Photo Upload Section */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Project Photos</h3>
+                  <button
+                    onClick={() => setShowPhotoUpload(!showPhotoUpload)}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 min-h-[44px] touch-manipulation"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span>Upload Photos</span>
+                  </button>
+                </div>
+
+                {showPhotoUpload && (
+                  <div className="bg-gray-50 rounded-xl p-4 border-2 border-dashed border-gray-300">
+                    <div className="text-center">
+                      {PHOTO_UPLOAD_ENABLED ? (
+                        <>
+                          <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          <div className="mt-4">
+                            <label htmlFor="photo-upload" className="cursor-pointer">
+                              <span className="mt-2 block text-sm font-medium text-gray-900">
+                                {uploadingPhoto ? 'Uploading...' : 'Click to upload photos'}
+                              </span>
+                              <span className="mt-1 block text-xs text-gray-500">
+                                PNG, JPG, GIF up to 10MB each
+                              </span>
+                            </label>
+                            <input
+                              id="photo-upload"
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              onChange={handlePhotoUpload}
+                              disabled={uploadingPhoto}
+                              className="hidden"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-12 h-12 mx-auto mb-3 bg-yellow-100 rounded-full flex items-center justify-center">
+                            <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                          </div>
+                          <div className="mt-4">
+                            <p className="text-sm font-medium text-gray-900 mb-2">
+                              Photo upload temporarily disabled
+                            </p>
+                            <p className="text-xs text-gray-500 mb-4">
+                              We're working with Firebase support to resolve storage issues. This feature will be available soon!
+                            </p>
+                            <button
+                              onClick={() => setShowPhotoUpload(false)}
+                              className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors"
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                      {uploadingPhoto && (
+                        <div className="mt-4">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                          {uploadProgress.total > 0 ? (
+                            <>
+                              <p className="text-sm text-gray-600">
+                                Uploading {uploadProgress.current} of {uploadProgress.total} files...
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Large files may take several minutes to upload
+                              </p>
+                              <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                                <div 
+                                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                                ></div>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="text-sm text-gray-600">
+                              Preparing upload...
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                )}
+              </div>
+
+              {/* Photos Grid */}
+              {photosLoading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-500 text-sm">Loading photos...</p>
+                  <p className="text-gray-400 text-xs mt-2">This may take a moment for the first time</p>
+                </div>
+              ) : photos.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-4xl mb-3">📸</div>
+                  <p className="text-gray-500 text-sm">No photos uploaded yet</p>
+                  <p className="text-gray-400 text-xs">Upload photos to document your project progress</p>
+                  <button
+                    onClick={() => setShowPhotoUpload(true)}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Upload Your First Photo
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {photos.map((photo) => (
+                    <div key={photo.id} className="relative group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
+                      <div className="aspect-square">
+                        <img
+                          src={photo.url}
+                          alt={photo.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      
+                      {/* Overlay with actions */}
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center">
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-2">
+                          <button
+                            onClick={() => window.open(photo.url, '_blank')}
+                            className="p-2 bg-white bg-opacity-90 rounded-full hover:bg-opacity-100 transition-colors"
+                            title="View full size"
+                          >
+                            <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleDeletePhoto(photo.id)}
+                            className="p-2 bg-red-500 bg-opacity-90 rounded-full hover:bg-opacity-100 transition-colors"
+                            title="Delete photo"
+                          >
+                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Photo info */}
+                      <div className="p-3">
+                        <p className="text-sm font-medium text-gray-900 truncate" title={photo.name}>
+                          {photo.name}
+                        </p>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-xs text-gray-500">
+                            {formatFileSize(photo.size)}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {new Date(photo.uploadedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -2646,7 +3163,7 @@ ${reportData.isOverBudget
                 <div>
                   <h4 className="text-lg font-semibold text-gray-900 mb-4">Completed Tasks ({reportData.completedTasks.length})</h4>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {reportData.completedTasks.map((task, index) => (
+                    {reportData.completedTasks.map((task: any, index: number) => (
                       <div key={index} className="bg-green-50 border border-green-200 rounded-lg p-3">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm font-medium text-green-900">{task.title}</span>
@@ -2665,7 +3182,7 @@ ${reportData.isOverBudget
                 <div>
                   <h4 className="text-lg font-semibold text-gray-900 mb-4">Incomplete Tasks ({reportData.incompleteTasks.length})</h4>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {reportData.incompleteTasks.map((task, index) => (
+                    {reportData.incompleteTasks.map((task: any, index: number) => (
                       <div key={index} className={`border rounded-lg p-3 ${task.isOverdue ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'}`}>
                         <div className="flex items-center justify-between mb-1">
                           <span className={`text-sm font-medium ${task.isOverdue ? 'text-red-900' : 'text-orange-900'}`}>{task.title}</span>

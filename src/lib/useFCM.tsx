@@ -91,10 +91,10 @@ export const useFCM = () => {
       
       // Show notification in foreground
       if (payload.notification) {
-        const notification = new Notification(payload.notification.title || 'Construction PM Update', {
+        const notification = new Notification(payload.notification.title || 'Scaffold Update', {
           body: payload.notification.body || 'You have a new project update',
-          icon: '/pwa-192x192.png',
-          badge: '/pwa-192x192.png',
+          icon: '/scaffold-logo.png',
+          badge: '/scaffold-logo.png',
           tag: payload.data?.projectId || 'project-update',
           data: payload.data
         });

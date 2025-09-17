@@ -26,7 +26,7 @@
 
 ### Step 2: Add Environment Variables to Vercel
 1. **Go to Vercel Dashboard**: https://vercel.com/dashboard
-2. **Select your project**: construction-pm
+2. **Select your project**: scaffold
 3. **Go to Settings → Environment Variables**
 4. **Add these variables**:
    - `SENDGRID_API_KEY` = Your SendGrid API key

@@ -58,7 +58,7 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <Layout title={isSignUp ? 'Sign Up' : 'Sign In'}>
+    <Layout title={isSignUp ? 'Sign Up' : 'Sign In'} currentRole={undefined}>
       <div className="max-w-md mx-auto">
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="text-center mb-6">
@@ -68,7 +68,7 @@ const LoginPage: React.FC = () => {
             <p className="text-gray-600">
               {isSignUp 
                 ? 'Sign up to start managing your construction projects' 
-                : 'Sign in to your construction PM account'
+                : 'Sign in to your Scaffold account'
               }
             </p>
           </div>

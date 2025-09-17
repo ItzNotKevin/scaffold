@@ -154,9 +154,9 @@ export class PushNotificationService {
   public showNotification(title: string, options?: NotificationOptions): void {
     if (Notification.permission === 'granted') {
       new Notification(title, {
-        icon: '/pwa-192x192.png',
-        badge: '/pwa-192x192.png',
-        tag: 'construction-pm-notification',
+        icon: '/scaffold-logo.png',
+        badge: '/scaffold-logo.png',
+        tag: 'scaffold-notification',
         requireInteraction: true,
         ...options
       });

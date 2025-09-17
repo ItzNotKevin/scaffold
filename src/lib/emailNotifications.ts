@@ -22,7 +22,7 @@ const getProjectCreatedEmail = (projectName: string, companyName: string, phase:
       
       <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
         <p style="color: #6b7280; font-size: 14px;">
-          This is an automated notification from Construction PM.
+          This is an automated notification from Scaffold.
         </p>
       </div>
     </div>
@@ -49,7 +49,7 @@ const getPhaseUpdateEmail = (projectName: string, companyName: string, oldPhase:
       
       <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
         <p style="color: #6b7280; font-size: 14px;">
-          This is an automated notification from Construction PM.
+          This is an automated notification from Scaffold.
         </p>
       </div>
     </div>

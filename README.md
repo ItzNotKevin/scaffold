@@ -36,8 +36,8 @@ A modern, mobile-first Progressive Web App (PWA) for construction project manage
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/ItzNotKevin/construction-pm.git
-   cd construction-pm
+   git clone https://github.com/ItzNotKevin/scaffold.git
+   cd scaffold
    ```
 
 2. **Install dependencies**
@@ -183,13 +183,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you encounter any issues or have questions:
 
-1. Check the [Issues](https://github.com/ItzNotKevin/construction-pm/issues) page
+1. Check the [Issues](https://github.com/ItzNotKevin/scaffold/issues) page
 2. Create a new issue with detailed information
 3. Include steps to reproduce the problem
 
 ## 🔗 Links
 
-- [Live Demo](https://construction-pm.vercel.app) (when deployed)
+- [Live Demo](https://scaffold.vercel.app) (when deployed)
 - [Firebase Console](https://console.firebase.google.com)
 - [React Documentation](https://reactjs.org/docs)
 - [Tailwind CSS](https://tailwindcss.com/docs)

@@ -54,7 +54,7 @@ npx firebase deploy --only functions
 ### Option B: Manual Deployment
 
 1. **Go to Firebase Console**: https://console.firebase.google.com
-2. **Select your project**: construction-pm
+2. **Select your project**: scaffold
 3. **Go to Functions**
 4. **Click "Get Started"** if first time
 5. **Upload the functions code** (or use Firebase CLI)

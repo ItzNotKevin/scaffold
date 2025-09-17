@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/useAuth';
 import { useLanguage } from '../lib/LanguageContext';
@@ -7,7 +7,7 @@ import { changeLanguage } from '../lib/i18n';
 const LanguageSwitcher: React.FC = () => {
   const { i18n, t, ready } = useTranslation();
   const { userProfile, updateUserProfile } = useAuth();
-  const { currentLanguage, forceUpdate } = useLanguage();
+  const { currentLanguage } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
 
   const languages = [
@@ -25,7 +25,6 @@ const LanguageSwitcher: React.FC = () => {
       if (i18n.language !== languageCode) {
         // Change language in i18next and save to localStorage
         await changeLanguage(languageCode);
-        forceUpdate(); // Force re-render through context
         
         // Update user preferences if user is logged in
         if (userProfile && updateUserProfile) {

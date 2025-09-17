@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Construction PM"
+    "title": "Scaffold"
   },
   "common": {
     "loading": "Cargando...",
@@ -44,6 +44,8 @@
     "dontHaveAccount": "¿No tienes una cuenta?",
     "loginSuccess": "Inicio de sesión exitoso",
     "signupSuccess": "Cuenta creada exitosamente",
+    "loginDescription": "Inicia sesión en tu cuenta para continuar",
+    "signupDescription": "Crea una nueva cuenta para comenzar",
     "loginError": "Error al iniciar sesión",
     "signupError": "Error al registrarse",
     "invalidCredentials": "Correo o contraseña inválidos",
@@ -140,7 +142,7 @@
     "refreshUsers": "Actualizar"
   },
   "dashboard": {
-    "welcome": "Bienvenido a Construction PM",
+    "welcome": "Bienvenido a Scaffold",
     "overview": "Resumen del Proyecto",
     "recentProjects": "Proyectos Recientes",
     "quickActions": "Acciones Rápidas",
@@ -183,5 +185,42 @@
     "light": "Claro",
     "dark": "Oscuro",
     "system": "Sistema"
+  },
+  "profile": {
+    "title": "Perfil",
+    "subtitle": "Gestiona la configuración de tu cuenta e información personal",
+    "profilePicture": "Foto de Perfil",
+    "uploadPicture": "Subir Foto",
+    "changePicture": "Cambiar Foto",
+    "removePicture": "Eliminar Foto",
+    "personalInfo": "Información Personal",
+    "displayName": "Nombre para Mostrar",
+    "enterDisplayName": "Ingresa tu nombre para mostrar",
+    "email": "Correo Electrónico",
+    "enterEmail": "Ingresa tu dirección de correo electrónico",
+    "updateProfile": "Actualizar Perfil",
+    "password": "Contraseña",
+    "changePassword": "Cambiar Contraseña",
+    "currentPassword": "Contraseña Actual",
+    "enterCurrentPassword": "Ingresa tu contraseña actual",
+    "newPassword": "Nueva Contraseña",
+    "enterNewPassword": "Ingresa tu nueva contraseña",
+    "confirmPassword": "Confirmar Contraseña",
+    "confirmNewPassword": "Confirma tu nueva contraseña",
+    "updatePassword": "Actualizar Contraseña",
+    "cancel": "Cancelar",
+    "profileUpdated": "Perfil actualizado exitosamente",
+    "passwordUpdated": "Contraseña actualizada exitosamente",
+    "pictureUpdated": "Foto de perfil actualizada exitosamente",
+    "pictureRemoved": "Foto de perfil eliminada exitosamente",
+    "updateError": "Error al actualizar el perfil",
+    "passwordError": "Error al actualizar la contraseña",
+    "pictureError": "Error al actualizar la foto de perfil",
+    "invalidFile": "Por favor selecciona un archivo de imagen válido",
+    "fileTooLarge": "El tamaño de la imagen debe ser menor a 5MB",
+    "passwordMismatch": "Las nuevas contraseñas no coinciden",
+    "passwordTooShort": "La contraseña debe tener al menos 6 caracteres",
+    "wrongPassword": "La contraseña actual es incorrecta",
+    "weakPassword": "La contraseña es muy débil"
   }
 }

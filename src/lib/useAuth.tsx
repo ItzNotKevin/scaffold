@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -14,10 +14,10 @@ import { auth, db } from './firebase';
 import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 // Define types directly here to avoid module resolution issues
 interface AppUser {
-  id: string;
+  uid: string;
   name: string;
   email: string;
-  avatar?: string;
+  profilePicture?: string;
   preferences: UserPreferences;
   companyId?: string; // Optional - only set when user belongs to a company
   createdAt?: any;
@@ -176,7 +176,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       // Prepare user data (no role - roles are company-specific)
       const userData: any = {
-        id: user.uid,
+        uid: user.uid,
         name: user.displayName || displayName || '',
         email: user.email,
         preferences: {
@@ -351,11 +351,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const getUserRoleInCompany = async (userId: string, companyId: string): Promise<UserRole> => {
     try {
-      console.log('getUserRoleInCompany: Checking role for user', userId, 'in company', companyId);
       
       // Check company membership record
       const membershipDoc = await getDoc(doc(db, 'companyMemberships', `${userId}_${companyId}`));
-      console.log('getUserRoleInCompany: Membership doc exists:', membershipDoc.exists());
       
       if (membershipDoc.exists()) {
         const membership = membershipDoc.data() as CompanyMembership;
@@ -364,13 +362,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       // Check if user is company owner
       const companyDoc = await getDoc(doc(db, 'companies', companyId));
-      console.log('getUserRoleInCompany: Company doc exists:', companyDoc.exists());
       
       if (companyDoc.exists()) {
         const companyData = companyDoc.data();
-        console.log('getUserRoleInCompany: Company owner ID:', companyData.ownerId, 'User ID:', userId);
         if (companyData.ownerId === userId) {
-          console.log('getUserRoleInCompany: User is company owner, creating admin membership');
           // Create admin membership record for company owner
           await setDoc(doc(db, 'companyMemberships', `${userId}_${companyId}`), {
             userId,
@@ -384,7 +379,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       // If no membership and not owner, check if company exists before creating membership
       if (companyDoc.exists()) {
-        console.log('getUserRoleInCompany: No membership found, creating staff membership');
         await setDoc(doc(db, 'companyMemberships', `${userId}_${companyId}`), {
           userId,
           companyId,
@@ -393,7 +387,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         });
         return 'staff';
       } else {
-        console.log('getUserRoleInCompany: Company does not exist, returning client');
         return 'client';
       }
     } catch (error) {
@@ -402,7 +395,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const refreshUserProfile = async () => {
+  const refreshUserProfile = useCallback(async () => {
+    console.log('refreshUserProfile: Starting, currentUser:', !!currentUser);
     if (!currentUser) {
       console.log('refreshUserProfile: No currentUser, clearing profile');
       setUserProfile(null);
@@ -411,21 +405,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
 
     try {
+      console.log('refreshUserProfile: Fetching user doc for uid:', currentUser.uid);
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
       
       if (userDoc.exists()) {
         const userData = userDoc.data() as AppUser;
+        console.log('refreshUserProfile: User doc found, data:', userData);
         setUserProfile(userData);
+        console.log('refreshUserProfile: Existing profile state updated');
         
         // Get role from company membership if user belongs to a company
         if (userData.companyId) {
-          const role = await getUserRoleInCompany(userData.id, userData.companyId);
+          const role = await getUserRoleInCompany(currentUser.uid, userData.companyId);
           
           // Check if company actually exists, regardless of role
           const companyDoc = await getDoc(doc(db, 'companies', userData.companyId));
           if (!companyDoc.exists()) {
             // Company doesn't exist, clear the companyId and set permissions to null
-            await updateDoc(doc(db, 'users', userData.id), {
+            await updateDoc(doc(db, 'users', currentUser.uid), {
               companyId: null,
               updatedAt: serverTimestamp()
             });
@@ -441,13 +438,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setPermissions(null);
         }
       } else {
+        // User document doesn't exist, create a default profile
+        console.log('refreshUserProfile: User doc not found, creating default profile');
         // Check if this is the first user in the system
         const usersSnapshot = await getDocs(collection(db, 'users'));
         const isFirstUser = usersSnapshot.empty;
         
         // Create a default user profile (no role - roles are company-specific)
         const defaultProfile: any = {
-          id: currentUser.uid,
+          uid: currentUser.uid,
           name: currentUser.displayName || '',
           email: currentUser.email || '',
           preferences: {
@@ -466,13 +465,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           defaultProfile.companyId = 'super-admin';
         }
         
+        console.log('refreshUserProfile: Creating user document with data:', {
+          ...defaultProfile,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
         await setDoc(doc(db, 'users', currentUser.uid), {
           ...defaultProfile,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        console.log('refreshUserProfile: User document created successfully');
         
+        console.log('refreshUserProfile: Setting default profile:', defaultProfile);
         setUserProfile(defaultProfile);
+        console.log('refreshUserProfile: Profile state updated');
         
         // Set permissions based on company membership
         if (defaultProfile.companyId) {
@@ -487,7 +494,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setUserProfile(null);
       setPermissions(null);
     }
-  };
+  }, [currentUser]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -505,7 +512,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     });
 
     return unsubscribe;
-  }, []);
+  }, [refreshUserProfile]);
 
   const updateUserProfile = async (updatedProfile: Partial<AppUser>) => {
     try {

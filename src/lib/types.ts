@@ -1,4 +1,4 @@
-// Type definitions for the Construction PM app
+// Type definitions for the Scaffold app
 
 export interface Project {
   id: string;

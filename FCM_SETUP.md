@@ -14,7 +14,7 @@ FCM is currently **disabled** but fully implemented. See `FCM_ENABLE_LATER.md` f
 ## Step 1: Enable Cloud Messaging in Firebase Console
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Select your project: `construction-pm`
+2. Select your project: `scaffold`
 3. Go to **Project Settings** → **Cloud Messaging**
 4. Note your **Server Key** (if needed for legacy FCM)
 

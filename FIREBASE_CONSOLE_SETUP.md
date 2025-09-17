@@ -9,7 +9,7 @@
 
 ### Option A: Use Firebase Console Functions
 1. **Go to Firebase Console**: https://console.firebase.google.com
-2. **Select your project**: construction-pm
+2. **Select your project**: scaffold
 3. **Go to Functions** in the left sidebar
 4. **Click "Get Started"** if first time
 5. **Follow the setup wizard**

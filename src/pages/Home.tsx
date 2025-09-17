@@ -223,7 +223,7 @@ const Home: React.FC = () => {
     const userRole = getUserRole();
 
     return (
-      <Layout title={`${selectedCompanyName} - ${t('app.title')}`} onMenuClick={handleMenuClick}>
+      <Layout title={`${selectedCompanyName} - ${t('app.title')}`} onMenuClick={handleMenuClick} currentRole={userRole}>
         <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
           <NotificationPermission />
           
@@ -257,7 +257,7 @@ const Home: React.FC = () => {
 
   // Show company management dashboard if no company is selected
   return (
-    <Layout title={t('app.title')} onMenuClick={handleMenuClick}>
+    <Layout title={t('app.title')} onMenuClick={handleMenuClick} currentRole={undefined}>
       <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
         <NotificationPermission />
         

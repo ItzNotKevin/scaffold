@@ -6,7 +6,7 @@ Since Firebase CLI authentication is not available, you'll need to deploy the Fi
 
 ### 1. Go to Firebase Console
 - Visit: https://console.firebase.google.com/
-- Select your project: `construction-pm`
+- Select your project: `scaffold`
 
 ### 2. Navigate to Firestore
 - Click on "Firestore Database" in the left sidebar

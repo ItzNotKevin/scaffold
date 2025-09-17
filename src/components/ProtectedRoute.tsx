@@ -11,17 +11,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { currentUser, loading } = useAuth();
   const navigate = useNavigate();
 
-  console.log('ProtectedRoute: Render', { loading, currentUser: currentUser ? 'logged in' : 'logged out' });
 
   useEffect(() => {
     if (!loading && !currentUser) {
-      console.log('ProtectedRoute: No user, redirecting to auth');
       navigate('/auth');
     }
   }, [currentUser, loading, navigate]);
 
   if (loading) {
-    console.log('ProtectedRoute: Showing loading state');
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
@@ -33,7 +30,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!currentUser) {
-    console.log('ProtectedRoute: No user, showing loading while redirecting');
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
@@ -44,7 +40,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  console.log('ProtectedRoute: User authenticated, showing children');
   return <>{children}</>;
 };
 

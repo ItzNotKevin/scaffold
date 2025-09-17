@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Construction PM"
+    "title": "Scaffold"
   },
   "common": {
     "loading": "Loading...",
@@ -44,6 +44,8 @@
     "dontHaveAccount": "Don't have an account?",
     "loginSuccess": "Login successful",
     "signupSuccess": "Account created successfully",
+    "loginDescription": "Sign in to your account to continue",
+    "signupDescription": "Create a new account to get started",
     "loginError": "Login failed",
     "signupError": "Signup failed",
     "invalidCredentials": "Invalid email or password",
@@ -140,7 +142,7 @@
     "refreshUsers": "Refresh"
   },
   "dashboard": {
-    "welcome": "Welcome to Construction PM",
+    "welcome": "Welcome to Scaffold",
     "overview": "Project Overview",
     "recentProjects": "Recent Projects",
     "quickActions": "Quick Actions",
@@ -183,5 +185,42 @@
     "light": "Light",
     "dark": "Dark",
     "system": "System"
+  },
+  "profile": {
+    "title": "Profile",
+    "subtitle": "Manage your account settings and personal information",
+    "profilePicture": "Profile Picture",
+    "uploadPicture": "Upload Picture",
+    "changePicture": "Change Picture",
+    "removePicture": "Remove Picture",
+    "personalInfo": "Personal Information",
+    "displayName": "Display Name",
+    "enterDisplayName": "Enter your display name",
+    "email": "Email",
+    "enterEmail": "Enter your email address",
+    "updateProfile": "Update Profile",
+    "password": "Password",
+    "changePassword": "Change Password",
+    "currentPassword": "Current Password",
+    "enterCurrentPassword": "Enter your current password",
+    "newPassword": "New Password",
+    "enterNewPassword": "Enter your new password",
+    "confirmPassword": "Confirm Password",
+    "confirmNewPassword": "Confirm your new password",
+    "updatePassword": "Update Password",
+    "cancel": "Cancel",
+    "profileUpdated": "Profile updated successfully",
+    "passwordUpdated": "Password updated successfully",
+    "pictureUpdated": "Profile picture updated successfully",
+    "pictureRemoved": "Profile picture removed successfully",
+    "updateError": "Failed to update profile",
+    "passwordError": "Failed to update password",
+    "pictureError": "Failed to update profile picture",
+    "invalidFile": "Please select a valid image file",
+    "fileTooLarge": "Image size must be less than 5MB",
+    "passwordMismatch": "New passwords do not match",
+    "passwordTooShort": "Password must be at least 6 characters",
+    "wrongPassword": "Current password is incorrect",
+    "weakPassword": "Password is too weak"
   }
 }

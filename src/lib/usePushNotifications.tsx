@@ -104,7 +104,7 @@ export const PushNotificationProvider: React.FC<PushNotificationProviderProps> =
         // Show a test notification to confirm it's working
         pushNotificationService.showNotification('Notifications Enabled!', {
           body: 'You will now receive updates about your projects.',
-          icon: '/pwa-192x192.png'
+          icon: '/scaffold-logo.png'
         });
       } else {
         console.log('Step 3: No subscription returned');

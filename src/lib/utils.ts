@@ -1,4 +1,4 @@
-// Utility functions for the Construction PM app
+// Utility functions for the Scaffold app
 
 export const formatDate = (date: Date): string => {
   return new Intl.DateTimeFormat('en-US', {

@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Construction PM"
+    "title": "Scaffold"
   },
   "common": {
     "loading": "Chargement...",
@@ -44,6 +44,8 @@
     "dontHaveAccount": "Vous n'avez pas de compte ?",
     "loginSuccess": "Connexion réussie",
     "signupSuccess": "Compte créé avec succès",
+    "loginDescription": "Connectez-vous à votre compte pour continuer",
+    "signupDescription": "Créez un nouveau compte pour commencer",
     "loginError": "Échec de la connexion",
     "signupError": "Échec de l'inscription",
     "invalidCredentials": "Email ou mot de passe invalide",
@@ -140,7 +142,7 @@
     "refreshUsers": "Actualiser"
   },
   "dashboard": {
-    "welcome": "Bienvenue dans Construction PM",
+    "welcome": "Bienvenue dans Scaffold",
     "overview": "Aperçu du Projet",
     "recentProjects": "Projets Récents",
     "quickActions": "Actions Rapides",
@@ -183,5 +185,42 @@
     "light": "Clair",
     "dark": "Sombre",
     "system": "Système"
+  },
+  "profile": {
+    "title": "Profil",
+    "subtitle": "Gérez les paramètres de votre compte et vos informations personnelles",
+    "profilePicture": "Photo de Profil",
+    "uploadPicture": "Télécharger une Photo",
+    "changePicture": "Changer la Photo",
+    "removePicture": "Supprimer la Photo",
+    "personalInfo": "Informations Personnelles",
+    "displayName": "Nom d'Affichage",
+    "enterDisplayName": "Entrez votre nom d'affichage",
+    "email": "Email",
+    "enterEmail": "Entrez votre adresse email",
+    "updateProfile": "Mettre à Jour le Profil",
+    "password": "Mot de Passe",
+    "changePassword": "Changer le Mot de Passe",
+    "currentPassword": "Mot de Passe Actuel",
+    "enterCurrentPassword": "Entrez votre mot de passe actuel",
+    "newPassword": "Nouveau Mot de Passe",
+    "enterNewPassword": "Entrez votre nouveau mot de passe",
+    "confirmPassword": "Confirmer le Mot de Passe",
+    "confirmNewPassword": "Confirmez votre nouveau mot de passe",
+    "updatePassword": "Mettre à Jour le Mot de Passe",
+    "cancel": "Annuler",
+    "profileUpdated": "Profil mis à jour avec succès",
+    "passwordUpdated": "Mot de passe mis à jour avec succès",
+    "pictureUpdated": "Photo de profil mise à jour avec succès",
+    "pictureRemoved": "Photo de profil supprimée avec succès",
+    "updateError": "Échec de la mise à jour du profil",
+    "passwordError": "Échec de la mise à jour du mot de passe",
+    "pictureError": "Échec de la mise à jour de la photo de profil",
+    "invalidFile": "Veuillez sélectionner un fichier image valide",
+    "fileTooLarge": "La taille de l'image doit être inférieure à 5MB",
+    "passwordMismatch": "Les nouveaux mots de passe ne correspondent pas",
+    "passwordTooShort": "Le mot de passe doit contenir au moins 6 caractères",
+    "wrongPassword": "Le mot de passe actuel est incorrect",
+    "weakPassword": "Le mot de passe est trop faible"
   }
 }

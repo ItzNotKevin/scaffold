@@ -1,5 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider } from './lib/useAuth';
 import { PushNotificationProvider } from './lib/usePushNotifications';
 // import { TaskReminderProvider } from './lib/useTaskReminders';
@@ -9,6 +11,7 @@ import { LanguageProvider } from './lib/LanguageContext';
 import Home from './pages/Home';
 import AuthPage from './pages/AuthPage.tsx';
 import ProjectPage from './pages/ProjectPage.tsx';
+import ProfilePage from './pages/ProfilePage.tsx';
 import DebugPage from './pages/DebugPage';
 
 function App() {
@@ -20,26 +23,36 @@ function App() {
             <LanguageProvider>
               <div className="min-h-screen bg-gray-50">
                 <Routes>
-                  <Route path="/auth" element={<AuthPage />} />
-                  <Route path="/debug" element={<DebugPage />} />
-                  <Route
-                    path="/"
-                    element={
-                      <ProtectedRoute>
-                        <Home />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/project/:id"
-                    element={
-                      <ProtectedRoute>
-                        <ProjectPage />
-                      </ProtectedRoute>
-                    }
-                  />
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/debug" element={<DebugPage />} />
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <Home />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <ProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/project/:id"
+                  element={
+                    <ProtectedRoute>
+                      <ProjectPage />
+                    </ProtectedRoute>
+                  }
+                />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
+                <Analytics />
+                <SpeedInsights />
               </div>
             </LanguageProvider>
           </PushNotificationProvider>
