@@ -8,7 +8,8 @@ const NotificationPermission: React.FC = () => {
     permission,
     isLoading,
     error,
-    requestPermission
+    requestPermission,
+    getFCMToken
   } = useFCM();
 
   const [showDetails, setShowDetails] = useState(false);
@@ -29,11 +30,22 @@ const NotificationPermission: React.FC = () => {
 
   // Add a test button for debugging
   const testNotification = () => {
+    console.log('Testing basic notification...');
+    console.log('Notification in window:', 'Notification' in window);
+    console.log('Permission:', Notification.permission);
+    
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('Test Notification', {
-        body: 'This is a test notification from Scaffold',
-        icon: '/scaffold-logo.png'
-      });
+      try {
+        const notification = new Notification('Test Notification', {
+          body: 'This is a test notification from Scaffold',
+          icon: '/scaffold-logo.png'
+        });
+        console.log('Basic notification created:', notification);
+      } catch (error) {
+        console.error('Error creating basic notification:', error);
+      }
+    } else {
+      console.log('Cannot create notification - permission not granted or not supported');
     }
   };
 
@@ -64,12 +76,23 @@ const NotificationPermission: React.FC = () => {
               Push notifications are enabled. You'll receive updates about your projects.
             </span>
           </div>
-          <button
-            onClick={testNotification}
-            className="text-xs text-green-600 hover:text-green-700 font-medium underline"
-          >
-            Test Notification
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={testNotification}
+              className="text-xs text-green-600 hover:text-green-700 font-medium underline"
+            >
+              Test Basic Notification
+            </button>
+            <button
+              onClick={() => {
+                console.log('Testing FCM token generation...');
+                getFCMToken();
+              }}
+              className="text-xs text-green-600 hover:text-green-700 font-medium underline"
+            >
+              Test FCM Token
+            </button>
+          </div>
         </div>
       </div>
     );

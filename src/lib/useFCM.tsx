@@ -69,9 +69,14 @@ export const useFCM = () => {
     }
 
     try {
-      console.log('FCM: Attempting to get token with VAPID key:', import.meta.env.VITE_FIREBASE_VAPID_KEY);
+      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+      console.log('FCM: VAPID key length:', vapidKey?.length);
+      console.log('FCM: VAPID key starts with:', vapidKey?.substring(0, 10));
+      console.log('FCM: VAPID key ends with:', vapidKey?.substring(vapidKey.length - 10));
+      console.log('FCM: Attempting to get token with VAPID key:', vapidKey);
+      
       const token = await getToken(messaging, {
-        vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY
+        vapidKey: vapidKey
       });
       
       if (token) {
