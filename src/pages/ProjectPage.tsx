@@ -160,9 +160,12 @@ const ProjectPage: React.FC = () => {
   };
 
   const showProjectNotification = (projectName: string, action: string) => {
+    console.log('showProjectNotification called:', { projectName, action, fcmToken, permission: Notification.permission });
+    
     if (fcmToken) {
       // Check if it's a fallback token
       if (fcmToken.startsWith('fallback-')) {
+        console.log('Using fallback notification for project');
         // Use basic browser notification as fallback
         if (Notification.permission === 'granted') {
           new Notification('Project Update', {
@@ -170,10 +173,14 @@ const ProjectPage: React.FC = () => {
             icon: '/scaffold-logo.png',
             tag: `project-${id}-${Date.now()}`
           });
+          console.log('Fallback project notification sent');
+        } else {
+          console.log('Notification permission not granted for fallback');
         }
         return;
       }
       
+      console.log('Sending FCM notification for project');
       // Send FCM notification via Cloud Function
       fetch(`${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`, {
         method: 'POST',
@@ -194,15 +201,18 @@ const ProjectPage: React.FC = () => {
       }).catch(error => {
         console.error('Error sending FCM notification:', error);
         // Fallback to basic notification if FCM fails
+        console.log('FCM failed, using fallback notification for project');
         if (Notification.permission === 'granted') {
           new Notification('Project Update', {
             body: `Project "${projectName}" was ${action}`,
             icon: '/scaffold-logo.png',
             tag: `project-${id}-${Date.now()}`
           });
+          console.log('Fallback project notification sent after FCM error');
         }
       });
     } else {
+      console.log('No FCM token available for project notification');
       // Use basic notification if no FCM token
       if (Notification.permission === 'granted') {
         new Notification('Project Update', {
@@ -210,6 +220,9 @@ const ProjectPage: React.FC = () => {
           icon: '/scaffold-logo.png',
           tag: `project-${id}-${Date.now()}`
         });
+        console.log('Basic project notification sent (no FCM token)');
+      } else {
+        console.log('Notification permission not granted');
       }
     }
   };
@@ -1356,6 +1369,7 @@ ${reportData.isOverBudget
   };
 
   const handlePhaseChange = async (newPhase: Phase) => {
+    console.log('handlePhaseChange called:', { newPhase, projectName, fcmToken });
     if (!id) return;
     const oldPhase = phase;
     setPhase(newPhase);
@@ -1373,6 +1387,7 @@ ${reportData.isOverBudget
     // }
     
     // Show notification
+    console.log('Calling showProjectNotification...');
     showProjectNotification(projectName, `moved to ${newPhase} phase`);
   };
 
