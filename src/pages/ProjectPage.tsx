@@ -101,6 +101,10 @@ const ProjectPage: React.FC = () => {
   const navigate = useNavigate();
   const { fcmToken } = useFCM();
   
+  // Debug the id parameter
+  console.log('ProjectPage: id from useParams:', id);
+  console.log('ProjectPage: current URL:', window.location.href);
+  
 
   // FCM Notification functions
   const showTaskNotification = (taskTitle: string, action: string, projectName: string) => {
@@ -160,7 +164,13 @@ const ProjectPage: React.FC = () => {
   };
 
   const showProjectNotification = (projectName: string, action: string) => {
-    console.log('showProjectNotification called:', { projectName, action, fcmToken, permission: Notification.permission });
+    console.log('showProjectNotification called:', { projectName, action, fcmToken, permission: Notification.permission, id });
+    
+    // Check if id is available
+    if (!id) {
+      console.error('Project ID is undefined, cannot send notification');
+      return;
+    }
     
     if (fcmToken) {
       // Check if it's a fallback token
@@ -182,7 +192,9 @@ const ProjectPage: React.FC = () => {
       
       console.log('Sending FCM notification for project');
       // Send FCM notification via Cloud Function
-      fetch(`${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`, {
+      const fcmUrl = `${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`;
+      console.log('FCM URL:', fcmUrl);
+      fetch(fcmUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
