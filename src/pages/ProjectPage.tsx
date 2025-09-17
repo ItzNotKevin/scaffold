@@ -7,6 +7,9 @@ import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import { sendPhaseUpdateEmails } from '../lib/emailNotifications';
 import { usePushNotifications } from '../lib/usePushNotifications';
+import DailyReportForm from '../components/DailyReportForm';
+import DailyReportList from '../components/DailyReportList';
+import type { DailyReport } from '../lib/types';
 
 const phases = ['Sales','Contract','Materials','Construction','Completion'] as const;
 type Phase = typeof phases[number];
@@ -36,6 +39,7 @@ interface Task {
   userId: string;
   title: string;
   description: string;
+  status: 'todo' | 'in-progress' | 'review' | 'completed';
   dueDate: any;
   priority: 'Low' | 'Medium' | 'High' | 'Urgent';
   completed: boolean;
@@ -93,7 +97,7 @@ interface Expense {
 
 const ProjectPage: React.FC = () => {
   const { id } = useParams();
-  const { currentUser } = useAuth();
+  const { currentUser, permissions } = useAuth();
   const navigate = useNavigate();
   const { showTaskNotification, showProjectNotification, showCommentNotification } = usePushNotifications();
   
@@ -102,7 +106,7 @@ const ProjectPage: React.FC = () => {
   const [projectDescription, setProjectDescription] = useState('');
   const [phase, setPhase] = useState<Phase>('Sales');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'Photos' | 'Staff' | 'Feedback' | 'Tasks'>('Photos');
+  const [activeTab, setActiveTab] = useState<'Photos' | 'Staff' | 'Feedback' | 'Tasks' | 'Daily Reports'>('Photos');
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -146,6 +150,10 @@ const ProjectPage: React.FC = () => {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
+  
+  // Daily Reports state
+  const [showDailyReportForm, setShowDailyReportForm] = useState(false);
+  const [editingDailyReport, setEditingDailyReport] = useState<DailyReport | null>(null);
   
   // Photo upload feature enabled - Firebase Storage bucket is now available
   const PHOTO_UPLOAD_ENABLED = true;
@@ -519,6 +527,7 @@ const ProjectPage: React.FC = () => {
           userId: data.userId,
           title: data.title,
           description: data.description,
+          status: data.status || 'todo',
           dueDate: data.dueDate,
           priority: data.priority,
           completed: data.completed || false,
@@ -2054,6 +2063,14 @@ ${reportData.isOverBudget
                 {t}
               </button>
             ))}
+            {permissions?.canViewDailyReports && (
+              <button 
+                onClick={() => setActiveTab('Daily Reports')} 
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[44px] flex-1 sm:flex-none ${activeTab==='Daily Reports'?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                Daily Reports
+              </button>
+            )}
           </div>
 
           {activeTab === 'Photos' && (
@@ -2912,6 +2929,47 @@ ${reportData.isOverBudget
               </div>
             </div>
           )}
+
+          {activeTab === 'Daily Reports' && permissions?.canViewDailyReports && (
+            <div>
+              {showDailyReportForm ? (
+                <DailyReportForm
+                  projectId={id!}
+                  existingReport={editingDailyReport || undefined}
+                  projectTasks={tasks.map(task => ({
+                    id: task.id,
+                    title: task.title,
+                    status: task.status
+                  }))}
+                  onSave={(report) => {
+                    console.log('Daily report saved:', report);
+                    setShowDailyReportForm(false);
+                    setEditingDailyReport(null);
+                  }}
+                  onCancel={() => {
+                    setShowDailyReportForm(false);
+                    setEditingDailyReport(null);
+                  }}
+                />
+              ) : (
+                <DailyReportList
+                  projectId={id!}
+                  onEditReport={(report) => {
+                    setEditingDailyReport(report);
+                    setShowDailyReportForm(true);
+                  }}
+                  onCreateReport={() => {
+                    setEditingDailyReport(null);
+                    setShowDailyReportForm(true);
+                  }}
+                  canCreate={permissions?.canCreateDailyReports || false}
+                  canEdit={permissions?.canManageDailyReports || false}
+                  canDelete={permissions?.canManageDailyReports || false}
+                  canApprove={permissions?.canApproveDailyReports || false}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -3227,8 +3285,8 @@ ${reportData.isOverBudget
                   <label className="block text-sm font-medium text-gray-700 mb-2">Budget ($)</label>
                   <input
                     type="number"
-                    value={budget}
-                    onChange={(e) => setBudget(Number(e.target.value))}
+                    value={budget || ''}
+                    onChange={(e) => setBudget(Number(e.target.value) || 0)}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                     placeholder="Enter project budget"
                     min="0"

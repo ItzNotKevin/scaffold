@@ -57,6 +57,10 @@ interface RolePermissions {
   canCreateFeedback: boolean;
   canViewFeedback: boolean;
   canManageCompany: boolean;
+  canManageDailyReports: boolean;
+  canCreateDailyReports: boolean;
+  canViewDailyReports: boolean;
+  canApproveDailyReports: boolean;
 }
 
 // Role-based permission utility
@@ -76,6 +80,10 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canCreateFeedback: true,
         canViewFeedback: true,
         canManageCompany: true,
+        canManageDailyReports: true,
+        canCreateDailyReports: true,
+        canViewDailyReports: true,
+        canApproveDailyReports: true,
       };
     case 'staff':
       return {
@@ -91,6 +99,10 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canCreateFeedback: true,
         canViewFeedback: true,
         canManageCompany: false,
+        canManageDailyReports: true,
+        canCreateDailyReports: true,
+        canViewDailyReports: true,
+        canApproveDailyReports: false,
       };
     case 'client':
       return {
@@ -106,6 +118,10 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canCreateFeedback: true,
         canViewFeedback: true,
         canManageCompany: false,
+        canManageDailyReports: false,
+        canCreateDailyReports: false,
+        canViewDailyReports: true,
+        canApproveDailyReports: false,
       };
     default:
       return {
@@ -121,6 +137,10 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canCreateFeedback: false,
         canViewFeedback: false,
         canManageCompany: false,
+        canManageDailyReports: false,
+        canCreateDailyReports: false,
+        canViewDailyReports: false,
+        canApproveDailyReports: false,
       };
   }
 };

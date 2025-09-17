@@ -132,6 +132,120 @@ export interface Feedback {
   updatedAt: any;
 }
 
+export interface DailyReport {
+  id: string;
+  projectId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  reportDate: string; // YYYY-MM-DD format
+  weather: WeatherData;
+  workLog: WorkLogEntry[];
+  safetyChecks: SafetyCheck[];
+  equipment: EquipmentEntry[];
+  materials: MaterialEntry[];
+  photos: DailyReportPhoto[];
+  notes: string;
+  issues: IssueEntry[];
+  subcontractors: SubcontractorEntry[];
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  submittedAt?: any;
+  approvedAt?: any;
+  approvedBy?: string;
+  approvedByName?: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface WeatherData {
+  temperature: number;
+  condition: 'sunny' | 'partly-cloudy' | 'cloudy' | 'rainy' | 'stormy' | 'snowy' | 'foggy';
+  windSpeed?: number;
+  humidity?: number;
+  notes?: string;
+}
+
+export interface WorkLogEntry {
+  id: string;
+  crewMember: string;
+  workPerformed: string;
+  hoursWorked: number;
+  startTime: string;
+  endTime: string;
+  location: string;
+  notes?: string;
+}
+
+export interface SafetyCheck {
+  id: string;
+  category: 'ppe' | 'equipment' | 'site-conditions' | 'emergency' | 'other';
+  description: string;
+  status: 'passed' | 'failed' | 'needs-attention';
+  notes?: string;
+  photos?: string[];
+}
+
+export interface EquipmentEntry {
+  id: string;
+  equipmentName: string;
+  condition: 'excellent' | 'good' | 'fair' | 'poor' | 'out-of-service';
+  hoursUsed?: number;
+  fuelUsed?: number;
+  maintenanceNotes?: string;
+  operator?: string;
+}
+
+export interface MaterialEntry {
+  id: string;
+  materialName: string;
+  quantity: number;
+  unit: string;
+  supplier?: string;
+  deliveryTime?: string;
+  condition: 'excellent' | 'good' | 'fair' | 'poor' | 'damaged';
+  notes?: string;
+}
+
+export interface DailyReportPhoto {
+  id: string;
+  url: string;
+  caption: string;
+  category: 'progress' | 'safety' | 'issue' | 'equipment' | 'materials' | 'general';
+  uploadedAt: any;
+  location?: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  };
+}
+
+export interface IssueEntry {
+  id: string;
+  title: string;
+  description: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  category: 'safety' | 'quality' | 'schedule' | 'cost' | 'other';
+  status: 'open' | 'in-progress' | 'resolved' | 'closed';
+  assignedTo?: string;
+  assignedToName?: string;
+  dueDate?: string;
+  photos?: string[];
+  resolution?: string;
+  resolvedAt?: any;
+  resolvedBy?: string;
+}
+
+export interface SubcontractorEntry {
+  id: string;
+  companyName: string;
+  workPerformed: string;
+  crewSize: number;
+  hoursWorked: number;
+  contactPerson?: string;
+  contactPhone?: string;
+  notes?: string;
+}
+
 // Role-based permission types
 export type UserRole = 'admin' | 'staff' | 'client';
 
@@ -148,6 +262,10 @@ export interface RolePermissions {
   canCreateFeedback: boolean;
   canViewFeedback: boolean;
   canManageCompany: boolean;
+  canManageDailyReports: boolean;
+  canCreateDailyReports: boolean;
+  canViewDailyReports: boolean;
+  canApproveDailyReports: boolean;
 }
 
 // Role-based permission utility
@@ -167,6 +285,10 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canCreateFeedback: true,
         canViewFeedback: true,
         canManageCompany: true,
+        canManageDailyReports: true,
+        canCreateDailyReports: true,
+        canViewDailyReports: true,
+        canApproveDailyReports: true,
       };
     case 'staff':
       return {
@@ -182,6 +304,10 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canCreateFeedback: true,
         canViewFeedback: true,
         canManageCompany: false,
+        canManageDailyReports: true,
+        canCreateDailyReports: true,
+        canViewDailyReports: true,
+        canApproveDailyReports: false,
       };
     case 'client':
       return {
@@ -197,6 +323,10 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canCreateFeedback: true,
         canViewFeedback: true,
         canManageCompany: false,
+        canManageDailyReports: false,
+        canCreateDailyReports: false,
+        canViewDailyReports: true,
+        canApproveDailyReports: false,
       };
     default:
       return {
@@ -212,6 +342,10 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canCreateFeedback: false,
         canViewFeedback: false,
         canManageCompany: false,
+        canManageDailyReports: false,
+        canCreateDailyReports: false,
+        canViewDailyReports: false,
+        canApproveDailyReports: false,
       };
   }
 };
