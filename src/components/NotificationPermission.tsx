@@ -81,52 +81,7 @@ const NotificationPermission: React.FC = () => {
               onClick={testNotification}
               className="text-xs text-green-600 hover:text-green-700 font-medium underline"
             >
-              Test Basic Notification
-            </button>
-            <button
-              onClick={() => {
-                console.log('Testing FCM token generation...');
-                getFCMToken();
-              }}
-              className="text-xs text-green-600 hover:text-green-700 font-medium underline"
-            >
-              Test FCM Token
-            </button>
-            <button
-              onClick={() => {
-                console.log('Testing FCM without VAPID key...');
-                // Test basic FCM without VAPID key
-                import('firebase/messaging').then(({ getToken }) => {
-                  import('../lib/firebase').then(({ messaging }) => {
-                    getToken(messaging).then(token => {
-                      console.log('FCM token without VAPID:', token);
-                    }).catch(error => {
-                      console.error('FCM error without VAPID:', error);
-                    });
-                  });
-                });
-              }}
-              className="text-xs text-green-600 hover:text-green-700 font-medium underline"
-            >
-              Test FCM (No VAPID)
-            </button>
-            <button
-              onClick={() => {
-                console.log('Testing fallback notification system...');
-                // Test fallback notification
-                if (Notification.permission === 'granted') {
-                  new Notification('Fallback Test', {
-                    body: 'This is a test of the fallback notification system',
-                    icon: '/scaffold-logo.png',
-                    tag: 'fallback-test'
-                  });
-                } else {
-                  console.log('Notification permission not granted');
-                }
-              }}
-              className="text-xs text-green-600 hover:text-green-700 font-medium underline"
-            >
-              Test Fallback
+              Test Notification
             </button>
           </div>
         </div>

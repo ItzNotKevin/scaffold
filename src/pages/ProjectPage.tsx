@@ -100,6 +100,7 @@ const ProjectPage: React.FC = () => {
   const { currentUser, permissions } = useAuth();
   const navigate = useNavigate();
   const { fcmToken } = useFCM();
+  
 
   // FCM Notification functions
   const showTaskNotification = (taskTitle: string, action: string, projectName: string) => {
@@ -135,7 +136,26 @@ const ProjectPage: React.FC = () => {
             projectId: id
           }
         })
-      }).catch(error => console.error('Error sending FCM notification:', error));
+      }).catch(error => {
+        console.error('Error sending FCM notification:', error);
+        // Fallback to basic notification if FCM fails
+        if (Notification.permission === 'granted') {
+          new Notification('Task Update', {
+            body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
+            icon: '/scaffold-logo.png',
+            tag: `task-${id}-${Date.now()}`
+          });
+        }
+      });
+    } else {
+      // Use basic notification if no FCM token
+      if (Notification.permission === 'granted') {
+        new Notification('Task Update', {
+          body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
+          icon: '/scaffold-logo.png',
+          tag: `task-${id}-${Date.now()}`
+        });
+      }
     }
   };
 
@@ -171,7 +191,26 @@ const ProjectPage: React.FC = () => {
             projectId: id
           }
         })
-      }).catch(error => console.error('Error sending FCM notification:', error));
+      }).catch(error => {
+        console.error('Error sending FCM notification:', error);
+        // Fallback to basic notification if FCM fails
+        if (Notification.permission === 'granted') {
+          new Notification('Project Update', {
+            body: `Project "${projectName}" was ${action}`,
+            icon: '/scaffold-logo.png',
+            tag: `project-${id}-${Date.now()}`
+          });
+        }
+      });
+    } else {
+      // Use basic notification if no FCM token
+      if (Notification.permission === 'granted') {
+        new Notification('Project Update', {
+          body: `Project "${projectName}" was ${action}`,
+          icon: '/scaffold-logo.png',
+          tag: `project-${id}-${Date.now()}`
+        });
+      }
     }
   };
 
@@ -1322,16 +1361,16 @@ ${reportData.isOverBudget
     setPhase(newPhase);
     await updateDoc(doc(db, 'projects', id), { phase: newPhase, updatedAt: serverTimestamp() });
     
-    // Send email notifications for phase update
-    try {
-      await sendPhaseUpdateEmails({
-        name: projectName,
-        phase: newPhase
-      }, oldPhase, companyId || '');
-      console.log('ProjectPage: Phase update email notifications sent');
-    } catch (emailError) {
-      console.error('ProjectPage: Error sending phase update emails:', emailError);
-    }
+    // Email notifications disabled - using push notifications only
+    // try {
+    //   await sendPhaseUpdateEmails({
+    //     name: projectName,
+    //     phase: newPhase
+    //   }, oldPhase, companyId || '');
+    //   console.log('ProjectPage: Phase update email notifications sent');
+    // } catch (emailError) {
+    //   console.error('ProjectPage: Error sending phase update emails:', emailError);
+    // }
     
     // Show notification
     showProjectNotification(projectName, `moved to ${newPhase} phase`);

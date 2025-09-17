@@ -191,8 +191,9 @@ async function sendFCMNotification(tokens: string[], title: string, body: string
 export const sendFCMNotificationHTTP = functions.https.onRequest(async (req, res) => {
   // Enable CORS
   res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.set('Access-Control-Max-Age', '3600');
 
   if (req.method === 'OPTIONS') {
     res.status(200).send('');

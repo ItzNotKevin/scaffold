@@ -116,7 +116,22 @@ export const useFCM = () => {
       console.error('FCM: Error retrieving token:', error);
       
       // If FCM fails, we'll use a fallback approach
-      if (error.message.includes('token-subscribe-failed') || error.message.includes('401')) {
+      console.log('FCM: Error details:', error.message);
+      console.log('FCM: Error includes token-subscribe-failed:', error.message.includes('token-subscribe-failed'));
+      console.log('FCM: Error includes 401:', error.message.includes('401'));
+      console.log('FCM: Error includes Unauthorized:', error.message.includes('Unauthorized'));
+      console.log('FCM: Error includes authentication:', error.message.includes('authentication'));
+      
+      // Check for various authentication error patterns
+      const isAuthError = error.message.includes('token-subscribe-failed') || 
+                         error.message.includes('401') || 
+                         error.message.includes('Unauthorized') ||
+                         error.message.includes('authentication') ||
+                         error.message.includes('credential');
+      
+      console.log('FCM: isAuthError:', isAuthError);
+      
+      if (isAuthError) {
         console.log('FCM: Authentication failed, using fallback notification system');
         setError('FCM authentication failed. Using fallback notification system.');
         
@@ -125,6 +140,7 @@ export const useFCM = () => {
         setFcmToken(fallbackToken);
         console.log('FCM: Using fallback token:', fallbackToken);
       } else {
+        console.log('FCM: Different error, not using fallback');
         setError('Failed to get FCM token: ' + error.message);
       }
     }
@@ -181,9 +197,18 @@ export const useFCM = () => {
   // Get FCM token when user logs in
   useEffect(() => {
     if (currentUser && permission === 'granted') {
+      console.log('FCM: User logged in, attempting to get FCM token...');
       getFCMToken();
     }
   }, [currentUser, permission]);
+
+  // Also try to get FCM token when component mounts if permission is already granted
+  useEffect(() => {
+    if (permission === 'granted' && !fcmToken && !isLoading) {
+      console.log('FCM: Permission already granted, attempting to get FCM token...');
+      getFCMToken();
+    }
+  }, [permission, fcmToken, isLoading]);
 
   return {
     fcmToken,
