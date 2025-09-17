@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider } from './lib/useAuth';
 import { PushNotificationProvider } from './lib/usePushNotifications';
+import FCMProvider from './components/FCMProvider';
 // import { TaskReminderProvider } from './lib/useTaskReminders';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -20,7 +21,8 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <PushNotificationProvider>
-            <LanguageProvider>
+            <FCMProvider>
+              <LanguageProvider>
               <div className="min-h-screen bg-gray-50">
                 <Routes>
                 <Route path="/auth" element={<AuthPage />} />
@@ -54,7 +56,8 @@ function App() {
                 <Analytics />
                 <SpeedInsights />
               </div>
-            </LanguageProvider>
+              </LanguageProvider>
+            </FCMProvider>
           </PushNotificationProvider>
         </AuthProvider>
       </BrowserRouter>
