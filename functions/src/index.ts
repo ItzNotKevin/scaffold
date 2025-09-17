@@ -187,6 +187,44 @@ async function sendFCMNotification(tokens: string[], title: string, body: string
   }
 }
 
+// HTTP function to send FCM notifications directly
+export const sendFCMNotificationHTTP = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  try {
+    const { tokens, title, body, data } = req.body;
+
+    if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
+      res.status(400).json({ error: 'Invalid or missing tokens' });
+      return;
+    }
+
+    if (!title || !body) {
+      res.status(400).json({ error: 'Missing title or body' });
+      return;
+    }
+
+    await sendFCMNotification(tokens, title, body, data);
+    res.status(200).json({ success: true, message: 'FCM notification sent' });
+  } catch (error) {
+    console.error('Error in sendFCMNotification function:', error);
+    res.status(500).json({ error: 'Failed to send FCM notification' });
+  }
+});
+
 // Trigger when a new project is created
 export const onProjectCreated = functions.firestore
   .document('projects/{projectId}')

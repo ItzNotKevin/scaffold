@@ -6,7 +6,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } 
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import { sendPhaseUpdateEmails } from '../lib/emailNotifications';
-import { usePushNotifications } from '../lib/usePushNotifications';
+import { useFCM } from '../lib/useFCM';
 import DailyReportForm from '../components/DailyReportForm';
 import DailyReportList from '../components/DailyReportList';
 import type { DailyReport } from '../lib/types';
@@ -99,7 +99,78 @@ const ProjectPage: React.FC = () => {
   const { id } = useParams();
   const { currentUser, permissions } = useAuth();
   const navigate = useNavigate();
-  const { showTaskNotification, showProjectNotification, showCommentNotification } = usePushNotifications();
+  const { fcmToken } = useFCM();
+
+  // FCM Notification functions
+  const showTaskNotification = (taskTitle: string, action: string, projectName: string) => {
+    if (fcmToken) {
+      // Send FCM notification via Cloud Function
+      fetch(`${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tokens: [fcmToken],
+          title: 'Task Update',
+          body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
+          data: {
+            type: 'task-update',
+            taskTitle,
+            action,
+            projectName,
+            projectId: id
+          }
+        })
+      }).catch(error => console.error('Error sending FCM notification:', error));
+    }
+  };
+
+  const showProjectNotification = (projectName: string, action: string) => {
+    if (fcmToken) {
+      // Send FCM notification via Cloud Function
+      fetch(`${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tokens: [fcmToken],
+          title: 'Project Update',
+          body: `Project "${projectName}" was ${action}`,
+          data: {
+            type: 'project-update',
+            projectName,
+            action,
+            projectId: id
+          }
+        })
+      }).catch(error => console.error('Error sending FCM notification:', error));
+    }
+  };
+
+  const showCommentNotification = (commenterName: string, taskTitle: string) => {
+    if (fcmToken) {
+      // Send FCM notification via Cloud Function
+      fetch(`${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tokens: [fcmToken],
+          title: 'New Comment',
+          body: `${commenterName} commented on task "${taskTitle}"`,
+          data: {
+            type: 'comment',
+            commenterName,
+            taskTitle,
+            projectId: id
+          }
+        })
+      }).catch(error => console.error('Error sending FCM notification:', error));
+    }
+  };
   
   console.log('ProjectPage: Rendered with project ID:', id);
   const [projectName, setProjectName] = useState('');

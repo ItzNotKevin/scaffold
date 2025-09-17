@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider } from './lib/useAuth';
-import { PushNotificationProvider } from './lib/usePushNotifications';
 import FCMProvider from './components/FCMProvider';
 // import { TaskReminderProvider } from './lib/useTaskReminders';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -20,9 +19,8 @@ function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <PushNotificationProvider>
-            <FCMProvider>
-              <LanguageProvider>
+          <FCMProvider>
+            <LanguageProvider>
               <div className="min-h-screen bg-gray-50">
                 <Routes>
                 <Route path="/auth" element={<AuthPage />} />
@@ -58,8 +56,7 @@ function App() {
               </div>
               </LanguageProvider>
             </FCMProvider>
-          </PushNotificationProvider>
-        </AuthProvider>
+          </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>
   );
