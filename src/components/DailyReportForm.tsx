@@ -315,11 +315,11 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <div className="mb-6">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
+        <div className="mb-4 sm:mb-6">
           <div className="mb-4">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">
               {existingReport ? 'Edit Daily Report' : 'Create Daily Report'}
             </h2>
             <p className="text-gray-600 mt-1 text-sm sm:text-base">
@@ -355,7 +355,7 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
 
         {/* Report Date */}
         <div className="bg-gray-50 rounded-xl p-4">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Report Date</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">Report Date</h3>
           <Input
             type="date"
             value={reportDate}
@@ -450,7 +450,7 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
                     <select
                       value={entry.workPerformed}
                       onChange={(e) => updateWorkLogEntry(entry.id, 'workPerformed', e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation min-h-[48px]"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation min-h-[48px] appearance-none bg-white"
                     >
                       <option value="">Select work performed...</option>
                       {projectTasks.map((task) => (
@@ -492,9 +492,10 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
                     <input
                       type="number"
                       value={entry.hoursWorked || ''}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base touch-manipulation min-h-[48px] bg-gray-100"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base touch-manipulation min-h-[48px] bg-gray-100 cursor-not-allowed"
                       readOnly
                       placeholder="Auto-calculated"
+                      tabIndex={-1}
                     />
                   </div>
                   <div>
@@ -859,47 +860,77 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
       </Card>
 
       {/* Photos */}
-      <Card className="p-4">
-        <h3 className="text-lg font-medium mb-3">Photos</h3>
-        <input
-          type="file"
-          multiple
-          accept="image/*"
-          onChange={(e) => e.target.files && handlePhotoUpload(e.target.files)}
-          className="w-full p-2 border border-gray-300 rounded-md"
-        />
+      <Card className="p-4 sm:p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <svg className="w-5 h-5 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          Photos
+        </h3>
         
-        {uploadedPhotos.length > 0 && (
-          <div className="mt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Uploaded Photos</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {uploadedPhotos.map((photo) => (
-                <div key={photo.id} className="relative">
-                  <img
-                    src={photo.url}
-                    alt={photo.caption}
-                    className="w-full h-24 object-cover rounded-lg"
-                  />
-                  <button
-                    onClick={() => removePhoto(photo.id)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
-                  >
-                    ×
-                  </button>
-                  <p className="text-xs text-gray-600 mt-1 truncate">{photo.caption}</p>
-                </div>
-              ))}
+        {/* Mobile-friendly file upload */}
+        <div className="space-y-4">
+          <div className="relative">
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={(e) => e.target.files && handlePhotoUpload(e.target.files)}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              id="photo-upload"
+            />
+            <label
+              htmlFor="photo-upload"
+              className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors"
+            >
+              <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              <p className="text-sm text-gray-600 font-medium">Tap to add photos</p>
+              <p className="text-xs text-gray-500">Supports multiple images</p>
+            </label>
+          </div>
+          
+          {uploadedPhotos.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Uploaded Photos ({uploadedPhotos.length})
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {uploadedPhotos.map((photo) => (
+                  <div key={photo.id} className="relative group">
+                    <img
+                      src={photo.url}
+                      alt={photo.caption}
+                      className="w-full h-24 sm:h-28 object-cover rounded-lg shadow-sm hover:shadow-md transition-shadow"
+                    />
+                    <button
+                      onClick={() => removePhoto(photo.id)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600 transition-colors shadow-lg"
+                    >
+                      ×
+                    </button>
+                    <p className="text-xs text-gray-600 mt-1 truncate px-1">{photo.caption}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-        
-        {photos.length > 0 && (
-          <div className="mt-3">
-            <p className="text-sm text-gray-600 mb-2">
-              {photos.length} photo(s) ready to upload
-            </p>
-          </div>
-        )}
+          )}
+          
+          {photos.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm text-blue-700 font-medium flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {photos.length} photo(s) ready to upload
+              </p>
+            </div>
+          )}
+        </div>
       </Card>
 
       {/* Notes */}

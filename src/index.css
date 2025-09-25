@@ -29,9 +29,15 @@
   input[type="text"],
   input[type="email"],
   input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
   textarea,
   select {
     font-size: 16px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
   }
   
   /* Better tap targets */
@@ -52,6 +58,20 @@
   
   .space-y-6 > * + * {
     margin-top: 1.5rem;
+  }
+  
+  /* Improve mobile form layouts */
+  .grid {
+    gap: 0.75rem;
+  }
+  
+  /* Better mobile card spacing */
+  .p-4 {
+    padding: 1rem;
+  }
+  
+  .p-6 {
+    padding: 1.25rem;
   }
 }
 

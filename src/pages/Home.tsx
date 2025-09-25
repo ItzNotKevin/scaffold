@@ -5,7 +5,6 @@ import { getRolePermissions } from '../lib/useAuth';
 import { usePWAInstall } from '../lib/usePWAInstall';
 import { useLanguage } from '../lib/LanguageContext';
 import Layout from '../components/Layout';
-import NotificationPermission from '../components/NotificationPermission';
 import CompanyManagementDashboard from '../components/CompanyManagementDashboard';
 import AdminDashboard from '../components/AdminDashboard';
 import StaffDashboard from '../components/StaffDashboard';
@@ -225,8 +224,6 @@ const Home: React.FC = () => {
     return (
       <Layout title={`${selectedCompanyName} - ${t('app.title')}`} onMenuClick={handleMenuClick} currentRole={userRole}>
         <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
-          <NotificationPermission />
-          
           <PageHeader
             title={selectedCompanyName}
             subtitle={t('app.title')}
@@ -259,9 +256,6 @@ const Home: React.FC = () => {
   return (
     <Layout title={t('app.title')} onMenuClick={handleMenuClick} currentRole={undefined}>
       <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
-        <NotificationPermission />
-        
-        
         <CompanyManagementDashboard
           onCreateCompany={handleCreateCompany}
           onJoinCompany={handleJoinCompany}

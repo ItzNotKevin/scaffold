@@ -122,8 +122,8 @@ const ProjectPage: React.FC = () => {
         return;
       }
       
-      // Send FCM notification via Cloud Function
-      fetch(`${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`, {
+      // Send notification via Vercel API route
+      fetch('/api/send-notification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -140,15 +140,30 @@ const ProjectPage: React.FC = () => {
             projectId: id
           }
         })
-      }).catch(error => {
-        console.error('Error sending FCM notification:', error);
-        // Fallback to basic notification if FCM fails
+      }).then(response => {
+        console.log('Task notification API response:', response.status);
+        return response.json();
+      }).then(data => {
+        console.log('Task notification API data:', data);
+        // Always show local notification regardless of API response
         if (Notification.permission === 'granted') {
           new Notification('Task Update', {
             body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
             icon: '/scaffold-logo.png',
             tag: `task-${id}-${Date.now()}`
           });
+          console.log('Local task notification sent');
+        }
+      }).catch(error => {
+        console.error('Error sending task notification:', error);
+        // Fallback to basic notification if API fails
+        if (Notification.permission === 'granted') {
+          new Notification('Task Update', {
+            body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
+            icon: '/scaffold-logo.png',
+            tag: `task-${id}-${Date.now()}`
+          });
+          console.log('Local task notification sent after API error');
         }
       });
     } else {
@@ -190,11 +205,9 @@ const ProjectPage: React.FC = () => {
         return;
       }
       
-      console.log('Sending FCM notification for project');
-      // Send FCM notification via Cloud Function
-      const fcmUrl = `${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`;
-      console.log('FCM URL:', fcmUrl);
-      fetch(fcmUrl, {
+      console.log('Sending notification for project');
+      // Send notification via Vercel API route
+      fetch('/api/send-notification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -210,17 +223,31 @@ const ProjectPage: React.FC = () => {
             projectId: id
           }
         })
-      }).catch(error => {
-        console.error('Error sending FCM notification:', error);
-        // Fallback to basic notification if FCM fails
-        console.log('FCM failed, using fallback notification for project');
+      }).then(response => {
+        console.log('Notification API response:', response.status);
+        return response.json();
+      }).then(data => {
+        console.log('Notification API data:', data);
+        // Always show local notification regardless of API response
         if (Notification.permission === 'granted') {
           new Notification('Project Update', {
             body: `Project "${projectName}" was ${action}`,
             icon: '/scaffold-logo.png',
             tag: `project-${id}-${Date.now()}`
           });
-          console.log('Fallback project notification sent after FCM error');
+          console.log('Local project notification sent');
+        }
+      }).catch(error => {
+        console.error('Error sending notification:', error);
+        // Fallback to basic notification if API fails
+        console.log('API failed, using local notification for project');
+        if (Notification.permission === 'granted') {
+          new Notification('Project Update', {
+            body: `Project "${projectName}" was ${action}`,
+            icon: '/scaffold-logo.png',
+            tag: `project-${id}-${Date.now()}`
+          });
+          console.log('Local project notification sent after API error');
         }
       });
     } else {

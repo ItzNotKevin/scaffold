@@ -1,17 +1,67 @@
-// Service Worker for Push Notifications
-const CACHE_NAME = 'scaffold-v1';
+// Service Worker for PWA and Push Notifications
+const CACHE_NAME = 'scaffold-v2';
 const urlsToCache = [
   '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
-  '/manifest.json'
+  '/manifest.json',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png'
 ];
 
 // Install event
 self.addEventListener('install', (event) => {
+  console.log('Service Worker installing...');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(urlsToCache))
+      .then((cache) => {
+        console.log('Opened cache');
+        return cache.addAll(urlsToCache);
+      })
+      .then(() => {
+        console.log('Cache populated');
+        return self.skipWaiting();
+      })
+  );
+});
+
+// Activate event
+self.addEventListener('activate', (event) => {
+  console.log('Service Worker activating...');
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => {
+      console.log('Service Worker activated');
+      return self.clients.claim();
+    })
+  );
+});
+
+// Fetch event - handle offline functionality
+self.addEventListener('fetch', (event) => {
+  // Skip cross-origin requests
+  if (!event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => {
+        // Return cached version or fetch from network
+        return response || fetch(event.request);
+      })
+      .catch(() => {
+        // If both cache and network fail, return offline page for navigation requests
+        if (event.request.destination === 'document') {
+          return caches.match('/');
+        }
+      })
   );
 });
 
@@ -22,8 +72,8 @@ self.addEventListener('push', (event) => {
   let notificationData = {
     title: 'Scaffold',
     body: 'You have a new notification',
-    icon: '/scaffold-logo.png',
-    badge: '/scaffold-logo.png',
+    icon: '/pwa-192x192.png',
+    badge: '/pwa-192x192.png',
     tag: 'scaffold-notification',
     requireInteraction: true,
     actions: [
