@@ -41,9 +41,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-6 text-white">
-        <h2 className="text-xl font-bold mb-2">Welcome, {userProfile?.name || 'Client'}!</h2>
-        <p className="text-purple-100 text-sm">Track your project progress and provide feedback.</p>
+      <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-4 sm:p-6 text-white">
+        <h2 className="text-lg sm:text-xl font-bold mb-2">Welcome, {userProfile?.name || 'Client'}!</h2>
+        <p className="text-purple-100 text-sm leading-relaxed">Track your project progress and provide feedback.</p>
       </div>
 
       {/* Project Status Overview */}

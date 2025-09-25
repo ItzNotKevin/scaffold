@@ -43,9 +43,9 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-green-600 to-blue-600 rounded-2xl p-6 text-white">
-        <h2 className="text-xl font-bold mb-2">Welcome back, {userProfile?.name || 'Staff'}!</h2>
-        <p className="text-green-100 text-sm">You can manage projects and check-ins for your company.</p>
+      <div className="bg-gradient-to-r from-green-600 to-blue-600 rounded-2xl p-4 sm:p-6 text-white">
+        <h2 className="text-lg sm:text-xl font-bold mb-2">Welcome back, {userProfile?.name || 'Staff'}!</h2>
+        <p className="text-green-100 text-sm leading-relaxed">You can manage projects and check-ins for your company.</p>
       </div>
 
       {/* Quick Stats */}

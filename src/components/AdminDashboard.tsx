@@ -46,9 +46,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white">
-        <h2 className="text-xl font-bold mb-2">Welcome back, {userProfile?.name || 'Admin'}!</h2>
-        <p className="text-blue-100 text-sm">You have full access to manage users, projects, and company settings.</p>
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-4 sm:p-6 text-white">
+        <h2 className="text-lg sm:text-xl font-bold mb-2">Welcome back, {userProfile?.name || 'Admin'}!</h2>
+        <p className="text-blue-100 text-sm leading-relaxed">You have full access to manage users, projects, and company settings.</p>
       </div>
 
       {/* Quick Stats */}

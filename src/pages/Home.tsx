@@ -10,7 +10,6 @@ import AdminDashboard from '../components/AdminDashboard';
 import StaffDashboard from '../components/StaffDashboard';
 import ClientDashboard from '../components/ClientDashboard';
 import BackButton from '../components/ui/BackButton';
-import PageHeader from '../components/ui/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -222,17 +221,13 @@ const Home: React.FC = () => {
     const userRole = getUserRole();
 
     return (
-      <Layout title={`${selectedCompanyName} - ${t('app.title')}`} onMenuClick={handleMenuClick} currentRole={userRole}>
+      <Layout title={selectedCompanyName} onMenuClick={handleMenuClick} currentRole={userRole}>
         <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
-          <PageHeader
-            title={selectedCompanyName}
-            subtitle={t('app.title')}
-            className="flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-0"
-          >
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <BackButton onClick={handleBackToCompanies} className="w-full sm:w-auto">
               {t('common.backToCompanies')}
             </BackButton>
-          </PageHeader>
+          </div>
           
           
           {loading ? (
