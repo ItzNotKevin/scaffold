@@ -3,7 +3,7 @@ import { useFCM } from '../lib/useFCM';
 import { useAuth } from '../lib/useAuth';
 
 // FCM Feature Flag - Set to true when ready to enable FCM
-const FCM_ENABLED = true;
+const FCM_ENABLED = false;
 
 const FCMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();

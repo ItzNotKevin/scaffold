@@ -1,53 +1,28 @@
 import React, { useState } from 'react';
-import { useFCM } from '../lib/useFCM';
+import { usePushNotifications } from '../lib/usePushNotifications';
 
 const NotificationPermission: React.FC = () => {
   const {
-    fcmToken,
     isSupported,
     permission,
+    isSubscribed,
     isLoading,
     error,
     requestPermission,
-    getFCMToken
-  } = useFCM();
+    subscribe,
+    unsubscribe
+  } = usePushNotifications();
 
   const [showDetails, setShowDetails] = useState(false);
 
   // Debug logging
   console.log('NotificationPermission render:', {
-    fcmToken: fcmToken ? 'present' : 'missing',
     isSupported,
     permission,
+    isSubscribed,
     isLoading,
     error
   });
-
-  // Force show permission request if not granted and supported
-  if (isSupported && permission === 'default' && !isLoading) {
-    console.log('FCM: Should show permission request banner');
-  }
-
-  // Add a test button for debugging
-  const testNotification = () => {
-    console.log('Testing basic notification...');
-    console.log('Notification in window:', 'Notification' in window);
-    console.log('Permission:', Notification.permission);
-    
-    if ('Notification' in window && Notification.permission === 'granted') {
-      try {
-        const notification = new Notification('Test Notification', {
-          body: 'This is a test notification from Scaffold',
-          icon: '/scaffold-logo.png'
-        });
-        console.log('Basic notification created:', notification);
-      } catch (error) {
-        console.error('Error creating basic notification:', error);
-      }
-    } else {
-      console.log('Cannot create notification - permission not granted or not supported');
-    }
-  };
 
   if (!isSupported) {
     return (
@@ -64,7 +39,7 @@ const NotificationPermission: React.FC = () => {
     );
   }
 
-  if (permission === 'granted' && fcmToken) {
+  if (permission === 'granted' && isSubscribed) {
     return (
       <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between">
@@ -76,21 +51,20 @@ const NotificationPermission: React.FC = () => {
               Push notifications are enabled. You'll receive updates about your projects.
             </span>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={testNotification}
-              className="text-xs text-green-600 hover:text-green-700 font-medium underline"
-            >
-              Test Notification
-            </button>
-          </div>
+          <button
+            onClick={unsubscribe}
+            disabled={isLoading}
+            className="text-xs text-green-600 hover:text-green-700 font-medium"
+          >
+            {isLoading ? 'Disabling...' : 'Disable'}
+          </button>
         </div>
       </div>
     );
   }
 
-  // Don't show the banner if notifications are already granted but FCM token is still loading
-  if (permission === 'granted' && !fcmToken && !isLoading) {
+  // Don't show the banner if notifications are already granted but not subscribed yet
+  if (permission === 'granted' && !isSubscribed && !isLoading) {
     return null;
   }
 
@@ -144,7 +118,10 @@ const NotificationPermission: React.FC = () => {
               <button
                 onClick={async () => {
                   try {
-                    await requestPermission();
+                    const newPermission = await requestPermission();
+                    if (newPermission === 'granted') {
+                      await subscribe();
+                    }
                   } catch (err) {
                     console.error('Failed to enable notifications:', err);
                   }

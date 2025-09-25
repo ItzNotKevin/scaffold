@@ -16,7 +16,7 @@ const Button: React.FC<ButtonProps> = ({
   children,
   ...props
 }) => {
-  const baseClasses = 'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[48px] sm:min-h-0';
+  const baseClasses = 'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation min-h-[44px] sm:min-h-0';
   
   const variantClasses = {
     primary: 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 focus:ring-blue-500 shadow-sm',
@@ -27,9 +27,9 @@ const Button: React.FC<ButtonProps> = ({
   };
   
   const sizeClasses = {
-    sm: 'px-3 py-2 text-sm gap-2 min-h-[40px]',
-    md: 'px-4 py-3 text-sm gap-2 min-h-[48px]',
-    lg: 'px-6 py-4 text-base gap-2 min-h-[56px]'
+    sm: 'px-3 py-2 text-sm gap-2 min-h-[36px]',
+    md: 'px-4 py-2.5 text-sm gap-2 min-h-[44px]',
+    lg: 'px-6 py-3 text-base gap-2 min-h-[48px]'
   };
   
   const classes = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;

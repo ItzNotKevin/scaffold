@@ -6,7 +6,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } 
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import { sendPhaseUpdateEmails } from '../lib/emailNotifications';
-import { useFCM } from '../lib/useFCM';
+import { usePushNotifications } from '../lib/usePushNotifications';
 import DailyReportForm from '../components/DailyReportForm';
 import DailyReportList from '../components/DailyReportList';
 import type { DailyReport } from '../lib/types';
@@ -99,208 +99,7 @@ const ProjectPage: React.FC = () => {
   const { id } = useParams();
   const { currentUser, permissions } = useAuth();
   const navigate = useNavigate();
-  const { fcmToken } = useFCM();
-  
-  // Debug the id parameter
-  console.log('ProjectPage: id from useParams:', id);
-  console.log('ProjectPage: current URL:', window.location.href);
-  
-
-  // FCM Notification functions
-  const showTaskNotification = (taskTitle: string, action: string, projectName: string) => {
-    if (fcmToken) {
-      // Check if it's a fallback token
-      if (fcmToken.startsWith('fallback-')) {
-        // Use basic browser notification as fallback
-        if (Notification.permission === 'granted') {
-          new Notification('Task Update', {
-            body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
-            icon: '/scaffold-logo.png',
-            tag: `task-${id}-${Date.now()}`
-          });
-        }
-        return;
-      }
-      
-      // Send notification via Vercel API route
-      fetch('/api/send-notification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tokens: [fcmToken],
-          title: 'Task Update',
-          body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
-          data: {
-            type: 'task-update',
-            taskTitle,
-            action,
-            projectName,
-            projectId: id
-          }
-        })
-      }).then(response => {
-        console.log('Task notification API response:', response.status);
-        return response.json();
-      }).then(data => {
-        console.log('Task notification API data:', data);
-        // Always show local notification regardless of API response
-        if (Notification.permission === 'granted') {
-          new Notification('Task Update', {
-            body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
-            icon: '/scaffold-logo.png',
-            tag: `task-${id}-${Date.now()}`
-          });
-          console.log('Local task notification sent');
-        }
-      }).catch(error => {
-        console.error('Error sending task notification:', error);
-        // Fallback to basic notification if API fails
-        if (Notification.permission === 'granted') {
-          new Notification('Task Update', {
-            body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
-            icon: '/scaffold-logo.png',
-            tag: `task-${id}-${Date.now()}`
-          });
-          console.log('Local task notification sent after API error');
-        }
-      });
-    } else {
-      // Use basic notification if no FCM token
-      if (Notification.permission === 'granted') {
-        new Notification('Task Update', {
-          body: `Task "${taskTitle}" was ${action} in project "${projectName}"`,
-          icon: '/scaffold-logo.png',
-          tag: `task-${id}-${Date.now()}`
-        });
-      }
-    }
-  };
-
-  const showProjectNotification = (projectName: string, action: string) => {
-    console.log('showProjectNotification called:', { projectName, action, fcmToken, permission: Notification.permission, id });
-    
-    // Check if id is available
-    if (!id) {
-      console.error('Project ID is undefined, cannot send notification');
-      return;
-    }
-    
-    if (fcmToken) {
-      // Check if it's a fallback token
-      if (fcmToken.startsWith('fallback-')) {
-        console.log('Using fallback notification for project');
-        // Use basic browser notification as fallback
-        if (Notification.permission === 'granted') {
-          new Notification('Project Update', {
-            body: `Project "${projectName}" was ${action}`,
-            icon: '/scaffold-logo.png',
-            tag: `project-${id}-${Date.now()}`
-          });
-          console.log('Fallback project notification sent');
-        } else {
-          console.log('Notification permission not granted for fallback');
-        }
-        return;
-      }
-      
-      console.log('Sending notification for project');
-      // Send notification via Vercel API route
-      fetch('/api/send-notification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tokens: [fcmToken],
-          title: 'Project Update',
-          body: `Project "${projectName}" was ${action}`,
-          data: {
-            type: 'project-update',
-            projectName,
-            action,
-            projectId: id
-          }
-        })
-      }).then(response => {
-        console.log('Notification API response:', response.status);
-        return response.json();
-      }).then(data => {
-        console.log('Notification API data:', data);
-        // Always show local notification regardless of API response
-        if (Notification.permission === 'granted') {
-          new Notification('Project Update', {
-            body: `Project "${projectName}" was ${action}`,
-            icon: '/scaffold-logo.png',
-            tag: `project-${id}-${Date.now()}`
-          });
-          console.log('Local project notification sent');
-        }
-      }).catch(error => {
-        console.error('Error sending notification:', error);
-        // Fallback to basic notification if API fails
-        console.log('API failed, using local notification for project');
-        if (Notification.permission === 'granted') {
-          new Notification('Project Update', {
-            body: `Project "${projectName}" was ${action}`,
-            icon: '/scaffold-logo.png',
-            tag: `project-${id}-${Date.now()}`
-          });
-          console.log('Local project notification sent after API error');
-        }
-      });
-    } else {
-      console.log('No FCM token available for project notification');
-      // Use basic notification if no FCM token
-      if (Notification.permission === 'granted') {
-        new Notification('Project Update', {
-          body: `Project "${projectName}" was ${action}`,
-          icon: '/scaffold-logo.png',
-          tag: `project-${id}-${Date.now()}`
-        });
-        console.log('Basic project notification sent (no FCM token)');
-      } else {
-        console.log('Notification permission not granted');
-      }
-    }
-  };
-
-  const showCommentNotification = (commenterName: string, taskTitle: string) => {
-    if (fcmToken) {
-      // Check if it's a fallback token
-      if (fcmToken.startsWith('fallback-')) {
-        // Use basic browser notification as fallback
-        if (Notification.permission === 'granted') {
-          new Notification('New Comment', {
-            body: `${commenterName} commented on task "${taskTitle}"`,
-            icon: '/scaffold-logo.png',
-            tag: `comment-${id}-${Date.now()}`
-          });
-        }
-        return;
-      }
-      
-      // Send FCM notification via Cloud Function
-      fetch(`${import.meta.env.VITE_FIREBASE_FUNCTIONS_URL}/sendFCMNotificationHTTP`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tokens: [fcmToken],
-          title: 'New Comment',
-          body: `${commenterName} commented on task "${taskTitle}"`,
-          data: {
-            type: 'comment',
-            commenterName,
-            taskTitle,
-            projectId: id
-          }
-        })
-      }).catch(error => console.error('Error sending FCM notification:', error));
-    }
-  };
+  const { showTaskNotification, showProjectNotification, showCommentNotification } = usePushNotifications();
   
   console.log('ProjectPage: Rendered with project ID:', id);
   const [projectName, setProjectName] = useState('');
@@ -1408,25 +1207,23 @@ ${reportData.isOverBudget
   };
 
   const handlePhaseChange = async (newPhase: Phase) => {
-    console.log('handlePhaseChange called:', { newPhase, projectName, fcmToken });
     if (!id) return;
     const oldPhase = phase;
     setPhase(newPhase);
     await updateDoc(doc(db, 'projects', id), { phase: newPhase, updatedAt: serverTimestamp() });
     
-    // Email notifications disabled - using push notifications only
-    // try {
-    //   await sendPhaseUpdateEmails({
-    //     name: projectName,
-    //     phase: newPhase
-    //   }, oldPhase, companyId || '');
-    //   console.log('ProjectPage: Phase update email notifications sent');
-    // } catch (emailError) {
-    //   console.error('ProjectPage: Error sending phase update emails:', emailError);
-    // }
+    // Send email notifications for phase update
+    try {
+      await sendPhaseUpdateEmails({
+        name: projectName,
+        phase: newPhase
+      }, oldPhase, companyId || '');
+      console.log('ProjectPage: Phase update email notifications sent');
+    } catch (emailError) {
+      console.error('ProjectPage: Error sending phase update emails:', emailError);
+    }
     
     // Show notification
-    console.log('Calling showProjectNotification...');
     showProjectNotification(projectName, `moved to ${newPhase} phase`);
   };
 
@@ -2256,12 +2053,12 @@ ${reportData.isOverBudget
 
         {/* Tabs */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap gap-2 mb-4">
             {['Photos','Staff','Feedback','Tasks'].map(t => (
               <button 
                 key={t} 
                 onClick={() => setActiveTab(t as any)} 
-                className={`px-3 py-3 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[48px] flex items-center justify-center ${activeTab===t?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[44px] flex-1 sm:flex-none ${activeTab===t?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
               >
                 {t}
               </button>
@@ -2269,7 +2066,7 @@ ${reportData.isOverBudget
             {permissions?.canViewDailyReports && (
               <button 
                 onClick={() => setActiveTab('Daily Reports')} 
-                className={`px-3 py-3 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[48px] flex items-center justify-center col-span-2 sm:col-span-1 ${activeTab==='Daily Reports'?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[44px] flex-1 sm:flex-none ${activeTab==='Daily Reports'?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
               >
                 Daily Reports
               </button>
@@ -3178,8 +2975,8 @@ ${reportData.isOverBudget
 
       {/* Sticky Bottom Action Bar */}
       {activeTab === 'Staff' && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 p-3 sm:p-4 pb-safe shadow-lg">
-          <div className="flex flex-col sm:flex-row gap-3">
+        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 p-4 pb-safe shadow-lg">
+          <div className="flex space-x-3">
             <button 
               onClick={() => handleCheck('checkin')} 
               disabled={checkinLoading}

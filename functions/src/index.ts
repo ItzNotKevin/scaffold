@@ -11,12 +11,12 @@ if (SENDGRID_API_KEY) {
   sgMail.setApiKey(SENDGRID_API_KEY);
 }
 
-// Get FCM VAPID configuration (unused for now)
-// const FCM_VAPID_PRIVATE_KEY = functions.config().fcm?.vapid_private_key;
-// const FCM_VAPID_PUBLIC_KEY = functions.config().fcm?.vapid_public_key;
+// Get FCM VAPID configuration
+const FCM_VAPID_PRIVATE_KEY = functions.config().fcm?.vapid_private_key;
+const FCM_VAPID_PUBLIC_KEY = functions.config().fcm?.vapid_public_key;
 
 // FCM Feature Flag - Set to true when ready to enable FCM
-const FCM_ENABLED = true;
+const FCM_ENABLED = false;
 
 // Email templates
 const getProjectCreatedEmail = (projectName: string, companyName: string, phase: string) => ({
@@ -187,79 +187,6 @@ async function sendFCMNotification(tokens: string[], title: string, body: string
   }
 }
 
-// HTTP function to send FCM notifications directly
-export const sendFCMNotificationHTTP = functions.https.onRequest(async (req, res) => {
-  console.log('sendFCMNotificationHTTP called:', req.method, req.url);
-  console.log('Request headers:', req.headers);
-  console.log('Request body:', req.body);
-  
-  // Enable CORS
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.set('Access-Control-Max-Age', '3600');
-
-  if (req.method === 'OPTIONS') {
-    console.log('Handling OPTIONS request');
-    res.status(200).send('');
-    return;
-  }
-
-  if (req.method !== 'POST') {
-    console.log('Method not allowed:', req.method);
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
-  try {
-    const { tokens, title, body, data } = req.body;
-    console.log('Request data:', { tokens, title, body, data });
-
-    if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
-      console.log('Invalid tokens');
-      res.status(400).json({ error: 'Invalid or missing tokens' });
-      return;
-    }
-
-    if (!title || !body) {
-      console.log('Missing title or body');
-      res.status(400).json({ error: 'Missing title or body' });
-      return;
-    }
-
-    console.log('Sending FCM notification...');
-    await sendFCMNotification(tokens, title, body, data);
-    console.log('FCM notification sent successfully');
-    res.status(200).json({ success: true, message: 'FCM notification sent' });
-  } catch (error) {
-    console.error('Error in sendFCMNotification function:', error);
-    res.status(500).json({ error: 'Failed to send FCM notification' });
-  }
-});
-
-// Simple test function
-export const testNotification = functions.https.onRequest(async (req, res) => {
-  console.log('testNotification called:', req.method, req.url);
-  
-  // Enable CORS
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-
-  if (req.method === 'OPTIONS') {
-    res.status(200).send('');
-    return;
-  }
-
-  res.status(200).json({ 
-    success: true, 
-    message: 'Test function working',
-    timestamp: new Date().toISOString(),
-    method: req.method,
-    url: req.url
-  });
-});
-
 // Trigger when a new project is created
 export const onProjectCreated = functions.firestore
   .document('projects/{projectId}')
@@ -427,19 +354,19 @@ export const onFeedbackAdded = functions.firestore
       // Get company details
       const companyDoc = await admin.firestore()
         .collection('companies')
-        .doc(projectData?.companyId || '')
+        .doc(projectData.companyId)
         .get();
       
       if (!companyDoc.exists) {
-        console.log('Company not found for project:', projectData?.companyId);
+        console.log('Company not found for project:', projectData.companyId);
         return;
       }
       
-      // const companyData = companyDoc.data();
-      // const companyName = companyData?.name || 'Unknown Company';
+      const companyData = companyDoc.data();
+      const companyName = companyData?.name || 'Unknown Company';
       
       // Get company members
-      const memberIds = await getCompanyMembers(projectData?.companyId || '');
+      const memberIds = await getCompanyMembers(projectData.companyId);
       
       // Send FCM notifications to all company members
       const fcmPromises = memberIds.map(async (memberId) => {
@@ -452,7 +379,7 @@ export const onFeedbackAdded = functions.firestore
             {
               projectId,
               type: 'feedback_added',
-              companyId: projectData?.companyId || '',
+              companyId: projectData.companyId,
               feedbackId
             }
           );
