@@ -44,10 +44,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-4 sm:p-6 text-white">
-        <h2 className="text-lg sm:text-xl font-bold mb-2">Welcome back, {userProfile?.name || 'Admin'}!</h2>
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white">
+        <h2 className="text-xl font-bold mb-2">Welcome back, {userProfile?.name || 'Admin'}!</h2>
         <p className="text-blue-100 text-sm">You have full access to manage users, projects, and company settings.</p>
       </div>
 
@@ -101,12 +101,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       {/* Projects Section */}
-      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Projects</h3>
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Projects</h3>
           <button 
             onClick={onNewProject} 
-            className="px-4 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors touch-manipulation w-full sm:w-auto min-h-[44px]"
+            className="px-4 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors touch-manipulation"
           >
             New Project
           </button>
@@ -123,7 +123,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {projects.map((p: any) => (
               <div
                 key={p.id}
-                className="group bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-200 touch-manipulation"
+                className="group bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-200 touch-manipulation"
               >
                 <div className="flex items-start justify-between mb-3">
                   <h4 
@@ -137,7 +137,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       e.stopPropagation();
                       onDeleteProject(p.id);
                     }}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors touch-manipulation min-h-[44px] min-w-[44px]"
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     title="Delete project"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

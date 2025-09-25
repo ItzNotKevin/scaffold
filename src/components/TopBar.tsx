@@ -33,7 +33,7 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick, currentRole }) => {
           {onMenuClick && (
             <button
               onClick={onMenuClick}
-              className="p-2.5 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation flex-shrink-0 min-h-[44px] min-w-[44px]"
+              className="p-2.5 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation flex-shrink-0"
               aria-label="Menu"
             >
               <svg
@@ -94,9 +94,9 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick, currentRole }) => {
                 {/* Mobile user indicator */}
                 <button
                   onClick={() => navigate('/profile')}
-                  className="sm:hidden w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center hover:bg-blue-200 transition-colors touch-manipulation min-h-[44px] min-w-[44px]"
+                  className="sm:hidden w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center hover:bg-blue-200 transition-colors touch-manipulation"
                 >
-                  <span className="text-sm font-medium text-blue-700">
+                  <span className="text-xs font-medium text-blue-700">
                     {(currentUser.displayName || currentUser.email).charAt(0).toUpperCase()}
                   </span>
                 </button>
@@ -112,11 +112,11 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick, currentRole }) => {
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="px-3 sm:px-3 py-2 text-sm text-red-600 hover:text-red-700 active:text-red-800 hover:bg-red-50 active:bg-red-100 rounded-xl transition-colors touch-manipulation min-h-[44px]"
+                  className="px-2 sm:px-3 py-2 text-sm text-red-600 hover:text-red-700 active:text-red-800 hover:bg-red-50 active:bg-red-100 rounded-xl transition-colors touch-manipulation"
                   aria-label="Logout"
                 >
                   <span className="hidden sm:inline">Sign Out</span>
-                  <svg className="sm:hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="sm:hidden w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                   </svg>
                 </button>
@@ -125,7 +125,7 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick, currentRole }) => {
           ) : (
             <button
               onClick={handleLogin}
-              className="px-4 sm:px-4 py-2.5 sm:py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors touch-manipulation min-h-[44px]"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors touch-manipulation"
             >
               Login
             </button>
