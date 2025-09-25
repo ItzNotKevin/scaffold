@@ -532,7 +532,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     });
 
     return unsubscribe;
-  }, [refreshUserProfile]);
+  }, []); // Remove refreshUserProfile dependency to prevent infinite loop
 
   const updateUserProfile = async (updatedProfile: Partial<AppUser>) => {
     try {

@@ -200,7 +200,7 @@ export const useFCM = () => {
       console.log('FCM: User logged in, attempting to get FCM token...');
       getFCMToken();
     }
-  }, [currentUser, permission]);
+  }, [currentUser, permission, getFCMToken]);
 
   // Also try to get FCM token when component mounts if permission is already granted
   useEffect(() => {
@@ -208,7 +208,7 @@ export const useFCM = () => {
       console.log('FCM: Permission already granted, attempting to get FCM token...');
       getFCMToken();
     }
-  }, [permission, fcmToken, isLoading]);
+  }, [permission, fcmToken, isLoading, getFCMToken]);
 
   return {
     fcmToken,
