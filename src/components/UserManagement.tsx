@@ -198,7 +198,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ companyId, permissions:
                 </span>
                 
                 {user.id === currentUser?.uid ? (
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                  <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 italic">(You)</span>
                     <span className="text-xs text-gray-400">Cannot change own role</span>
                   </div>
