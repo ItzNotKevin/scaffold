@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where, orderBy, doc, getDoc } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
+import { collection, getDocs, query, where, orderBy, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 
@@ -8,15 +9,16 @@ interface AppUser {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'staff' | 'client';
+  role: 'admin' | 'staff';
   avatar?: string;
   preferences: any;
   companyId?: string;
+  dailyRate?: number;
   createdAt?: any;
   updatedAt?: any;
 }
 
-type UserRole = 'admin' | 'staff' | 'client';
+type UserRole = 'admin' | 'staff';
 
 interface UserManagementProps {
   companyId: string;
@@ -24,14 +26,20 @@ interface UserManagementProps {
 }
 
 const UserManagement: React.FC<UserManagementProps> = ({ companyId, permissions: propPermissions }) => {
+  const { t } = useTranslation();
   const { updateUserRole, permissions: authPermissions, currentUser } = useAuth();
   const permissions = propPermissions || authPermissions;
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [editingRate, setEditingRate] = useState<string | null>(null);
+  const [rateValue, setRateValue] = useState<string>('');
 
   useEffect(() => {
-    loadUsers();
+    if (companyId) {
+      loadUsers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
   const loadUsers = async () => {
@@ -69,11 +77,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ companyId, permissions:
               }
             }
             
-            // Default to client if no membership found
-            return { ...user, role: 'client' };
+            // Default to staff if no membership found
+            return { ...user, role: 'staff' };
           } catch (error) {
             console.error('Error loading role for user:', user.id, error);
-            return { ...user, role: 'client' };
+            return { ...user, role: 'staff' };
           }
         })
       );
@@ -98,14 +106,46 @@ const UserManagement: React.FC<UserManagementProps> = ({ companyId, permissions:
     }
   };
 
+  const handleDailyRateUpdate = async (userId: string, newRate: number) => {
+    try {
+      setUpdating(userId);
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        dailyRate: newRate,
+        updatedAt: serverTimestamp()
+      });
+      await loadUsers(); // Refresh the list
+      setEditingRate(null);
+    } catch (error) {
+      console.error('Error updating daily rate:', error);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const startEditingRate = (userId: string, currentRate?: number) => {
+    setEditingRate(userId);
+    setRateValue(currentRate?.toString() || '0');
+  };
+
+  const cancelEditingRate = () => {
+    setEditingRate(null);
+    setRateValue('');
+  };
+
+  const saveRate = (userId: string) => {
+    const rate = parseFloat(rateValue);
+    if (!isNaN(rate) && rate >= 0) {
+      handleDailyRateUpdate(userId, rate);
+    }
+  };
+
   const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
       case 'admin':
         return 'bg-red-100 text-red-800 border-red-200';
       case 'staff':
         return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'client':
-        return 'bg-green-100 text-green-800 border-green-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -137,14 +177,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ companyId, permissions:
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-semibold text-gray-900">User Management</h3>
-          <p className="text-sm text-gray-500">Manage user roles and permissions for your company</p>
+          <h3 className="text-lg font-semibold text-gray-900">{t('userManagement.title')}</h3>
+          <p className="text-sm text-gray-500">{t('userManagement.manageUserRoles')}</p>
         </div>
         <button
           onClick={loadUsers}
           className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors touch-manipulation min-h-[44px] w-full sm:w-auto"
         >
-          Refresh
+          {t('userManagement.refreshUsers')}
         </button>
       </div>
 
@@ -156,13 +196,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ companyId, permissions:
             </svg>
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="text-sm font-medium text-blue-900">Role Management Tips</h4>
+            <h4 className="text-sm font-medium text-blue-900">{t('userManagement.roleManagementTips')}</h4>
             <ul className="text-xs text-blue-800 mt-1 space-y-0.5 sm:space-y-1">
-              <li>• <strong>Client:</strong> View projects and submit feedback</li>
-              <li>• <strong>Staff:</strong> Manage projects and check-ins</li>
-              <li>• <strong>Admin:</strong> Full access including user management</li>
-              <li>• New users start as Clients</li>
-              <li>• <strong>Security:</strong> Cannot change your own role</li>
+              <li>• <strong>Staff:</strong> {t('userManagement.staffRole')}</li>
+              <li>• <strong>Admin:</strong> {t('userManagement.adminRole')}</li>
+              <li>• {t('userManagement.newUsersStartAsStaff')}</li>
+              <li>• <strong>Security:</strong> {t('userManagement.cannotChangeOwnRole')}</li>
             </ul>
           </div>
         </div>
@@ -187,39 +226,87 @@ const UserManagement: React.FC<UserManagementProps> = ({ companyId, permissions:
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-gray-900 text-sm truncate">{user.name || 'No name'}</p>
+                  <p className="font-medium text-gray-900 text-sm truncate">{user.name || t('userManagement.noName')}</p>
                   <p className="text-gray-500 text-xs truncate">{user.email}</p>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)} w-fit`}>
-                  {user.role === 'admin' ? 'admin' : user.role === 'staff' ? 'staff' : 'client'}
-                </span>
-                
-                {user.id === currentUser?.uid ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 italic">(You)</span>
-                    <span className="text-xs text-gray-400">Cannot change own role</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={user.role}
-                      onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
-                      disabled={updating === user.id}
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 touch-manipulation min-h-[32px]"
-                    >
-                      <option value="client">Client</option>
-                      <option value="staff">Staff</option>
-                      <option value="admin">Admin</option>
-                    </select>
+              <div className="flex flex-col gap-3 mt-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                  <span className="text-xs text-gray-600 font-medium">{t('company.role')}:</span>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)} w-fit`}>
+                    {user.role === 'admin' ? t('userManagement.admin') : t('userManagement.staff')}
+                  </span>
+                  
+                  {user.id === currentUser?.uid ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 italic">(You)</span>
+                      <span className="text-xs text-gray-400">Cannot change own role</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={user.role}
+                        onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
+                        disabled={updating === user.id}
+                        className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 touch-manipulation min-h-[32px]"
+                      >
+                        <option value="staff">{t('userManagement.staff')}</option>
+                        <option value="admin">{t('userManagement.admin')}</option>
+                      </select>
 
-                    {updating === user.id && (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    )}
-                  </div>
-                )}
+                      {updating === user.id && (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                  <span className="text-xs text-gray-600 font-medium">{t('userManagement.dailyRate')}:</span>
+                  {editingRate === user.id ? (
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center">
+                        <span className="text-xs text-gray-600 mr-1">$</span>
+                        <input
+                          type="number"
+                          value={rateValue}
+                          onChange={(e) => setRateValue(e.target.value)}
+                          className="w-24 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[32px]"
+                          min="0"
+                          step="1"
+                        />
+                      </div>
+                      <button
+                        onClick={() => saveRate(user.id)}
+                        disabled={updating === user.id}
+                        className="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700 disabled:opacity-50 min-h-[32px]"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={cancelEditingRate}
+                        disabled={updating === user.id}
+                        className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-300 disabled:opacity-50 min-h-[32px]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900">
+                        ${user.dailyRate?.toFixed(2) || '0.00'}/day
+                      </span>
+                      <button
+                        onClick={() => startEditingRate(user.id, user.dailyRate)}
+                        disabled={updating === user.id}
+                        className="text-xs text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))}

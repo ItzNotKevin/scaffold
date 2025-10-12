@@ -11,7 +11,7 @@ import {
   type User
 } from 'firebase/auth';
 import { auth, db } from './firebase';
-import { doc, setDoc, getDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 // Define types directly here to avoid module resolution issues
 interface AppUser {
   uid: string;
@@ -28,7 +28,7 @@ interface AppUser {
 interface CompanyMembership {
   userId: string;
   companyId: string;
-  role: 'admin' | 'staff' | 'client';
+  role: 'admin' | 'staff';
   joinedAt: any;
 }
 
@@ -42,7 +42,7 @@ interface UserPreferences {
   language: string;
 }
 
-export type UserRole = 'admin' | 'staff' | 'client';
+export type UserRole = 'admin' | 'staff';
 
 interface RolePermissions {
   canManageUsers: boolean;
@@ -101,25 +101,6 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canManageCompany: false,
         canManageDailyReports: true,
         canCreateDailyReports: true,
-        canViewDailyReports: true,
-        canApproveDailyReports: false,
-      };
-    case 'client':
-      return {
-        canManageUsers: false,
-        canManageProjects: false,
-        canCreateProjects: false,
-        canDeleteProjects: false,
-        canManageCheckIns: false,
-        canCreateCheckIns: false,
-        canViewAllProjects: false,
-        canViewProjectDetails: true,
-        canManageFeedback: false,
-        canCreateFeedback: true,
-        canViewFeedback: true,
-        canManageCompany: false,
-        canManageDailyReports: false,
-        canCreateDailyReports: false,
         canViewDailyReports: true,
         canApproveDailyReports: false,
       };
@@ -182,7 +163,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [permissions, setPermissions] = useState<RolePermissions | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const signup = async (email: string, password: string, displayName?: string, role: UserRole = 'client', companyId?: string) => {
+  const signup = async (email: string, password: string, displayName?: string, role: UserRole = 'staff', companyId?: string) => {
     try {
       const { user } = await createUserWithEmailAndPassword(auth, email, password);
       
@@ -197,7 +178,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Prepare user data (no role - roles are company-specific)
       const userData: any = {
         uid: user.uid,
-        name: user.displayName || displayName || '',
+        name: user.displayName || displayName || user.email?.split('@')[0] || 'User',
         email: user.email,
         preferences: {
           theme: 'system',
@@ -294,10 +275,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       await setDoc(doc(db, 'companies', companyId), companyData);
       
-      // Update user to belong to this company
+      // Update user to belong to this company and ensure name is set
       await setDoc(
         doc(db, 'users', currentUser.uid),
         {
+          name: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
+          email: currentUser.email || '',
           companyId: companyId,
           updatedAt: serverTimestamp(),
         },
@@ -339,10 +322,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         { merge: true }
       );
       
-      // Update user to belong to this company
+      // Update user to belong to this company and ensure name is set
       await setDoc(
         doc(db, 'users', currentUser.uid),
         {
+          name: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
+          email: currentUser.email || '',
           companyId: companyId,
           updatedAt: serverTimestamp(),
         },
@@ -407,11 +392,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         });
         return 'staff';
       } else {
-        return 'client';
+        return 'staff';
       }
     } catch (error) {
       console.error('Error getting user role in company:', error);
-      return 'client';
+      return 'staff';
     }
   };
 
@@ -421,6 +406,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       console.log('refreshUserProfile: No currentUser, clearing profile');
       setUserProfile(null);
       setPermissions(null);
+      setLoading(false);
       return;
     }
 
@@ -436,23 +422,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         // Get role from company membership if user belongs to a company
         if (userData.companyId) {
-          const role = await getUserRoleInCompany(currentUser.uid, userData.companyId);
-          
-          // Check if company actually exists, regardless of role
-          const companyDoc = await getDoc(doc(db, 'companies', userData.companyId));
-          if (!companyDoc.exists()) {
-            // Company doesn't exist, clear the companyId and set permissions to null
-            await updateDoc(doc(db, 'users', currentUser.uid), {
-              companyId: null,
-              updatedAt: serverTimestamp()
-            });
-            setUserProfile({ ...userData, companyId: undefined });
-            setPermissions(null);
-            return;
+          try {
+            const role = await getUserRoleInCompany(currentUser.uid, userData.companyId);
+            
+            // Check if company actually exists, regardless of role
+            const companyDoc = await getDoc(doc(db, 'companies', userData.companyId));
+            if (!companyDoc.exists()) {
+              // Company doesn't exist, clear the companyId and set permissions to null
+              setUserProfile({ ...userData, companyId: undefined });
+              setPermissions(null);
+              return;
+            }
+            
+            const permissions = getRolePermissions(role);
+            setPermissions(permissions);
+          } catch (roleError) {
+            console.error('Error getting role, defaulting to staff:', roleError);
+            // If we can't get role, default to staff permissions
+            setPermissions(getRolePermissions('staff'));
           }
-          
-          const permissions = getRolePermissions(role);
-          setPermissions(permissions);
         } else {
           // User without company has no permissions
           setPermissions(null);
@@ -467,7 +455,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         // Create a default user profile (no role - roles are company-specific)
         const defaultProfile: any = {
           uid: currentUser.uid,
-          name: currentUser.displayName || '',
+          name: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
           email: currentUser.email || '',
           preferences: {
             theme: 'system',
@@ -517,21 +505,43 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [currentUser]);
 
   useEffect(() => {
+    let mounted = true;
+    
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!mounted) return;
+      
       setCurrentUser(user);
       
       if (user) {
         // Load user profile and permissions
-        await refreshUserProfile();
+        try {
+          await refreshUserProfile();
+        } catch (error) {
+          console.error('Error refreshing profile:', error);
+        }
       } else {
         setUserProfile(null);
         setPermissions(null);
       }
       
-      setLoading(false);
+      if (mounted) {
+        setLoading(false);
+      }
     });
 
-    return unsubscribe;
+    // Fallback timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (mounted) {
+        console.log('Auth loading timeout - forcing loading to false');
+        setLoading(false);
+      }
+    }, 10000);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      unsubscribe();
+    };
   }, [refreshUserProfile]);
 
   const updateUserProfile = async (updatedProfile: Partial<AppUser>) => {

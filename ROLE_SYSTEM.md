@@ -9,22 +9,18 @@ This document describes the role-based access control (RBAC) system implemented 
 - Can manage users and assign roles
 - Can create, edit, and delete projects
 - Can manage company settings
-- Can access all check-ins and feedback
+- Can access all check-ins, feedback, and daily reports
 - Can delete projects and manage expenses
+- Can approve daily reports
 
 ### Staff
 - Can manage projects and check-ins
 - Can create new projects (but not delete them)
-- Can respond to client feedback
+- Can manage feedback
+- Can create and manage daily reports (but not approve them)
 - Can view all project data within their company
 - Cannot manage users or company settings
-
-### Client
-- **Read-only access** to assigned projects
-- Can view project progress and status
-- Can submit feedback and concerns
-- Cannot create or modify projects
-- Cannot access check-ins or administrative features
+- Cannot delete projects or approve daily reports
 
 ## Implementation Details
 
@@ -36,7 +32,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'staff' | 'client';
+  role: 'admin' | 'staff';
   avatar?: string;
   preferences: UserPreferences;
   companyId?: string;
@@ -49,17 +45,17 @@ interface User {
 The security rules enforce role-based access at the database level:
 
 - **Users**: Can read their own data, admins can manage all users
-- **Companies**: Admins have full access, staff/clients can read if they belong to the company
-- **Projects**: Role-based access based on company membership and user role
-- **Check-ins**: Staff can manage, clients can only read
-- **Feedback**: Staff can manage, clients can create their own feedback
+- **Companies**: Admins have full access, staff can read if they belong to the company
+- **Projects**: Admins and staff can read/write projects in their company
+- **Check-ins**: Admins and staff can manage check-ins
+- **Feedback**: Admins and staff can manage feedback
+- **Daily Reports**: Admins and staff can create/edit, only admins can approve
 
 ### Frontend Components
 
 #### Dashboard Components
 - `AdminDashboard`: Full management interface with user management
-- `StaffDashboard`: Project and check-in management interface
-- `ClientDashboard`: Read-only project viewing interface
+- `StaffDashboard`: Project and daily report management interface
 
 #### Permission System
 ```typescript

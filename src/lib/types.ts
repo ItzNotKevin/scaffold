@@ -99,6 +99,7 @@ export interface Company {
   updatedAt: any;
 }
 
+// @deprecated - Replaced by TaskAssignment system
 export interface CheckIn {
   id: string;
   projectId: string;
@@ -114,6 +115,54 @@ export interface CheckIn {
     longitude: number;
     address: string;
   };
+  createdAt: any;
+  updatedAt: any;
+}
+
+// Staff member with daily rate for payroll
+export interface StaffMember extends AppUser {
+  dailyRate: number; // Flat daily wage
+  hireDate?: Date;
+  status: 'active' | 'inactive';
+}
+
+// Task assignment for staff by admin
+export interface TaskAssignment {
+  id: string;
+  projectId: string;
+  projectName: string;
+  staffId: string;
+  staffName: string;
+  taskDescription: string;
+  date: string; // YYYY-MM-DD format
+  dailyRate: number; // Snapshot of rate at assignment time
+  notes?: string;
+  createdBy: string; // Admin who assigned
+  createdAt: any;
+}
+
+// Pay period configuration
+export interface PayPeriodConfig {
+  id: string;
+  companyId: string;
+  type: 'weekly' | 'biweekly' | 'monthly';
+  startDate: string; // First day of pay period cycle (YYYY-MM-DD)
+  createdAt: any;
+  updatedAt: any;
+}
+
+// Payroll report for a staff member in a pay period
+export interface PayrollReport {
+  id: string;
+  companyId: string;
+  staffId: string;
+  staffName: string;
+  periodStart: string; // YYYY-MM-DD
+  periodEnd: string; // YYYY-MM-DD
+  assignments: TaskAssignment[];
+  totalDays: number;
+  totalWages: number;
+  status: 'open' | 'closed' | 'paid';
   createdAt: any;
   updatedAt: any;
 }
@@ -247,7 +296,7 @@ export interface SubcontractorEntry {
 }
 
 // Role-based permission types
-export type UserRole = 'admin' | 'staff' | 'client';
+export type UserRole = 'admin' | 'staff';
 
 export interface RolePermissions {
   canManageUsers: boolean;
@@ -306,25 +355,6 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canManageCompany: false,
         canManageDailyReports: true,
         canCreateDailyReports: true,
-        canViewDailyReports: true,
-        canApproveDailyReports: false,
-      };
-    case 'client':
-      return {
-        canManageUsers: false,
-        canManageProjects: false,
-        canCreateProjects: false,
-        canDeleteProjects: false,
-        canManageCheckIns: false,
-        canCreateCheckIns: false,
-        canViewAllProjects: false,
-        canViewProjectDetails: true,
-        canManageFeedback: false,
-        canCreateFeedback: true,
-        canViewFeedback: true,
-        canManageCompany: false,
-        canManageDailyReports: false,
-        canCreateDailyReports: false,
         canViewDailyReports: true,
         canApproveDailyReports: false,
       };

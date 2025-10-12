@@ -1,6 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/useAuth';
 import UserManagement from './UserManagement';
+import TaskAssignmentManager from './TaskAssignmentManager';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface AdminDashboardProps {
   companyId: string;
@@ -19,7 +23,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onNavigateToProject,
   permissions
 }) => {
+  const { t } = useTranslation();
   const { userProfile } = useAuth();
+  const [showTaskManager, setShowTaskManager] = useState(false);
+  const [todayAssignments, setTodayAssignments] = useState(0);
+  const [todayLaborCost, setTodayLaborCost] = useState(0);
+
+  const loadTodayStats = React.useCallback(async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const assignmentsQuery = query(
+        collection(db, 'taskAssignments'),
+        where('date', '==', today)
+      );
+      const snapshot = await getDocs(assignmentsQuery);
+      const assignments = snapshot.docs.map(doc => doc.data());
+      
+      setTodayAssignments(assignments.length);
+      setTodayLaborCost(assignments.reduce((sum: number, a: any) => sum + (a.dailyRate || 0), 0));
+    } catch (error) {
+      console.error('Error loading today stats:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTodayStats();
+  }, [loadTodayStats, companyId]);
 
   const getPhaseColor = (phase: string) => {
     switch (phase) {
@@ -47,8 +76,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     <div className="space-y-6">
       {/* Welcome Section */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-4 sm:p-6 text-white">
-        <h2 className="text-lg sm:text-xl font-bold mb-2">Welcome back, {userProfile?.name || 'Admin'}!</h2>
-        <p className="text-blue-100 text-sm leading-relaxed">You have full access to manage users, projects, and company settings.</p>
+        <h2 className="text-lg sm:text-xl font-bold mb-2">{t('adminDashboard.welcome')}, {userProfile?.name || 'Admin'}!</h2>
+        <p className="text-blue-100 text-sm leading-relaxed">{t('adminDashboard.subtitle')}</p>
       </div>
 
       {/* Quick Stats */}
@@ -57,7 +86,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-2xl font-bold text-gray-900">{projects.length}</p>
-              <p className="text-sm text-gray-500">Total Projects</p>
+              <p className="text-sm text-gray-500">{t('staffDashboard.totalProjects')}</p>
             </div>
             <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
               <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,7 +102,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <p className="text-2xl font-bold text-gray-900">
                 {projects.filter(p => p.phase === 'Construction').length}
               </p>
-              <p className="text-sm text-gray-500">Active Projects</p>
+              <p className="text-sm text-gray-500">{t('staffDashboard.activeProjects')}</p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
               <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -89,7 +118,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <p className="text-2xl font-bold text-gray-900">
                 {projects.filter(p => p.phase === 'Completion').length}
               </p>
-              <p className="text-sm text-gray-500">Completed</p>
+              <p className="text-sm text-gray-500">{t('staffDashboard.completed')}</p>
             </div>
             <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
               <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,12 +132,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* Projects Section */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Projects</h3>
+          <h3 className="text-lg font-semibold text-gray-900">{t('project.title')}</h3>
           <button 
             onClick={onNewProject} 
             className="px-4 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors touch-manipulation"
           >
-            New Project
+            {t('project.newProject')}
           </button>
         </div>
         
@@ -162,7 +191,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 
                 <div className="flex items-center justify-between">
                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getPhaseColor(p.phase || 'Sales')}`}>
-                    {p.phase || 'Sales'}
+                    {t(`project.${(p.phase || 'Sales').toLowerCase()}`)}
                   </span>
                   <button
                     onClick={() => onNavigateToProject(p.id)}
@@ -177,8 +206,59 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
       </div>
 
+      {/* Task Assignment Section */}
+      {!showTaskManager && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">{t('taskAssignment.staffTaskAssignments')}</h3>
+              <p className="text-sm text-gray-500">{t('taskAssignment.assignDailyTasks')}</p>
+            </div>
+            <button 
+              onClick={() => setShowTaskManager(true)} 
+              className="px-4 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors touch-manipulation"
+            >
+              {t('taskAssignment.manageAssignments')}
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 bg-green-50 rounded-xl border border-green-100">
+              <p className="text-sm text-green-600 font-medium">{t('taskAssignment.tasksAssignedToday')}</p>
+              <p className="text-2xl font-bold text-green-900 mt-1">{todayAssignments}</p>
+            </div>
+            <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+              <p className="text-sm text-blue-600 font-medium">{t('taskAssignment.staffWorkingToday')}</p>
+              <p className="text-2xl font-bold text-blue-900 mt-1">{todayAssignments}</p>
+            </div>
+            <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+              <p className="text-sm text-purple-600 font-medium">{t('taskAssignment.todayLaborCost')}</p>
+              <p className="text-2xl font-bold text-purple-900 mt-1">${todayLaborCost.toFixed(2)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Task Assignment Manager Modal */}
+      {showTaskManager && (
+        <TaskAssignmentManager 
+          companyId={companyId} 
+          onClose={() => {
+            setShowTaskManager(false);
+            loadTodayStats();
+          }}
+          onAssignmentCreated={() => {
+            // Refresh stats immediately when assignment is created
+            // Small delay to allow Firebase to index the new document
+            setTimeout(() => loadTodayStats(), 100);
+          }}
+        />
+      )}
+
       {/* User Management Section */}
-      {permissions?.canManageUsers && <UserManagement companyId={companyId} permissions={permissions} />}
+      {permissions?.canManageUsers && !showTaskManager && (
+        <UserManagement companyId={companyId} permissions={permissions} />
+      )}
     </div>
   );
 };

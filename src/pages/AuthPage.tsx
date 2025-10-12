@@ -7,7 +7,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 // Define UserRole type locally
-type UserRole = 'admin' | 'staff' | 'client';
+type UserRole = 'admin' | 'staff';
 
 const AuthPage: React.FC = () => {
   const { t } = useTranslation();
@@ -32,7 +32,7 @@ const AuthPage: React.FC = () => {
     setLoading(true);
     try {
         if (isSignUp) {
-          await signup(email, password, displayName, 'client', companyId || undefined);
+          await signup(email, password, displayName, 'staff', companyId || undefined);
         } else {
           await login(email, password);
         }
@@ -118,8 +118,8 @@ const AuthPage: React.FC = () => {
                       <ul className="text-xs text-blue-800 mt-1 space-y-1">
                         <li>• <strong>Create a company:</strong> You become the admin</li>
                         <li>• <strong>Join a company:</strong> You become staff</li>
-                        <li>• <strong>Invited to a project:</strong> You become a client for that project</li>
-                        <li>• <strong>New accounts:</strong> Start as clients until you join a company</li>
+                        <li>• <strong>New accounts:</strong> Start as staff by default</li>
+                        <li>• <strong>Permissions:</strong> Admins can promote staff to admin role</li>
                       </ul>
                     </div>
                   </div>

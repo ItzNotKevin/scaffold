@@ -8,7 +8,6 @@ import Layout from '../components/Layout';
 import CompanyManagementDashboard from '../components/CompanyManagementDashboard';
 import AdminDashboard from '../components/AdminDashboard';
 import StaffDashboard from '../components/StaffDashboard';
-import ClientDashboard from '../components/ClientDashboard';
 import BackButton from '../components/ui/BackButton';
 import PageHeader from '../components/ui/PageHeader';
 import { useNavigate } from 'react-router-dom';
@@ -59,7 +58,7 @@ const Home: React.FC = () => {
       // Load user's role in this company
       const membershipDoc = await getDoc(doc(db, 'companyMemberships', `${currentUser.uid}_${companyId}`));
       
-      let userRole = 'client'; // Default role
+      let userRole = 'staff'; // Default role
       
       if (membershipDoc.exists()) {
         const membership = membershipDoc.data();
@@ -209,7 +208,7 @@ const Home: React.FC = () => {
 
     const getUserRole = () => {
       if (!selectedCompanyPermissions) {
-        return 'client';
+        return 'staff';
       }
       if (selectedCompanyPermissions.canManageUsers) {
         return 'admin';
@@ -217,7 +216,7 @@ const Home: React.FC = () => {
       if (selectedCompanyPermissions.canManageProjects) {
         return 'staff';
       }
-      return 'client';
+      return 'staff';
     };
 
     const userRole = getUserRole();
@@ -241,7 +240,6 @@ const Home: React.FC = () => {
             <>
               {userRole === 'admin' && <AdminDashboard {...commonProps} />}
               {userRole === 'staff' && <StaffDashboard {...commonProps} />}
-              {userRole === 'client' && <ClientDashboard {...commonProps} />}
             </>
           )}
         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
@@ -26,6 +27,7 @@ const DailyReportList: React.FC<DailyReportListProps> = ({
   canDelete,
   canApprove
 }) => {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,8 +184,8 @@ const DailyReportList: React.FC<DailyReportListProps> = ({
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Daily Reports"
-        subtitle={`${reports.length} report${reports.length !== 1 ? 's' : ''} found`}
+        title={t('dailyReport.title')}
+        subtitle={`${reports.length} ${t('dailyReport.reportsFound')}`}
       >
         {canCreate && (
           <Button onClick={onCreateReport}>

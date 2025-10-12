@@ -1,55 +1,50 @@
 # Role Management System Guide
 
 ## Overview
-The Construction PM app uses a role-based access control (RBAC) system with three distinct user roles: **Admin**, **Staff**, and **Client**.
+The Construction PM app uses a role-based access control (RBAC) system with two distinct user roles: **Admin** and **Staff**.
 
 ## User Roles
 
 ### 🔧 Admin
 - **Full system access** - Can manage everything
 - **User management** - Can create, update, and delete user accounts
-- **Role assignment** - Can promote/demote users between roles
+- **Role assignment** - Can promote/demote users between admin and staff roles
 - **Project management** - Full CRUD access to all projects
 - **Company management** - Can manage company settings and data
 - **Analytics access** - Can view all reports and analytics
+- **Delete projects** - Can delete projects and manage all company data
 
 ### 👷 Staff
 - **Project management** - Can create, update, and manage projects
 - **Check-in management** - Can create and manage daily check-ins
-- **Client communication** - Can respond to client feedback
-- **Limited user access** - Can view other users but not manage roles
-- **Project-specific access** - Only sees projects they're assigned to
-
-### 👤 Client
-- **Read-only project access** - Can view project status and progress
-- **Feedback submission** - Can submit feedback and questions
-- **Status updates** - Receives notifications about project milestones
-- **Limited visibility** - Only sees their own projects
+- **Daily reports** - Can create and manage daily reports
+- **Project access** - Can view and manage all projects in their company
+- **Feedback** - Can view and manage feedback
+- **Limited permissions** - Cannot manage users, company settings, or delete projects
 
 ## How Roles Are Assigned
 
 ### 1. Initial Signup
-- **All new users start as "Client"** by default
-- Users cannot self-assign Staff or Admin roles during signup
-- Role selection is limited to Client during account creation
+- **All new users start as "Staff"** by default
+- Users cannot self-assign Admin role during signup
+- New accounts have staff-level access until promoted by an admin
 
 ### 2. Role Promotion (Admin Only)
-- Only existing Admins can promote users to Staff or Admin roles
+- Only existing Admins can promote users to Admin role
 - This is done through the **User Management** section in the Admin Dashboard
-- Admins can change any user's role at any time
+- Admins can change any user's role at any time (except their own)
 
 ### 3. Role Demotion
-- Admins can demote users to lower roles
-- Staff can be demoted to Client
-- Admins can be demoted to Staff or Client
+- Admins can demote other admins to staff
+- Admins cannot change their own role (security measure)
 
 ## Role Management Workflow
 
 ### For New Users:
 1. **Sign up** with email/password
-2. **Select "Client"** role (only option available)
-3. **Join a company** or wait for admin invitation
-4. **Admin promotes** to Staff/Admin as needed
+2. **Start as Staff** role automatically
+3. **Join a company** or create a new company
+4. **Admin promotes** to Admin role if needed (or you become admin when creating a company)
 
 ### For Admins:
 1. **Go to Admin Dashboard**

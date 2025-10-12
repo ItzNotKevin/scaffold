@@ -15,7 +15,7 @@ interface Company {
   ownerId: string;
   createdAt: any;
   memberCount?: number;
-  userRole?: 'admin' | 'staff' | 'client';
+  userRole?: 'admin' | 'staff';
 }
 
 interface CompanyManagementDashboardProps {
@@ -39,10 +39,24 @@ const CompanyManagementDashboard: React.FC<CompanyManagementDashboardProps> = ({
   const [joinCompanyId, setJoinCompanyId] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadUserCompanies();
-  }, [currentUser, userProfile]);
+    let mounted = true;
+    
+    const load = async () => {
+      if (currentUser && mounted) {
+        await loadUserCompanies();
+      }
+    };
+    
+    load();
+    
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.uid]);
 
   const loadUserCompanies = async () => {
     try {
@@ -88,7 +102,7 @@ const CompanyManagementDashboard: React.FC<CompanyManagementDashboardProps> = ({
             const companyData = companyDoc.data();
             const membership = membershipsSnapshot.docs.find(doc => doc.data().companyId === companyId);
             
-            const role = membership?.data().role || 'client';
+            const role = membership?.data().role || 'staff';
             
             companiesData.push({
               id: companyId,
@@ -152,6 +166,16 @@ const CompanyManagementDashboard: React.FC<CompanyManagementDashboardProps> = ({
     }
   };
 
+  const copyCompanyId = (companyId: string) => {
+    navigator.clipboard.writeText(companyId).then(() => {
+      setCopiedId(companyId);
+      setTimeout(() => setCopiedId(null), 2000);
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+      alert(`Company ID: ${companyId}`);
+    });
+  };
+
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -165,7 +189,7 @@ const CompanyManagementDashboard: React.FC<CompanyManagementDashboardProps> = ({
     <div className="space-y-4 sm:space-y-6">
       <PageHeader
         title={t('company.title')}
-        subtitle="Manage your companies and access projects"
+        subtitle={t('company.subtitle')}
         className="text-center sm:text-left"
       />
 
@@ -224,31 +248,58 @@ const CompanyManagementDashboard: React.FC<CompanyManagementDashboardProps> = ({
             {companies.map((company) => (
               <div
                 key={company.id}
-                className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => onSelectCompany(company.id)}
+                className="p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
               >
-                <div className="flex-1">
-                  <h3 className="font-medium text-gray-900">{company.name}</h3>
-                  <p className="text-sm text-gray-500">
-                    Role: <span className="font-medium">
-                      {(() => {
-                        const cleanRole = String(company.userRole).replace(/[^a-zA-Z]/g, '').toLowerCase() || 'client';
-                        // Force proper capitalization
-                        if (cleanRole === 'admin') return 'Admin';
-                        if (cleanRole === 'staff') return 'Staff';
-                        if (cleanRole === 'client') return 'Client';
-                        return 'Client';
-                      })()}
-                    </span>
-                    {company.memberCount > 0 && (
-                      <span className="ml-2">• {company.memberCount} members</span>
-                    )}
-                  </p>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-medium text-gray-900">{company.name}</h3>
+                    <p className="text-sm text-gray-500">
+                      Role: <span className="font-medium">
+                        {(() => {
+                          const cleanRole = String(company.userRole).replace(/[^a-zA-Z]/g, '').toLowerCase() || 'staff';
+                          // Force proper capitalization
+                          if (cleanRole === 'admin') return 'Admin';
+                          if (cleanRole === 'staff') return 'Staff';
+                          return 'Staff';
+                        })()}
+                      </span>
+                      {company.memberCount > 0 && (
+                        <span className="ml-2">• {company.memberCount} members</span>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onSelectCompany(company.id)}
+                    className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors touch-manipulation"
+                  >
+                    Open →
+                  </button>
                 </div>
-                <div className="text-gray-400">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                
+                {/* Company ID Display */}
+                <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-lg">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-500 mb-1">Company ID (share with team):</p>
+                    <code className="text-xs font-mono text-gray-900 break-all">{company.id}</code>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copyCompanyId(company.id);
+                    }}
+                    className="px-3 py-2 bg-white text-gray-700 text-xs rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors touch-manipulation flex-shrink-0"
+                  >
+                    {copiedId === company.id ? (
+                      <span className="flex items-center gap-1">
+                        <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Copied!
+                      </span>
+                    ) : (
+                      'Copy ID'
+                    )}
+                  </button>
                 </div>
               </div>
             ))}

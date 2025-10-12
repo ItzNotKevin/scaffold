@@ -65,16 +65,8 @@ const RoleTest: React.FC = () => {
               <ul className="space-y-1">
                 <li>• Manage projects and check-ins</li>
                 <li>• Create new projects</li>
-                <li>• Respond to client feedback</li>
+                <li>• Manage daily reports</li>
                 <li>• View all project data</li>
-              </ul>
-            )}
-            {userProfile.role === 'client' && (
-              <ul className="space-y-1">
-                <li>• View assigned projects</li>
-                <li>• Submit feedback and concerns</li>
-                <li>• Track project progress</li>
-                <li>• Read-only access to project data</li>
               </ul>
             )}
           </div>

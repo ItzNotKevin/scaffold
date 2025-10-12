@@ -13,6 +13,7 @@ import AuthPage from './pages/AuthPage.tsx';
 import ProjectPage from './pages/ProjectPage.tsx';
 import ProfilePage from './pages/ProfilePage.tsx';
 import DebugPage from './pages/DebugPage';
+import PayrollPage from './pages/PayrollPage.tsx';
 
 function App() {
   return (
@@ -46,6 +47,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ProjectPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/payroll"
+                  element={
+                    <ProtectedRoute>
+                      <PayrollPage />
                     </ProtectedRoute>
                   }
                 />

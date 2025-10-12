@@ -18,15 +18,15 @@ if ('serviceWorker' in navigator) {
       .then((registration) => {
         console.log('Service Worker registered: ', registration);
         
-        // Check for updates
+        // Check for updates but don't auto-reload
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // New content is available, refresh the page
-                console.log('New content available, refreshing...');
-                window.location.reload();
+                // New content is available but don't auto-reload
+                console.log('New content available. Reload page to update.');
+                // Optionally show a toast notification to user instead
               }
             });
           }

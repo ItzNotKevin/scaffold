@@ -3,7 +3,7 @@ export interface AppUser {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'staff' | 'client';
+  role: 'admin' | 'staff';
   avatar?: string;
   preferences: UserPreferences;
   companyId?: string;
@@ -21,7 +21,7 @@ export interface UserPreferences {
   language: string;
 }
 
-export type UserRole = 'admin' | 'staff' | 'client';
+export type UserRole = 'admin' | 'staff';
 
 export interface RolePermissions {
   canManageUsers: boolean;
@@ -80,25 +80,6 @@ export const getRolePermissions = (role: UserRole): RolePermissions => {
         canManageCompany: false,
         canManageDailyReports: true,
         canCreateDailyReports: true,
-        canViewDailyReports: true,
-        canApproveDailyReports: false,
-      };
-    case 'client':
-      return {
-        canManageUsers: false,
-        canManageProjects: false,
-        canCreateProjects: false,
-        canDeleteProjects: false,
-        canManageCheckIns: false,
-        canCreateCheckIns: false,
-        canViewAllProjects: false,
-        canViewProjectDetails: true,
-        canManageFeedback: false,
-        canCreateFeedback: true,
-        canViewFeedback: true,
-        canManageCompany: false,
-        canManageDailyReports: false,
-        canCreateDailyReports: false,
         canViewDailyReports: true,
         canApproveDailyReports: false,
       };

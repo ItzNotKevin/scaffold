@@ -54,7 +54,7 @@ export async function migrateExistingUsers() {
       
       // Set role if not already set
       if (!userData.role) {
-        updateData.role = firstUser ? 'admin' : 'client';
+        updateData.role = firstUser ? 'admin' : 'staff';
         console.log(`  - Setting role to: ${updateData.role}`);
         firstUser = false;
       }

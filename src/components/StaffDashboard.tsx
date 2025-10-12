@@ -1,5 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/useAuth';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import type { TaskAssignment } from '../lib/types';
 
 interface StaffDashboardProps {
   companyId: string;
@@ -16,7 +20,73 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({
   onNavigateToProject,
   permissions
 }) => {
-  const { userProfile } = useAuth();
+  const { t } = useTranslation();
+  const { userProfile, currentUser } = useAuth();
+  const [assignments, setAssignments] = useState<TaskAssignment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState('week');
+  const [daysWorked, setDaysWorked] = useState(0);
+  const [estimatedWages, setEstimatedWages] = useState(0);
+
+  const loadAssignments = React.useCallback(async () => {
+    if (!currentUser) return;
+
+    setLoading(true);
+    try {
+      // Calculate date range based on selected period
+      const now = new Date();
+      let startDate = new Date();
+      
+      if (selectedPeriod === 'today') {
+        startDate = new Date();
+      } else if (selectedPeriod === 'week') {
+        startDate.setDate(now.getDate() - 7);
+      } else if (selectedPeriod === 'month') {
+        startDate.setMonth(now.getMonth() - 1);
+      }
+      
+      const startDateStr = startDate.toISOString().split('T')[0];
+      
+      const assignmentsQuery = query(
+        collection(db, 'taskAssignments'),
+        where('staffId', '==', currentUser.uid),
+        where('date', '>=', startDateStr)
+      );
+      
+      const snapshot = await getDocs(assignmentsQuery);
+      const assignmentsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as TaskAssignment[];
+      
+      console.log('StaffDashboard: Loaded assignments:', assignmentsData.length, assignmentsData);
+      
+      // Sort by date descending
+      assignmentsData.sort((a, b) => b.date.localeCompare(a.date));
+      
+      setAssignments(assignmentsData);
+      
+      // Calculate stats
+      const uniqueDates = new Set(assignmentsData.map(a => a.date));
+      setDaysWorked(uniqueDates.size);
+      setEstimatedWages(assignmentsData.reduce((sum, a) => sum + a.dailyRate, 0));
+    } catch (error: any) {
+      console.error('Error loading assignments:', error);
+      // Check if it's an index error
+      if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
+        console.error('FIRESTORE INDEX REQUIRED: Please deploy firestore.indexes.json');
+        alert('Firestore index required. Please deploy the Firestore indexes.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser, selectedPeriod]);
+
+  useEffect(() => {
+    if (currentUser) {
+      loadAssignments();
+    }
+  }, [loadAssignments, currentUser]);
 
   const getPhaseColor = (phase: string) => {
     switch (phase) {
@@ -44,8 +114,8 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({
     <div className="space-y-6">
       {/* Welcome Section */}
       <div className="bg-gradient-to-r from-green-600 to-blue-600 rounded-2xl p-4 sm:p-6 text-white">
-        <h2 className="text-lg sm:text-xl font-bold mb-2">Welcome back, {userProfile?.name || 'Staff'}!</h2>
-        <p className="text-green-100 text-sm leading-relaxed">You can manage projects and check-ins for your company.</p>
+        <h2 className="text-lg sm:text-xl font-bold mb-2">{t('staffDashboard.welcome')}, {userProfile?.name || 'Staff'}!</h2>
+        <p className="text-green-100 text-sm leading-relaxed">{t('staffDashboard.subtitle')}</p>
       </div>
 
       {/* Quick Stats */}
@@ -162,23 +232,75 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({
         )}
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Check-ins</h3>
-          <p className="text-gray-500 text-sm mb-4">Submit daily progress updates and photos</p>
-          <button className="w-full bg-green-600 text-white py-2.5 rounded-xl font-medium hover:bg-green-700 transition-colors touch-manipulation">
-            Submit Check-in
-          </button>
+      {/* My Assignments Section */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">{t('staffDashboard.myAssignments')}</h3>
+            <p className="text-sm text-gray-500">{t('staffDashboard.viewAssignedTasks')}</p>
+          </div>
+          <select
+            value={selectedPeriod}
+            onChange={(e) => setSelectedPeriod(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="today">{t('staffDashboard.today')}</option>
+            <option value="week">{t('staffDashboard.thisWeek')}</option>
+            <option value="month">{t('staffDashboard.thisMonth')}</option>
+          </select>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Feedback</h3>
-          <p className="text-gray-500 text-sm mb-4">View and respond to client feedback</p>
-          <button className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-medium hover:bg-purple-700 transition-colors touch-manipulation">
-            View Feedback
-          </button>
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+            <p className="text-sm text-blue-600 font-medium">{t('staffDashboard.daysWorked')}</p>
+            <p className="text-2xl font-bold text-blue-900 mt-1">{daysWorked}</p>
+          </div>
+          <div className="p-4 bg-green-50 rounded-xl border border-green-100">
+            <p className="text-sm text-green-600 font-medium">{t('staffDashboard.totalAssignments')}</p>
+            <p className="text-2xl font-bold text-green-900 mt-1">{assignments.length}</p>
+          </div>
+          <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+            <p className="text-sm text-purple-600 font-medium">{t('staffDashboard.estimatedWages')}</p>
+            <p className="text-2xl font-bold text-purple-900 mt-1">${estimatedWages.toFixed(2)}</p>
+          </div>
         </div>
+
+        {/* Assignments List */}
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-500 text-sm mt-2">{t('staffDashboard.loadingAssignments')}</p>
+          </div>
+        ) : assignments.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-2">📅</div>
+            <p className="text-gray-500 text-sm">{t('staffDashboard.noAssignmentsForPeriod')}</p>
+            <p className="text-gray-400 text-xs mt-1">{t('staffDashboard.checkBackLater')}</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {assignments.map(assignment => (
+              <div key={assignment.id} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">
+                        {assignment.date}
+                      </span>
+                      <span className="text-xs text-gray-500">${assignment.dailyRate.toFixed(2)}/day</span>
+                    </div>
+                    <p className="font-medium text-gray-900 mb-1">{assignment.projectName}</p>
+                    <p className="text-sm text-gray-700 mb-2">{assignment.taskDescription}</p>
+                    {assignment.notes && (
+                      <p className="text-xs text-gray-500 italic">{assignment.notes}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
