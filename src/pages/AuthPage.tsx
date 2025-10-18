@@ -6,8 +6,8 @@ import { useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
-// Define UserRole type locally
-type UserRole = 'admin' | 'staff';
+// All users are admins
+type UserRole = 'admin';
 
 const AuthPage: React.FC = () => {
   const { t } = useTranslation();
@@ -19,9 +19,9 @@ const AuthPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [displayName, setDisplayName] = useState('');
-  const [companyId, setCompanyId] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState(false);
 
   const { login, signup, loginWithGoogle, resetPassword } = useAuth();
   const navigate = useNavigate();
@@ -32,13 +32,18 @@ const AuthPage: React.FC = () => {
     setLoading(true);
     try {
         if (isSignUp) {
-          await signup(email, password, displayName, 'staff', companyId || undefined);
+          await signup(email, password, displayName);
+          setPendingApproval(true);
         } else {
           await login(email, password);
+          navigate('/');
         }
-      navigate('/');
     } catch (err: any) {
-      setError(err.message);
+      if (err.message === 'PENDING_APPROVAL') {
+        setPendingApproval(true);
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -70,6 +75,41 @@ const AuthPage: React.FC = () => {
     }
   };
 
+  if (pendingApproval) {
+    return (
+      <div key={languageKey} className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8 px-safe">
+        <div className="max-w-sm w-full">
+          <Card>
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-yellow-100 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Account Pending Approval
+              </h2>
+              <p className="text-gray-600 text-sm">
+                Your account has been created and is pending approval by an administrator. You will receive an email once your account is approved.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <Button
+                onClick={() => {
+                  setPendingApproval(false);
+                  setIsSignUp(false);
+                }}
+                className="w-full"
+              >
+                Back to Login
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div key={languageKey} className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8 px-safe">
       <div className="max-w-sm w-full">
@@ -84,7 +124,7 @@ const AuthPage: React.FC = () => {
               {isSignUp ? t('auth.createAccount') : t('auth.login')}
             </h2>
             <p className="text-gray-600 text-sm">
-              {isSignUp ? t('auth.signupDescription') : t('auth.loginDescription')}
+              {isSignUp ? 'Create an admin account (pending approval)' : t('auth.loginDescription')}
             </p>
           </div>
 
@@ -114,26 +154,13 @@ const AuthPage: React.FC = () => {
                       </svg>
                     </div>
                     <div>
-                      <h4 className="text-sm font-medium text-blue-900">How Roles Work</h4>
-                      <ul className="text-xs text-blue-800 mt-1 space-y-1">
-                        <li>• <strong>Create a company:</strong> You become the admin</li>
-                        <li>• <strong>Join a company:</strong> You become staff</li>
-                        <li>• <strong>New accounts:</strong> Start as staff by default</li>
-                        <li>• <strong>Permissions:</strong> Admins can promote staff to admin role</li>
-                      </ul>
+                      <h4 className="text-sm font-medium text-blue-900">Account Approval Required</h4>
+                      <p className="text-xs text-blue-800 mt-1">
+                        Your account will be reviewed by an administrator before you can access the system.
+                      </p>
                     </div>
                   </div>
                 </div>
-                
-                <Input
-                  id="companyId"
-                  label="Company ID (Optional)"
-                  type="text"
-                  value={companyId}
-                  onChange={(e) => setCompanyId(e.target.value)}
-                  placeholder="Enter company ID if you have one"
-                  helperText="If you don't have a company ID, leave this blank and an admin can add you later."
-                />
               </>
             )}
 

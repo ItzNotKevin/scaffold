@@ -52,18 +52,16 @@ const PayrollPage: React.FC = () => {
       return;
     }
 
-    if (permissions?.canManageUsers && userProfile?.companyId) {
+    if (permissions?.canManageUsers) {
       loadConfig();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.uid, userProfile?.companyId, permissions?.canManageUsers, navigate]);
+  }, [currentUser?.uid, permissions?.canManageUsers, navigate]);
 
   const loadConfig = async () => {
-    if (!userProfile?.companyId) return;
-
     setLoading(true);
     try {
-      const existingConfig = await getPayPeriodConfig(userProfile.companyId);
+      const existingConfig = await getPayPeriodConfig();
       
       if (existingConfig) {
         setConfig(existingConfig);
@@ -90,8 +88,6 @@ const PayrollPage: React.FC = () => {
   };
 
   const handleSaveConfig = async () => {
-    if (!userProfile?.companyId) return;
-
     setSaving(true);
     try {
       if (config) {
@@ -104,7 +100,6 @@ const PayrollPage: React.FC = () => {
       } else {
         // Create new config
         await addDoc(collection(db, 'payPeriodConfig'), {
-          companyId: userProfile.companyId,
           type: periodType,
           startDate,
           createdAt: serverTimestamp(),
@@ -123,11 +118,9 @@ const PayrollPage: React.FC = () => {
   };
 
   const loadReport = async (start: string, end: string) => {
-    if (!userProfile?.companyId) return;
-
     setReportLoading(true);
     try {
-      const data = await generatePayrollReport(userProfile.companyId, start, end);
+      const data = await generatePayrollReport(start, end);
       setReportData(data);
     } catch (error) {
       console.error('Error loading report:', error);
@@ -157,6 +150,8 @@ const PayrollPage: React.FC = () => {
 
   const totalWages = reportData.reduce((sum, data) => sum + data.totalWages, 0);
   const totalDays = reportData.reduce((sum, data) => sum + data.daysWorked, 0);
+  const totalReimbursements = reportData.reduce((sum, data) => sum + (data.totalReimbursements || 0), 0);
+  const grandTotal = totalWages + totalReimbursements;
 
   if (loading) {
     return (
@@ -258,7 +253,7 @@ const PayrollPage: React.FC = () => {
 
             {/* Summary Stats */}
             {selectedPeriod && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
                   <p className="text-sm text-blue-600 font-medium">{t('payroll.totalStaff')}</p>
                   <p className="text-2xl font-bold text-blue-900 mt-1">{reportData.length}</p>
@@ -268,8 +263,12 @@ const PayrollPage: React.FC = () => {
                   <p className="text-2xl font-bold text-green-900 mt-1">{totalDays}</p>
                 </div>
                 <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
-                  <p className="text-sm text-purple-600 font-medium">{t('payroll.totalWages')}</p>
+                  <p className="text-sm text-purple-600 font-medium">Wages</p>
                   <p className="text-2xl font-bold text-purple-900 mt-1">${totalWages.toFixed(2)}</p>
+                </div>
+                <div className="p-4 bg-orange-50 rounded-xl border border-orange-100">
+                  <p className="text-sm text-orange-600 font-medium">Reimbursements</p>
+                  <p className="text-2xl font-bold text-orange-900 mt-1">${totalReimbursements.toFixed(2)}</p>
                 </div>
               </div>
             )}
@@ -313,23 +312,56 @@ const PayrollPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-                      <span className="text-sm text-gray-600">{t('payroll.totalWages')}</span>
-                      <span className="text-lg font-bold text-green-600">${staff.totalWages.toFixed(2)}</span>
+                    {/* Reimbursements breakdown */}
+                    {staff.reimbursements && staff.reimbursements.length > 0 && (
+                      <div className="bg-orange-50 rounded-lg p-3 mb-3">
+                        <p className="text-xs font-medium text-gray-700 mb-2">Reimbursements:</p>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {staff.reimbursements.map((reimbursement) => (
+                            <div key={reimbursement.id} className="text-xs text-gray-600 flex justify-between">
+                              <span>
+                                <span className="font-medium">{reimbursement.date}</span> - {reimbursement.itemDescription}
+                              </span>
+                              <span className="font-medium text-orange-600">${reimbursement.amount.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2 pt-3 border-t border-gray-200">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Wages</span>
+                        <span className="font-semibold text-gray-900">${staff.totalWages.toFixed(2)}</span>
+                      </div>
+                      {staff.totalReimbursements > 0 && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Reimbursements</span>
+                          <span className="font-semibold text-orange-600">${staff.totalReimbursements.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                        <span className="text-sm font-medium text-gray-900">Total Payout</span>
+                        <span className="text-lg font-bold text-green-600">${staff.totalPayout.toFixed(2)}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
 
                 {/* Grand Total */}
                 <div className="bg-gray-900 text-white rounded-xl p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-2">
                     <div>
                       <p className="text-sm opacity-80">{t('payroll.grandTotal')}</p>
                       <p className="text-xs opacity-60 mt-1">
                         {reportData.length} staff · {totalDays} days
                       </p>
                     </div>
-                    <p className="text-2xl font-bold">${totalWages.toFixed(2)}</p>
+                    <div className="text-right">
+                      <p className="text-xs opacity-60">Wages: ${totalWages.toFixed(2)}</p>
+                      <p className="text-xs opacity-60">Reimbursements: ${totalReimbursements.toFixed(2)}</p>
+                      <p className="text-2xl font-bold mt-1">${grandTotal.toFixed(2)}</p>
+                    </div>
                   </div>
                 </div>
               </div>

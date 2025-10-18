@@ -19,17 +19,19 @@ interface AppUser {
   email: string;
   profilePicture?: string;
   preferences: UserPreferences;
-  companyId?: string; // Optional - only set when user belongs to a company
   createdAt?: any;
   updatedAt?: any;
 }
 
-// Company membership with role
-interface CompanyMembership {
-  userId: string;
-  companyId: string;
-  role: 'admin' | 'staff';
-  joinedAt: any;
+// Pending user awaiting approval
+interface PendingUser {
+  id: string;
+  email: string;
+  name: string;
+  requestedAt: any;
+  approvedBy?: string;
+  approvedAt?: any;
+  status: 'pending' | 'approved' | 'rejected';
 }
 
 interface UserPreferences {
@@ -42,7 +44,7 @@ interface UserPreferences {
   language: string;
 }
 
-export type UserRole = 'admin' | 'staff';
+export type UserRole = 'admin';
 
 interface RolePermissions {
   canManageUsers: boolean;
@@ -63,67 +65,26 @@ interface RolePermissions {
   canApproveDailyReports: boolean;
 }
 
-// Role-based permission utility
-export const getRolePermissions = (role: UserRole): RolePermissions => {
-  switch (role) {
-    case 'admin':
-      return {
-        canManageUsers: true,
-        canManageProjects: true,
-        canCreateProjects: true,
-        canDeleteProjects: true,
-        canManageCheckIns: true,
-        canCreateCheckIns: true,
-        canViewAllProjects: true,
-        canViewProjectDetails: true,
-        canManageFeedback: true,
-        canCreateFeedback: true,
-        canViewFeedback: true,
-        canManageCompany: true,
-        canManageDailyReports: true,
-        canCreateDailyReports: true,
-        canViewDailyReports: true,
-        canApproveDailyReports: true,
-      };
-    case 'staff':
-      return {
-        canManageUsers: false,
-        canManageProjects: true,
-        canCreateProjects: true,
-        canDeleteProjects: false,
-        canManageCheckIns: true,
-        canCreateCheckIns: true,
-        canViewAllProjects: true,
-        canViewProjectDetails: true,
-        canManageFeedback: true,
-        canCreateFeedback: true,
-        canViewFeedback: true,
-        canManageCompany: false,
-        canManageDailyReports: true,
-        canCreateDailyReports: true,
-        canViewDailyReports: true,
-        canApproveDailyReports: false,
-      };
-    default:
-      return {
-        canManageUsers: false,
-        canManageProjects: false,
-        canCreateProjects: false,
-        canDeleteProjects: false,
-        canManageCheckIns: false,
-        canCreateCheckIns: false,
-        canViewAllProjects: false,
-        canViewProjectDetails: false,
-        canManageFeedback: false,
-        canCreateFeedback: false,
-        canViewFeedback: false,
-        canManageCompany: false,
-        canManageDailyReports: false,
-        canCreateDailyReports: false,
-        canViewDailyReports: false,
-        canApproveDailyReports: false,
-      };
-  }
+// All users are admins with full permissions
+export const getRolePermissions = (): RolePermissions => {
+  return {
+    canManageUsers: true,
+    canManageProjects: true,
+    canCreateProjects: true,
+    canDeleteProjects: true,
+    canManageCheckIns: true,
+    canCreateCheckIns: true,
+    canViewAllProjects: true,
+    canViewProjectDetails: true,
+    canManageFeedback: true,
+    canCreateFeedback: true,
+    canViewFeedback: true,
+    canManageCompany: true,
+    canManageDailyReports: true,
+    canCreateDailyReports: true,
+    canViewDailyReports: true,
+    canApproveDailyReports: true,
+  };
 };
 
 interface AuthContextType {
@@ -131,16 +92,16 @@ interface AuthContextType {
   userProfile: AppUser | null;
   permissions: RolePermissions | null;
   loading: boolean;
-  signup: (email: string, password: string, displayName?: string, role?: UserRole, companyId?: string) => Promise<void>;
+  signup: (email: string, password: string, displayName?: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  updateUserRole: (userId: string, role: UserRole) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
-  createCompany: (companyName: string, companyDescription?: string) => Promise<string>;
-  joinCompany: (companyId: string) => Promise<void>;
   updateUserProfile: (updatedProfile: Partial<AppUser>) => Promise<void>;
+  approvePendingUser: (pendingUserId: string) => Promise<void>;
+  rejectPendingUser: (pendingUserId: string) => Promise<void>;
+  getPendingUsers: () => Promise<PendingUser[]>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -163,44 +124,55 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [permissions, setPermissions] = useState<RolePermissions | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const signup = async (email: string, password: string, displayName?: string, role: UserRole = 'staff', companyId?: string) => {
+  const signup = async (email: string, password: string, displayName?: string) => {
     try {
-      const { user } = await createUserWithEmailAndPassword(auth, email, password);
-      
-      if (displayName) {
-        await updateProfile(user, { displayName });
-      }
-      
-      // Check if this is the first user in the system (becomes super admin)
+      // Check if this is the first user in the system (becomes admin immediately)
       const usersSnapshot = await getDocs(collection(db, 'users'));
       const isFirstUser = usersSnapshot.empty;
       
-      // Prepare user data (no role - roles are company-specific)
-      const userData: any = {
-        uid: user.uid,
-        name: user.displayName || displayName || user.email?.split('@')[0] || 'User',
-        email: user.email,
-        preferences: {
-          theme: 'system',
-          notifications: {
-            email: true,
-            push: true,
-            sms: false,
-          },
-          language: 'en',
-        },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-      
-      // Only add companyId if it has a value
       if (isFirstUser) {
-        userData.companyId = 'super-admin';
-      } else if (companyId) {
-        userData.companyId = companyId;
+        // First user becomes admin immediately
+        const { user } = await createUserWithEmailAndPassword(auth, email, password);
+        
+        if (displayName) {
+          await updateProfile(user, { displayName });
+        }
+        
+        const userData: AppUser = {
+          uid: user.uid,
+          name: user.displayName || displayName || user.email?.split('@')[0] || 'User',
+          email: user.email!,
+          preferences: {
+            theme: 'system',
+            notifications: {
+              email: true,
+              push: true,
+              sms: false,
+            },
+            language: 'en',
+          },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        
+        await setDoc(doc(db, 'users', user.uid), userData, { merge: true });
+      } else {
+        // Subsequent users go to pending approval
+        const pendingUserData: PendingUser = {
+          id: email, // Use email as ID for simplicity
+          email,
+          name: displayName || email.split('@')[0],
+          requestedAt: serverTimestamp(),
+          status: 'pending',
+        };
+        
+        await setDoc(doc(db, 'pendingUsers', email), pendingUserData);
+        
+        // Sign out the user since they're not approved yet
+        await signOut(auth);
+        
+        throw new Error('PENDING_APPROVAL');
       }
-      
-      await setDoc(doc(db, 'users', user.uid), userData, { merge: true });
     } catch (error) {
       console.error('Signup: Error during signup process', error);
       throw error;
@@ -229,174 +201,91 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     await sendPasswordResetEmail(auth, email);
   };
 
-  const updateUserRole = async (userId: string, role: UserRole, companyId?: string) => {
+
+
+
+  // Pending user management functions
+  const getPendingUsers = async (): Promise<PendingUser[]> => {
     try {
-      if (!companyId) {
-        throw new Error('Company ID is required to update user role');
-      }
-      
-      // Update role in companyMemberships collection
-      await setDoc(
-        doc(db, 'companyMemberships', `${userId}_${companyId}`),
-        { 
-          userId,
-          companyId,
-          role: role,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-      
-      // Refresh current user profile if it's the same user
-      if (currentUser && currentUser.uid === userId) {
-        await refreshUserProfile();
-      }
+      const pendingUsersSnapshot = await getDocs(collection(db, 'pendingUsers'));
+      return pendingUsersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as PendingUser));
     } catch (error) {
-      console.error('Error updating user role:', error);
+      console.error('Error getting pending users:', error);
       throw error;
     }
   };
 
-  const createCompany = async (companyName: string, companyDescription?: string) => {
-    if (!currentUser) throw new Error('User must be logged in to create a company');
-    
+  const approvePendingUser = async (pendingUserId: string) => {
     try {
-      // Create company document
-      const companyId = `company-${Date.now()}`;
-      const companyData = {
-        id: companyId,
-        name: companyName,
-        description: companyDescription || '',
-        ownerId: currentUser.uid,
-        members: [currentUser.uid],
+      if (!currentUser) throw new Error('User must be logged in to approve users');
+      
+      // Get pending user data
+      const pendingUserDoc = await getDoc(doc(db, 'pendingUsers', pendingUserId));
+      if (!pendingUserDoc.exists()) {
+        throw new Error('Pending user not found');
+      }
+      
+      const pendingUserData = pendingUserDoc.data() as PendingUser;
+      
+      // Create user account
+      const { user } = await createUserWithEmailAndPassword(auth, pendingUserData.email, 'tempPassword123!');
+      
+      // Update user profile
+      await updateProfile(user, { displayName: pendingUserData.name });
+      
+      // Create user document
+      const userData: AppUser = {
+        uid: user.uid,
+        name: pendingUserData.name,
+        email: pendingUserData.email,
+        preferences: {
+          theme: 'system',
+          notifications: {
+            email: true,
+            push: true,
+            sms: false,
+          },
+          language: 'en',
+        },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
       
-      await setDoc(doc(db, 'companies', companyId), companyData);
+      await setDoc(doc(db, 'users', user.uid), userData);
       
-      // Update user to belong to this company and ensure name is set
-      await setDoc(
-        doc(db, 'users', currentUser.uid),
-        {
-          name: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
-          email: currentUser.email || '',
-          companyId: companyId,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      // Update pending user status
+      await updateDoc(doc(db, 'pendingUsers', pendingUserId), {
+        status: 'approved',
+        approvedBy: currentUser.uid,
+        approvedAt: serverTimestamp(),
+      });
       
-      // Create company membership record for admin
-      await setDoc(
-        doc(db, 'companyMemberships', `${currentUser.uid}_${companyId}`),
-        {
-          userId: currentUser.uid,
-          companyId: companyId,
-          role: 'admin',
-          joinedAt: serverTimestamp(),
-        }
-      );
+      // Sign out the temporary user
+      await signOut(auth);
       
-      // Refresh user profile
-      await refreshUserProfile();
-      
-      return companyId;
     } catch (error) {
-      console.error('Error creating company:', error);
+      console.error('Error approving pending user:', error);
       throw error;
     }
   };
 
-  const joinCompany = async (companyId: string) => {
-    if (!currentUser) throw new Error('User must be logged in to join a company');
-    
+  const rejectPendingUser = async (pendingUserId: string) => {
     try {
-      // Add user to company members
-      await setDoc(
-        doc(db, 'companies', companyId),
-        {
-          members: [currentUser.uid],
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      if (!currentUser) throw new Error('User must be logged in to reject users');
       
-      // Update user to belong to this company and ensure name is set
-      await setDoc(
-        doc(db, 'users', currentUser.uid),
-        {
-          name: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
-          email: currentUser.email || '',
-          companyId: companyId,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-      
-      // Create company membership record
-      await setDoc(
-        doc(db, 'companyMemberships', `${currentUser.uid}_${companyId}`),
-        {
-          userId: currentUser.uid,
-          companyId: companyId,
-          role: 'staff',
-          joinedAt: serverTimestamp(),
-        }
-      );
-      
-      // Refresh user profile
-      await refreshUserProfile();
+      // Update pending user status
+      await updateDoc(doc(db, 'pendingUsers', pendingUserId), {
+        status: 'rejected',
+        approvedBy: currentUser.uid,
+        approvedAt: serverTimestamp(),
+      });
       
     } catch (error) {
-      console.error('Error joining company:', error);
+      console.error('Error rejecting pending user:', error);
       throw error;
-    }
-  };
-
-  const getUserRoleInCompany = async (userId: string, companyId: string): Promise<UserRole> => {
-    try {
-      
-      // Check company membership record
-      const membershipDoc = await getDoc(doc(db, 'companyMemberships', `${userId}_${companyId}`));
-      
-      if (membershipDoc.exists()) {
-        const membership = membershipDoc.data() as CompanyMembership;
-        return membership.role;
-      }
-      
-      // Check if user is company owner
-      const companyDoc = await getDoc(doc(db, 'companies', companyId));
-      
-      if (companyDoc.exists()) {
-        const companyData = companyDoc.data();
-        if (companyData.ownerId === userId) {
-          // Create admin membership record for company owner
-          await setDoc(doc(db, 'companyMemberships', `${userId}_${companyId}`), {
-            userId,
-            companyId,
-            role: 'admin',
-            joinedAt: serverTimestamp()
-          });
-          return 'admin';
-        }
-      }
-      
-      // If no membership and not owner, check if company exists before creating membership
-      if (companyDoc.exists()) {
-        await setDoc(doc(db, 'companyMemberships', `${userId}_${companyId}`), {
-          userId,
-          companyId,
-          role: 'staff',
-          joinedAt: serverTimestamp()
-        });
-        return 'staff';
-      } else {
-        return 'staff';
-      }
-    } catch (error) {
-      console.error('Error getting user role in company:', error);
-      return 'staff';
     }
   };
 
@@ -420,40 +309,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUserProfile(userData);
         console.log('refreshUserProfile: Existing profile state updated');
         
-        // Get role from company membership if user belongs to a company
-        if (userData.companyId) {
-          try {
-            const role = await getUserRoleInCompany(currentUser.uid, userData.companyId);
-            
-            // Check if company actually exists, regardless of role
-            const companyDoc = await getDoc(doc(db, 'companies', userData.companyId));
-            if (!companyDoc.exists()) {
-              // Company doesn't exist, clear the companyId and set permissions to null
-              setUserProfile({ ...userData, companyId: undefined });
-              setPermissions(null);
-              return;
-            }
-            
-            const permissions = getRolePermissions(role);
-            setPermissions(permissions);
-          } catch (roleError) {
-            console.error('Error getting role, defaulting to staff:', roleError);
-            // If we can't get role, default to staff permissions
-            setPermissions(getRolePermissions('staff'));
-          }
-        } else {
-          // User without company has no permissions
-          setPermissions(null);
-        }
+        // All users are admins with full permissions
+        setPermissions(getRolePermissions());
       } else {
         // User document doesn't exist, create a default profile
-        console.log('refreshUserProfile: User doc not found, creating default profile');
-        // Check if this is the first user in the system
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        const isFirstUser = usersSnapshot.empty;
-        
-        // Create a default user profile (no role - roles are company-specific)
-        const defaultProfile: any = {
+        const defaultProfile: AppUser = {
           uid: currentUser.uid,
           name: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
           email: currentUser.email || '',
@@ -466,36 +326,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             },
             language: 'en',
           },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         };
         
-        // Only add companyId if it has a value
-        if (isFirstUser) {
-          defaultProfile.companyId = 'super-admin';
-        }
-        
-        console.log('refreshUserProfile: Creating user document with data:', {
-          ...defaultProfile,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        await setDoc(doc(db, 'users', currentUser.uid), {
-          ...defaultProfile,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        console.log('refreshUserProfile: User document created successfully');
-        
-        console.log('refreshUserProfile: Setting default profile:', defaultProfile);
+        await setDoc(doc(db, 'users', currentUser.uid), defaultProfile);
         setUserProfile(defaultProfile);
-        console.log('refreshUserProfile: Profile state updated');
-        
-        // Set permissions based on company membership
-        if (defaultProfile.companyId) {
-          const role = await getUserRoleInCompany(currentUser.uid, defaultProfile.companyId);
-          setPermissions(getRolePermissions(role));
-        } else {
-          setPermissions(null);
-        }
+        setPermissions(getRolePermissions());
       }
     } catch (error) {
       console.error('refreshUserProfile: Error fetching user profile:', error);
@@ -573,11 +410,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     loginWithGoogle,
     logout,
     resetPassword,
-    updateUserRole,
     refreshUserProfile,
-    createCompany,
-    joinCompany,
     updateUserProfile,
+    approvePendingUser,
+    rejectPendingUser,
+    getPendingUsers,
   };
 
 

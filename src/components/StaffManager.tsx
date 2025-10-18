@@ -1,0 +1,296 @@
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import type { StaffMember } from '../lib/types';
+import Button from './ui/Button';
+import Input from './ui/Input';
+import Card from './ui/Card';
+
+const StaffManager: React.FC = () => {
+  const { t } = useTranslation();
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    dailyRate: '' as string | number,
+    status: 'active' as 'active' | 'inactive',
+    notes: ''
+  });
+
+  const loadStaff = async () => {
+    try {
+      setLoading(true);
+      const staffSnapshot = await getDocs(collection(db, 'staffMembers'));
+      const staffData = staffSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as StaffMember));
+      setStaff(staffData);
+    } catch (error) {
+      console.error('Error loading staff:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStaff();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim() || !formData.email.trim()) return;
+
+    try {
+      setSaving(true);
+      
+      const dataToSave = {
+        ...formData,
+        dailyRate: parseFloat(formData.dailyRate as string) || 0
+      };
+
+      if (editingId) {
+        // Update existing staff member
+        await updateDoc(doc(db, 'staffMembers', editingId), {
+          ...dataToSave,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        // Create new staff member
+        await addDoc(collection(db, 'staffMembers'), {
+          ...dataToSave,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      await loadStaff();
+      resetForm();
+    } catch (error) {
+      console.error('Error saving staff member:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEdit = (staffMember: StaffMember) => {
+    setFormData({
+      name: staffMember.name,
+      email: staffMember.email,
+      phone: staffMember.phone || '',
+      dailyRate: staffMember.dailyRate,
+      status: staffMember.status,
+      notes: staffMember.notes || ''
+    });
+    setEditingId(staffMember.id);
+    setShowForm(true);
+  };
+
+  const handleDelete = async (staffId: string) => {
+    if (!confirm('Are you sure you want to delete this staff member?')) return;
+    
+    try {
+      await deleteDoc(doc(db, 'staffMembers', staffId));
+      await loadStaff();
+    } catch (error) {
+      console.error('Error deleting staff member:', error);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      email: '',
+      phone: '',
+      dailyRate: '',
+      status: 'active',
+      notes: ''
+    });
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Staff Management</h3>
+            <p className="text-sm text-gray-500">Manage non-user staff members for task assignments</p>
+          </div>
+          <Button onClick={() => setShowForm(true)}>
+            Add Staff Member
+          </Button>
+        </div>
+
+        {/* Form */}
+        {showForm && (
+          <form onSubmit={handleSubmit} className="space-y-4 mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Name *
+                </label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Staff member name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email *
+                </label>
+                <Input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="staff@example.com"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone
+                </label>
+                <Input
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="Phone number"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Daily Rate ($)
+                </label>
+                <Input
+                  type="number"
+                  value={formData.dailyRate}
+                  onChange={(e) => setFormData({ ...formData, dailyRate: e.target.value })}
+                  placeholder="0.00"
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Status
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notes
+              </label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Additional notes..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Saving...' : (editingId ? 'Update' : 'Add')} Staff Member
+              </Button>
+              <Button type="button" variant="outline" onClick={resetForm}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* Staff List */}
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-500 text-sm mt-2">Loading staff...</p>
+          </div>
+        ) : staff.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-2">👥</div>
+            <p className="text-gray-500 text-sm">No staff members found</p>
+            <p className="text-gray-400 text-xs mt-1">Add staff members to assign tasks</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {staff.map((staffMember) => (
+              <div key={staffMember.id} className="p-4 bg-white border border-gray-200 rounded-xl">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <span className="text-blue-600 font-medium text-sm">
+                          {staffMember.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900">{staffMember.name}</h4>
+                        <p className="text-sm text-gray-500">{staffMember.email}</p>
+                        {staffMember.phone && (
+                          <p className="text-sm text-gray-500">{staffMember.phone}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-4 text-sm">
+                      <span className="text-gray-600">
+                        Daily Rate: <span className="font-medium">${staffMember.dailyRate.toFixed(2)}</span>
+                      </span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        staffMember.status === 'active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {staffMember.status}
+                      </span>
+                    </div>
+                    {staffMember.notes && (
+                      <p className="text-sm text-gray-600 mt-2">{staffMember.notes}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(staffMember)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDelete(staffMember.id)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+};
+
+export default StaffManager;

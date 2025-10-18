@@ -14,24 +14,6 @@ import type { DailyReport } from '../lib/types';
 const phases = ['Sales','Contract','Materials','Construction','Completion'] as const;
 type Phase = typeof phases[number];
 
-interface Checkin {
-  id: string;
-  type: 'checkin' | 'checkout';
-  time: any;
-  userId: string;
-  userName?: string;
-  userEmail?: string;
-}
-
-interface Feedback {
-  id: string;
-  projectId: string;
-  clientId: string;
-  feedback: string;
-  createdAt: any;
-  clientName?: string;
-  clientEmail?: string;
-}
 
 interface Task {
   id: string;
@@ -106,22 +88,13 @@ const ProjectPage: React.FC = () => {
   const [projectDescription, setProjectDescription] = useState('');
   const [phase, setPhase] = useState<Phase>('Sales');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'Photos' | 'Staff' | 'Feedback' | 'Tasks' | 'Daily Reports'>('Photos');
+  const [activeTab, setActiveTab] = useState<'Photos' | 'Tasks' | 'Daily Reports'>('Photos');
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editPhase, setEditPhase] = useState<Phase>('Sales');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [checkinMessage, setCheckinMessage] = useState('');
-  const [checkinLoading, setCheckinLoading] = useState(false);
-  const [checkins, setCheckins] = useState<Checkin[]>([]);
-  const [checkinsLoading, setCheckinsLoading] = useState(true);
-  const [feedback, setFeedback] = useState<Feedback[]>([]);
-  const [feedbackLoading, setFeedbackLoading] = useState(true);
-  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
-  const [feedbackText, setFeedbackText] = useState('');
-  const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
   const [showTaskForm, setShowTaskForm] = useState(false);
@@ -133,7 +106,6 @@ const ProjectPage: React.FC = () => {
   const [newTaskAssignedTo, setNewTaskAssignedTo] = useState('');
   const [submittingTask, setSubmittingTask] = useState(false);
   const [companyUsers, setCompanyUsers] = useState<Array<{id: string, name: string, email: string}>>([]);
-  const [companyId, setCompanyId] = useState<string>('');
   const [taskFilter, setTaskFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(true);
@@ -189,7 +161,6 @@ const ProjectPage: React.FC = () => {
         setEditName(data.name || 'Project');
         setEditDescription(data.description || '');
         setEditPhase((data.phase as Phase) || 'Sales');
-        setCompanyId(data.companyId || '');
         
         // Load financial data
         setBudget(data.budget || 0);
@@ -241,120 +212,11 @@ const ProjectPage: React.FC = () => {
     return () => unsubscribe();
   }, [id]);
 
-  // Fetch check-ins with real-time updates
   useEffect(() => {
     if (!id) return;
-
-    const q = query(
-      collection(db, 'checkins'),
-      where('projectId', '==', id)
-    );
-
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const checkinsData: Checkin[] = [];
-      
-      for (const docSnapshot of snapshot.docs) {
-        const data = docSnapshot.data();
-        const checkin: Checkin = {
-          id: docSnapshot.id,
-          type: data.type,
-          time: data.time,
-          userId: data.userId,
-        };
-
-        // Fetch user details
-        try {
-          const userRef = doc(db, 'users', data.userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            checkin.userName = userData.displayName || userData.name;
-            checkin.userEmail = userData.email;
-          }
-        } catch (err) {
-          console.error('Error fetching user data:', err);
-        }
-
-        checkinsData.push(checkin);
-      }
-
-      // Sort by time (newest first) on the client side
-      checkinsData.sort((a, b) => {
-        const timeA = a.time?.toDate ? a.time.toDate() : new Date(a.time);
-        const timeB = b.time?.toDate ? b.time.toDate() : new Date(b.time);
-        return timeB.getTime() - timeA.getTime();
-      });
-
-      setCheckins(checkinsData);
-      setCheckinsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [id]);
-
-  // Fetch feedback for this project
-  useEffect(() => {
-    if (!id) return;
-
-    const loadFeedback = async () => {
-      try {
-        console.log('Loading feedback for project:', id);
-        const q = query(
-          collection(db, 'feedback'),
-          where('projectId', '==', id)
-        );
-        const snapshot = await getDocs(q);
-        console.log('Found', snapshot.docs.length, 'feedback documents on load');
-        
-        const feedbackData: Feedback[] = [];
-        for (const docSnapshot of snapshot.docs) {
-          const data = docSnapshot.data();
-          console.log('Loading feedback doc:', docSnapshot.id, data);
-          const feedbackItem: Feedback = {
-            id: docSnapshot.id,
-            projectId: data.projectId,
-            clientId: data.clientId,
-            feedback: data.feedback,
-            createdAt: data.createdAt,
-          };
-
-          // Fetch client details
-          try {
-            const clientRef = doc(db, 'users', data.clientId);
-            const clientSnap = await getDoc(clientRef);
-            if (clientSnap.exists()) {
-              const clientData = clientSnap.data();
-              feedbackItem.clientName = clientData.displayName || clientData.name;
-              feedbackItem.clientEmail = clientData.email;
-              console.log('Client details loaded:', feedbackItem.clientName, feedbackItem.clientEmail);
-            }
-          } catch (err) {
-            console.error('Error fetching client data:', err);
-          }
-
-          feedbackData.push(feedbackItem);
-        }
-
-        // Sort by creation time (newest first)
-        feedbackData.sort((a, b) => {
-          const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
-          const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
-          return timeB.getTime() - timeA.getTime();
-        });
-
-        console.log('Setting initial feedback data:', feedbackData);
-        setFeedback(feedbackData);
-        setFeedbackLoading(false);
-      } catch (error) {
-        console.error('Error loading feedback:', error);
-        setFeedbackLoading(false);
-      }
-    };
-
-    loadFeedback();
     loadTasks();
     loadCompanyUsers();
-  }, [id, companyId]);
+  }, [id]);
 
   // Load comments when tasks change
   useEffect(() => {
@@ -380,51 +242,20 @@ const ProjectPage: React.FC = () => {
     }
   }, [photosLoading]);
 
-  // Load company users for task assignment
+  // Load users for task assignment
   const loadCompanyUsers = async () => {
-    if (!companyId) {
-      console.log('No companyId available for loading users');
-      return;
-    }
-
     try {
-      console.log('Loading company users for company:', companyId);
-      const companyDoc = await getDoc(doc(db, 'companies', companyId));
-      if (!companyDoc.exists()) {
-        console.log('Company document not found:', companyId);
-        return;
-      }
-
-      const companyData = companyDoc.data();
-      const memberIds = companyData?.members || [];
-      const ownerId = companyData?.ownerId;
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const users = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name || 'Unknown User',
+        email: doc.data().email || 'No email'
+      }));
       
-      // Include owner in members list
-      if (ownerId && !memberIds.includes(ownerId)) {
-        memberIds.push(ownerId);
-      }
-
-      const users: Array<{id: string, name: string, email: string}> = [];
-      for (const userId of memberIds) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', userId));
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            users.push({
-              id: userId,
-              name: userData.displayName || userData.name || 'Unknown User',
-              email: userData.email || 'No email'
-            });
-          }
-        } catch (err) {
-          console.error('Error loading user:', userId, err);
-        }
-      }
-
       setCompanyUsers(users);
-      console.log('Loaded company users:', users);
+      console.log('Loaded users:', users);
     } catch (error) {
-      console.error('Error loading company users:', error);
+      console.error('Error loading users:', error);
     }
   };
 
@@ -1217,7 +1048,7 @@ ${reportData.isOverBudget
       await sendPhaseUpdateEmails({
         name: projectName,
         phase: newPhase
-      }, oldPhase, companyId || '');
+      }, oldPhase, '');
       console.log('ProjectPage: Phase update email notifications sent');
     } catch (emailError) {
       console.error('ProjectPage: Error sending phase update emails:', emailError);
@@ -1244,100 +1075,6 @@ ${reportData.isOverBudget
     }
   };
 
-  const handleCheck = async (type: 'checkin' | 'checkout') => {
-    if (!id || !currentUser) return;
-    
-    setCheckinLoading(true);
-    setCheckinMessage('');
-    
-    try {
-      await addDoc(collection(db, 'checkins'), {
-        projectId: id,
-        userId: currentUser.uid,
-        type,
-        time: serverTimestamp(),
-      });
-      
-      const action = type === 'checkin' ? 'checked in' : 'checked out';
-      setCheckinMessage(`Successfully ${action}!`);
-      
-      // Clear message after 3 seconds
-      setTimeout(() => setCheckinMessage(''), 3000);
-    } catch (err: any) {
-      setCheckinMessage(`Failed to ${type === 'checkin' ? 'check in' : 'check out'}: ${err.message}`);
-      setTimeout(() => setCheckinMessage(''), 5000);
-    } finally {
-      setCheckinLoading(false);
-    }
-  };
-
-  const handleSubmitFeedback = async () => {
-    if (!id || !currentUser || !feedbackText.trim()) return;
-    
-    setSubmittingFeedback(true);
-    
-    try {
-      console.log('Submitting feedback for project:', id);
-      const feedbackDoc = await addDoc(collection(db, 'feedback'), {
-        projectId: id,
-        clientId: currentUser.uid,
-        feedback: feedbackText.trim(),
-        createdAt: serverTimestamp(),
-      });
-      console.log('Feedback submitted with ID:', feedbackDoc.id);
-      
-      // Refresh feedback list
-      console.log('Refreshing feedback list...');
-      const q = query(collection(db, 'feedback'), where('projectId', '==', id));
-      const snapshot = await getDocs(q);
-      console.log('Found', snapshot.docs.length, 'feedback documents');
-      
-      const feedbackData: Feedback[] = [];
-      for (const docSnapshot of snapshot.docs) {
-        const data = docSnapshot.data();
-        console.log('Processing feedback doc:', docSnapshot.id, data);
-        const feedbackItem: Feedback = {
-          id: docSnapshot.id,
-          projectId: data.projectId,
-          clientId: data.clientId,
-          feedback: data.feedback,
-          createdAt: data.createdAt,
-        };
-
-        // Fetch client details
-        try {
-          const clientRef = doc(db, 'users', data.clientId);
-          const clientSnap = await getDoc(clientRef);
-          if (clientSnap.exists()) {
-            const clientData = clientSnap.data();
-            feedbackItem.clientName = clientData.displayName || clientData.name;
-            feedbackItem.clientEmail = clientData.email;
-            console.log('Client details:', feedbackItem.clientName, feedbackItem.clientEmail);
-          }
-        } catch (err) {
-          console.error('Error fetching client data:', err);
-        }
-
-        feedbackData.push(feedbackItem);
-      }
-
-      // Sort by creation time (newest first)
-      feedbackData.sort((a, b) => {
-        const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
-        const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
-        return timeB.getTime() - timeA.getTime();
-      });
-
-      console.log('Setting feedback data:', feedbackData);
-      setFeedback(feedbackData);
-      setFeedbackText('');
-      setShowFeedbackForm(false);
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
-    } finally {
-      setSubmittingFeedback(false);
-    }
-  };
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -2054,7 +1791,7 @@ ${reportData.isOverBudget
         {/* Tabs */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <div className="flex flex-wrap gap-2 mb-4">
-            {['Photos','Staff','Feedback','Tasks'].map(t => (
+            {['Photos','Tasks'].map(t => (
               <button 
                 key={t} 
                 onClick={() => setActiveTab(t as any)} 
@@ -2246,217 +1983,6 @@ ${reportData.isOverBudget
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {activeTab === 'Staff' && (
-            <div>
-              {/* Check-in/out Section */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 mb-6 border border-blue-100">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-blue-900 mb-2">Staff Check-in/out</h3>
-                  <p className="text-blue-700 text-sm mb-4">Use the buttons below to check in or out of this project</p>
-                  
-                  {checkinMessage && (
-                    <div className={`p-4 rounded-xl text-sm font-medium ${
-                      checkinMessage.includes('Successfully') 
-                        ? 'bg-green-100 text-green-800 border border-green-200' 
-                        : 'bg-red-100 text-red-800 border border-red-200'
-                    }`}>
-                      <div className="flex items-center justify-center space-x-2">
-                        {checkinMessage.includes('Successfully') ? (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        )}
-                        <span>{checkinMessage}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Check-ins List */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
-                  <div className="flex items-center space-x-2 text-sm text-gray-500">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span>Check In</span>
-                    <div className="w-2 h-2 bg-red-500 rounded-full ml-3"></div>
-                    <span>Check Out</span>
-                  </div>
-                </div>
-                
-                {checkinsLoading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
-                    <p className="text-gray-500 text-sm">Loading activity...</p>
-                  </div>
-                ) : checkins.length === 0 ? (
-                  <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                    </div>
-                    <p className="text-gray-600 font-medium mb-1">No activity yet</p>
-                    <p className="text-gray-400 text-sm">Check in or out to see activity here</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {checkins.map((checkin) => (
-                      <div
-                        key={checkin.id}
-                        className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 transition-colors"
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div className={`w-3 h-3 rounded-full ${
-                            checkin.type === 'checkin' ? 'bg-green-500' : 'bg-red-500'
-                          }`}></div>
-                          <div>
-                            <p className="text-sm font-semibold text-gray-900">
-                              {checkin.type === 'checkin' ? 'Checked In' : 'Checked Out'}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              {checkin.userName || checkin.userEmail || 'Unknown User'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-gray-900">
-                            {formatTimestamp(checkin.time)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'Feedback' && (
-            <div>
-              {/* Leave Feedback Button - Only show for Completion phase */}
-              {phase === 'Completion' && (
-                <div className="mb-6">
-                  {!showFeedbackForm ? (
-                    <button
-                      onClick={() => setShowFeedbackForm(true)}
-                      className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-4 rounded-2xl font-semibold hover:from-green-700 hover:to-green-800 transition-all duration-200 touch-manipulation shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                    >
-                      <div className="flex items-center justify-center space-x-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                        <span>Leave Feedback</span>
-                      </div>
-                    </button>
-                  ) : (
-                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-100">
-                      <h3 className="text-lg font-semibold text-green-900 mb-4">Share Your Feedback</h3>
-                      <textarea
-                        value={feedbackText}
-                        onChange={(e) => setFeedbackText(e.target.value)}
-                        placeholder="Tell us about your experience with this project..."
-                        className="w-full h-32 px-4 py-3 border border-green-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm resize-none"
-                      />
-                      <div className="flex space-x-3 mt-4">
-                        <button
-                          onClick={() => {
-                            setShowFeedbackForm(false);
-                            setFeedbackText('');
-                          }}
-                          disabled={submittingFeedback}
-                          className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-xl font-medium hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleSubmitFeedback}
-                          disabled={submittingFeedback || !feedbackText.trim()}
-                          className="flex-1 bg-green-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {submittingFeedback ? (
-                            <div className="flex items-center justify-center space-x-2">
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                              <span>Submitting...</span>
-                            </div>
-                          ) : (
-                            'Submit Feedback'
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Feedback List */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Client Feedback</h3>
-                
-                {feedbackLoading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
-                    <p className="text-gray-500 text-sm">Loading feedback...</p>
-                  </div>
-                ) : feedback.length === 0 ? (
-                  <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                    </div>
-                    <p className="text-gray-600 font-medium mb-1">No feedback yet</p>
-                    <p className="text-gray-400 text-sm">
-                      {phase === 'Completion' 
-                        ? 'Be the first to share your experience!' 
-                        : 'Feedback will be available when the project reaches completion.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {feedback.map((item) => (
-                      <div
-                        key={item.id}
-                        className="bg-white rounded-xl p-5 border border-gray-100 hover:border-gray-200 transition-colors"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                            </div>
-                            <div>
-                              <p className="font-semibold text-gray-900">
-                                {item.clientName || item.clientEmail || 'Anonymous Client'}
-                              </p>
-                              <p className="text-sm text-gray-500">
-                                {formatTimestamp(item.createdAt)}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        <p className="text-gray-700 leading-relaxed">
-                          {item.feedback}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           )}
 
@@ -2973,55 +2499,6 @@ ${reportData.isOverBudget
         </div>
       </div>
 
-      {/* Sticky Bottom Action Bar */}
-      {activeTab === 'Staff' && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 p-4 pb-safe shadow-lg">
-          <div className="flex space-x-3">
-            <button 
-              onClick={() => handleCheck('checkin')} 
-              disabled={checkinLoading}
-              className="flex-1 bg-gradient-to-r from-green-600 to-green-700 text-white py-4 rounded-2xl font-semibold hover:from-green-700 hover:to-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-manipulation shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
-            >
-              <div className="flex items-center justify-center space-x-2">
-                {checkinLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Checking In...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>Check In</span>
-                  </>
-                )}
-              </div>
-            </button>
-            <button 
-              onClick={() => handleCheck('checkout')} 
-              disabled={checkinLoading}
-              className="flex-1 bg-gradient-to-r from-red-600 to-red-700 text-white py-4 rounded-2xl font-semibold hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 touch-manipulation shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
-            >
-              <div className="flex items-center justify-center space-x-2">
-                {checkinLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Checking Out...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    <span>Check Out</span>
-                  </>
-                )}
-              </div>
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Task Completion Report Modal */}
       {showReport && reportData && (

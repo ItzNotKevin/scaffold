@@ -11,7 +11,6 @@ export interface Project {
   actualCost: number;
   progress: number;
   team: TeamMember[];
-  companyId: string;
   phase: string;
   createdAt: any;
   updatedAt: any;
@@ -56,10 +55,8 @@ export interface AppUser {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'staff' | 'client';
   avatar?: string;
   preferences: UserPreferences;
-  companyId?: string;
   createdAt?: any;
   updatedAt?: any;
 }
@@ -119,11 +116,18 @@ export interface CheckIn {
   updatedAt: any;
 }
 
-// Staff member with daily rate for payroll
-export interface StaffMember extends AppUser {
+// Non-user staff member for task assignments and payroll
+export interface StaffMember {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
   dailyRate: number; // Flat daily wage
   hireDate?: Date;
   status: 'active' | 'inactive';
+  notes?: string;
+  createdAt: any;
+  updatedAt: any;
 }
 
 // Task assignment for staff by admin
@@ -131,7 +135,7 @@ export interface TaskAssignment {
   id: string;
   projectId: string;
   projectName: string;
-  staffId: string;
+  staffId: string; // References StaffMember.id
   staffName: string;
   taskDescription: string;
   date: string; // YYYY-MM-DD format
@@ -144,7 +148,6 @@ export interface TaskAssignment {
 // Pay period configuration
 export interface PayPeriodConfig {
   id: string;
-  companyId: string;
   type: 'weekly' | 'biweekly' | 'monthly';
   startDate: string; // First day of pay period cycle (YYYY-MM-DD)
   createdAt: any;
@@ -154,8 +157,7 @@ export interface PayPeriodConfig {
 // Payroll report for a staff member in a pay period
 export interface PayrollReport {
   id: string;
-  companyId: string;
-  staffId: string;
+  staffId: string; // References StaffMember.id
   staffName: string;
   periodStart: string; // YYYY-MM-DD
   periodEnd: string; // YYYY-MM-DD
@@ -163,6 +165,35 @@ export interface PayrollReport {
   totalDays: number;
   totalWages: number;
   status: 'open' | 'closed' | 'paid';
+  createdAt: any;
+  updatedAt: any;
+}
+
+// Pending user awaiting approval
+export interface PendingUser {
+  id: string;
+  email: string;
+  name: string;
+  requestedAt: any;
+  approvedBy?: string;
+  approvedAt?: any;
+  status: 'pending' | 'approved' | 'rejected';
+}
+
+// Reimbursement for materials bought by staff
+export interface Reimbursement {
+  id: string;
+  staffId: string;
+  staffName: string;
+  projectId?: string;
+  projectName?: string;
+  itemDescription: string;
+  amount: number;
+  date: string; // YYYY-MM-DD format
+  receiptUrl?: string; // URL to receipt photo in Firebase Storage
+  notes?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdBy: string;
   createdAt: any;
   updatedAt: any;
 }

@@ -1,27 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/useAuth';
-import UserManagement from './UserManagement';
+import StaffManager from './StaffManager';
+import PendingUsersManager from './PendingUsersManager';
 import TaskAssignmentManager from './TaskAssignmentManager';
+import ReimbursementManager from './ReimbursementManager';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 interface AdminDashboardProps {
-  companyId: string;
   projects: any[];
   onNewProject: () => void;
   onDeleteProject: (projectId: string) => void;
   onNavigateToProject: (projectId: string) => void;
-  permissions?: any; // Add permissions prop
+  permissions?: any;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({
-  companyId,
-  projects,
-  onNewProject,
-  onDeleteProject,
-  onNavigateToProject,
-  permissions
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
+  projects, 
+  onNewProject, 
+  onDeleteProject, 
+  onNavigateToProject, 
+  permissions 
 }) => {
   const { t } = useTranslation();
   const { userProfile } = useAuth();
@@ -48,7 +48,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   useEffect(() => {
     loadTodayStats();
-  }, [loadTodayStats, companyId]);
+  }, [loadTodayStats]);
 
   const getPhaseColor = (phase: string) => {
     switch (phase) {
@@ -242,7 +242,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* Task Assignment Manager Modal */}
       {showTaskManager && (
         <TaskAssignmentManager 
-          companyId={companyId} 
           onClose={() => {
             setShowTaskManager(false);
             loadTodayStats();
@@ -255,9 +254,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         />
       )}
 
-      {/* User Management Section */}
+      {/* Pending Users Section */}
+      {!showTaskManager && (
+        <PendingUsersManager />
+      )}
+
+      {/* Staff Management Section */}
       {permissions?.canManageUsers && !showTaskManager && (
-        <UserManagement companyId={companyId} permissions={permissions} />
+        <StaffManager />
+      )}
+
+      {/* Reimbursement Management Section */}
+      {!showTaskManager && (
+        <ReimbursementManager />
       )}
     </div>
   );

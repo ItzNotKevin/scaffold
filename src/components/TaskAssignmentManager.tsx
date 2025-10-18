@@ -9,17 +9,11 @@ import Input from './ui/Input';
 import Card from './ui/Card';
 
 interface TaskAssignmentManagerProps {
-  companyId: string;
   onClose?: () => void;
   onAssignmentCreated?: () => void;
 }
 
-interface StaffMember {
-  id: string;
-  name: string;
-  email: string;
-  dailyRate?: number;
-}
+import type { StaffMember } from '../lib/types';
 
 interface Project {
   id: string;
@@ -32,7 +26,7 @@ interface ProjectTask {
   status: string;
 }
 
-const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ companyId, onClose, onAssignmentCreated }) => {
+const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, onAssignmentCreated }) => {
   const { t } = useTranslation();
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -56,42 +50,30 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ companyId
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (companyId) {
-      loadData();
-    }
+    loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId]);
+  }, []);
 
   useEffect(() => {
-    if (selectedDate && companyId) {
+    if (selectedDate) {
       loadAssignments();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, companyId]);
+  }, [selectedDate]);
 
   const loadData = async () => {
     setLoading(true);
     try {
       // Load staff members
-      const staffQuery = query(
-        collection(db, 'users'),
-        where('companyId', '==', companyId)
-      );
-      const staffSnapshot = await getDocs(staffQuery);
+      const staffSnapshot = await getDocs(collection(db, 'staffMembers'));
       const staffData = staffSnapshot.docs.map(doc => ({
         id: doc.id,
-        name: doc.data().name || 'Unknown',
-        email: doc.data().email || '',
-        dailyRate: doc.data().dailyRate || 0
-      }));
+        ...doc.data()
+      } as StaffMember));
       setStaff(staffData);
 
       // Load projects
-      const projectsQuery = query(
-        collection(db, 'projects'),
-        where('companyId', '==', companyId)
-      );
-      const projectsSnapshot = await getDocs(projectsQuery);
+      const projectsSnapshot = await getDocs(collection(db, 'projects'));
       const projectsData = projectsSnapshot.docs.map(doc => ({
         id: doc.id,
         name: doc.data().name || 'Unnamed Project'

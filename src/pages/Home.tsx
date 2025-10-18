@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth, type UserRole } from '../lib/useAuth';
-import { getRolePermissions } from '../lib/useAuth';
+import { useAuth } from '../lib/useAuth';
 import { usePWAInstall } from '../lib/usePWAInstall';
 import { useLanguage } from '../lib/LanguageContext';
 import Layout from '../components/Layout';
-import CompanyManagementDashboard from '../components/CompanyManagementDashboard';
 import AdminDashboard from '../components/AdminDashboard';
-import StaffDashboard from '../components/StaffDashboard';
 import BackButton from '../components/ui/BackButton';
 import PageHeader from '../components/ui/PageHeader';
 import { useNavigate } from 'react-router-dom';
@@ -17,22 +14,19 @@ import { sendProjectCreatedEmails } from '../lib/emailNotifications';
 
 const Home: React.FC = () => {
   const { t } = useTranslation();
-  const { currentUser, userProfile, permissions, createCompany, joinCompany } = useAuth();
+  const { currentUser, userProfile, permissions } = useAuth();
   const { isInstallable, installApp } = usePWAInstall();
   const { languageKey } = useLanguage();
   const navigate = useNavigate();
   
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
-  const [selectedCompanyName, setSelectedCompanyName] = useState<string>('');
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [selectedCompanyPermissions, setSelectedCompanyPermissions] = useState<any>(null);
 
   const handleMenuClick = () => {
-    // Navigate back to company selection (dashboard)
-    handleBackToCompanies();
+    // No company selection needed - just refresh
+    loadProjects();
   };
 
   const handleNavigateToProject = (projectId: string) => {
@@ -40,152 +34,40 @@ const Home: React.FC = () => {
     window.location.href = `/project/${projectId}`;
   };
 
-  const loadCompanyData = async (companyId: string) => {
-    if (!companyId || !currentUser) {
+  const loadProjects = async () => {
+    if (!currentUser) {
       return;
     }
     
     try {
       setLoading(true);
       
-      // Load company details
-      const companyDoc = await getDoc(doc(db, 'companies', companyId));
-      if (companyDoc.exists()) {
-        const companyData = companyDoc.data();
-        setSelectedCompanyName(companyData.name || 'Company');
-      }
-      
-      // Load user's role in this company
-      const membershipDoc = await getDoc(doc(db, 'companyMemberships', `${currentUser.uid}_${companyId}`));
-      
-      let userRole = 'staff'; // Default role
-      
-      if (membershipDoc.exists()) {
-        const membership = membershipDoc.data();
-        userRole = membership.role;
-      } else {
-        // Check if user is company owner
-        if (companyDoc.exists()) {
-          const companyData = companyDoc.data();
-          if (companyData.ownerId === currentUser.uid) {
-            userRole = 'admin';
-          }
-        }
-      }
-      
-      // Set permissions based on role
-      const rolePermissions = getRolePermissions(userRole as UserRole);
-      setSelectedCompanyPermissions(rolePermissions);
-      
-      // Load projects for this company
-      const projectsQuery = query(collection(db, 'projects'), where('companyId', '==', companyId));
+      // Load all projects (no company filtering needed)
+      const projectsQuery = query(collection(db, 'projects'));
       const projectsSnapshot = await getDocs(projectsQuery);
-      setProjects(projectsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      
+      const projectsData = projectsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setProjects(projectsData);
     } catch (error) {
-      console.error('Error loading company data:', error);
+      console.error('Error loading projects:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectCompany = async (companyId: string) => {
-    setSelectedCompanyId(companyId);
-    await loadCompanyData(companyId);
-  };
-
-  const handleBackToCompanies = () => {
-    setSelectedCompanyId(null);
-    setSelectedCompanyName('');
-    setProjects([]);
-  };
-
-  const handleCreateCompany = async (companyName: string): Promise<string> => {
-    if (!currentUser || !companyName.trim()) {
-      throw new Error('Invalid user or company name');
-    }
-    
-    try {
-      const newCompanyId = await createCompany(companyName.trim());
-      console.log('Company created successfully:', newCompanyId);
-      return newCompanyId;
-    } catch (error) {
-      console.error('Error creating company:', error);
-      throw error;
-    }
-  };
-
-  const handleJoinCompany = async (companyId: string) => {
-    if (!currentUser || !companyId.trim()) return;
-    
-    try {
-      await joinCompany(companyId.trim());
-      console.log('Joined company successfully:', companyId);
-    } catch (error) {
-      console.error('Error joining company:', error);
-      throw error;
-    }
-  };
-
-  const handleNewProject = async () => {
-    console.log('handleNewProject called, selectedCompanyId:', selectedCompanyId);
-    if (!selectedCompanyId) {
-      console.log('No selectedCompanyId, cannot create project');
-      return;
-    }
-    
-    try {
-      console.log('Creating new project...');
-      const projectDoc = await addDoc(collection(db, 'projects'), {
-        name: `New Project ${projects.length + 1}`,
-        companyId: selectedCompanyId,
-        phase: 'Sales',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      
-      console.log('Project created with ID:', projectDoc.id);
-      
-      // Send email notifications
-      try {
-        const projectName = `New Project ${projects.length + 1}`;
-        await sendProjectCreatedEmails({
-          name: projectName,
-          phase: 'Sales'
-        }, selectedCompanyId);
-        console.log('Email notifications sent');
-      } catch (emailError) {
-        console.error('Error sending email notifications:', emailError);
-      }
-      
-      console.log('Navigating to project page...');
-      navigate(`/project/${projectDoc.id}`);
-    } catch (error) {
-      console.error('Error creating project:', error);
-    }
+  const handleNewProject = () => {
+    navigate('/project/new');
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    if (!projectId) return;
+    if (!confirm('Are you sure you want to delete this project?')) return;
     
-    setDeleting(true);
     try {
-      // Delete associated check-ins first
-      const checkinsQuery = query(collection(db, 'checkins'), where('projectId', '==', projectId));
-      const checkinsSnapshot = await getDocs(checkinsQuery);
-      
-      const deleteCheckinsPromises = checkinsSnapshot.docs.map(checkinDoc => 
-        deleteDoc(doc(db, 'checkins', checkinDoc.id))
-      );
-      
-      await Promise.all(deleteCheckinsPromises);
-      
-      // Delete the project
+      setDeleting(true);
       await deleteDoc(doc(db, 'projects', projectId));
-      
-      // Update local state
-      setProjects(prev => prev.filter(p => p.id !== projectId));
-      setDeleteConfirm(null);
+      await loadProjects();
     } catch (error) {
       console.error('Error deleting project:', error);
     } finally {
@@ -193,69 +75,60 @@ const Home: React.FC = () => {
     }
   };
 
-  // Show role-based dashboard if a company is selected
-  if (selectedCompanyId) {
-    const commonProps = {
-      projects,
-      onNewProject: handleNewProject,
-      onDeleteProject: handleDeleteProject,
-      onEditProject: (projectId: string) => navigate(`/project/${projectId}`),
-      onNavigateToProject: handleNavigateToProject,
-      companyName: selectedCompanyName,
-      companyId: selectedCompanyId,
-      permissions: selectedCompanyPermissions
-    };
+  useEffect(() => {
+    if (currentUser) {
+      loadProjects();
+    }
+  }, [currentUser]);
 
-    const getUserRole = () => {
-      if (!selectedCompanyPermissions) {
-        return 'staff';
-      }
-      if (selectedCompanyPermissions.canManageUsers) {
-        return 'admin';
-      }
-      if (selectedCompanyPermissions.canManageProjects) {
-        return 'staff';
-      }
-      return 'staff';
-    };
-
-    const userRole = getUserRole();
-
+  if (!currentUser || !userProfile) {
     return (
-      <Layout title={selectedCompanyName} onMenuClick={handleMenuClick} currentRole={userRole}>
-        <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
-          <PageHeader
-            title={selectedCompanyName}
-            subtitle={t('app.title')}
-            className="flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-0"
-          />
-          
-          
-          {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-500 text-sm mt-2">Loading company data...</p>
-            </div>
-          ) : (
-            <>
-              {userRole === 'admin' && <AdminDashboard {...commonProps} />}
-              {userRole === 'staff' && <StaffDashboard {...commonProps} />}
-            </>
-          )}
+      <Layout title="Loading..." currentRole="admin">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-500 text-sm mt-4">Loading...</p>
+          </div>
         </div>
       </Layout>
     );
   }
 
-  // Show company management dashboard if no company is selected
   return (
-    <Layout title={t('app.title')} onMenuClick={handleMenuClick} currentRole={undefined}>
-      <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
-        <CompanyManagementDashboard
-          onCreateCompany={handleCreateCompany}
-          onJoinCompany={handleJoinCompany}
-          onSelectCompany={handleSelectCompany}
-          userProfile={userProfile}
+    <Layout title="Dashboard" currentRole="admin">
+      <div className="space-y-6">
+        {/* PWA Install Prompt */}
+        {isInstallable && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-blue-900">Install App</h3>
+                  <p className="text-xs text-blue-700">Install this app on your device for a better experience</p>
+                </div>
+              </div>
+              <button
+                onClick={installApp}
+                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Install
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Dashboard */}
+        <AdminDashboard
+          projects={projects}
+          onNewProject={handleNewProject}
+          onDeleteProject={handleDeleteProject}
+          onNavigateToProject={handleNavigateToProject}
+          permissions={permissions}
         />
       </div>
     </Layout>

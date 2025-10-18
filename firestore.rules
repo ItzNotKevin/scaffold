@@ -1,113 +1,73 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions for role-based access
+    // Helper function to check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    function getUserCompanyId() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId;
-    }
-    
-    function isSuperAdmin() {
-      return isAuthenticated() && getUserCompanyId() == 'super-admin';
-    }
-    
-    // Users collection
+    // Users collection - all authenticated users can read/write
     match /users/{userId} {
-      // Any authenticated user can read, write, create, delete users
-      // (App-level permissions control actual access)
       allow read, write: if isAuthenticated();
     }
     
-    // Company Memberships collection
-    match /companyMemberships/{membershipId} {
-      // Users can read their own memberships
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      
-      // Admins can read all memberships in their company
-      allow read: if isAuthenticated();
-      
-      // Admins and system can create/update memberships
-      allow write: if isAuthenticated();
+    // Staff members collection - all authenticated users can read/write
+    match /staffMembers/{staffId} {
+      allow read, write: if isAuthenticated();
     }
     
-    // Companies collection
-    match /companies/{companyId} {
-      // Super admin can do everything with all companies
-      allow read, write: if isSuperAdmin();
-      
-      // Admins can manage their own company
-      allow read, write: if isAdmin() && belongsToCompany(companyId);
-      
-      // Staff can read their own company info
-      allow read: if isStaff() && belongsToCompany(companyId);
-      
-      // Any authenticated user can read companies (to check if they exist when joining)
-      allow read: if isAuthenticated();
-      
-      // Any authenticated user can create companies
-      allow create: if isAuthenticated();
-      
-      // Any authenticated user can update companies they belong to (for joining)
-      allow update: if isAuthenticated();
+    // Pending users collection - all authenticated users can read/write
+    match /pendingUsers/{pendingUserId} {
+      allow read, write: if isAuthenticated();
     }
     
-    // Projects collection
+    // Projects collection - all authenticated users can read/write
     match /projects/{projectId} {
-      // Super admin can do everything with all projects
-      allow read, write: if isSuperAdmin();
-      
-      // Any authenticated user can read/write projects
-      // (Role-based permissions are enforced in the application layer)
-      allow read, write: if isAuthenticated();
-      
-      // Allow creation for authenticated users
-      allow create: if isAuthenticated();
-    }
-    
-    // Check-ins collection (deprecated - replaced by task assignments)
-    match /checkins/{checkinId} {
-      // Any authenticated user can read/write check-ins for backward compatibility
       allow read, write: if isAuthenticated();
     }
     
-    // Task Assignments collection
+    // Project tasks collection - all authenticated users can read/write
+    match /projects/{projectId}/tasks/{taskId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Task assignments collection - all authenticated users can read/write
     match /taskAssignments/{assignmentId} {
-      // Any authenticated user can read/write task assignments
-      // (App-level permissions control actual access)
       allow read, write: if isAuthenticated();
     }
     
-    // Pay Period Configuration collection
+    // Pay period config collection - all authenticated users can read/write
     match /payPeriodConfig/{configId} {
-      // Any authenticated user can read/write pay period config
-      // (App-level permissions control actual access)
       allow read, write: if isAuthenticated();
     }
     
-    // Daily Reports collection  
+    // Payroll reports collection - all authenticated users can read/write
+    match /payrollReports/{reportId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Daily reports collection - all authenticated users can read/write
     match /dailyReports/{reportId} {
-      // Any authenticated user can read/write daily reports
       allow read, write: if isAuthenticated();
     }
     
-    // Feedback collection
+    // Feedback collection - all authenticated users can read/write
     match /feedback/{feedbackId} {
-      // Any authenticated user can read/write feedback
       allow read, write: if isAuthenticated();
     }
     
-    // Expenses collection (if it exists)
+    // Expenses collection - all authenticated users can read/write
     match /expenses/{expenseId} {
-      // Any authenticated user can read/write expenses
       allow read, write: if isAuthenticated();
     }
     
-    // Tasks collection
-    match /tasks/{taskId} {
-      // Any authenticated user can read/write tasks
+    // Reimbursements collection - all authenticated users can read/write
+    match /reimbursements/{reimbursementId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Storage rules for file uploads
+    match /{allPaths=**} {
       allow read, write: if isAuthenticated();
     }
   }
