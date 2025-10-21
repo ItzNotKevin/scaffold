@@ -4,6 +4,7 @@ import { collection, getDocs, query, where, addDoc, serverTimestamp, doc, getDoc
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import type { TaskAssignment } from '../lib/types';
+import { updateProjectActualCost } from '../lib/projectCosts';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Card from './ui/Card';
@@ -218,6 +219,9 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
         }
       }
 
+      // Update project actual cost
+      await updateProjectActualCost(selectedProjectId);
+      
       // Reset form
       setSelectedStaffId('');
       setSelectedStaffIds([]);
@@ -250,7 +254,17 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
     if (!confirm('Are you sure you want to delete this assignment?')) return;
 
     try {
+      // Get the assignment to find its projectId before deleting
+      const assignment = assignments.find(a => a.id === assignmentId);
+      const projectId = assignment?.projectId;
+      
       await deleteDoc(doc(db, 'taskAssignments', assignmentId));
+      
+      // Update project costs if we have a projectId
+      if (projectId) {
+        await updateProjectActualCost(projectId);
+      }
+      
       await loadAssignments();
       
       // Notify parent component to refresh stats

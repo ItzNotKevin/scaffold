@@ -7,6 +7,7 @@ import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import { sendPhaseUpdateEmails } from '../lib/emailNotifications';
 import { usePushNotifications } from '../lib/usePushNotifications';
+import { getProjectCostBreakdown } from '../lib/projectCosts';
 import DailyReportForm from '../components/DailyReportForm';
 import DailyReportList from '../components/DailyReportList';
 import type { DailyReport } from '../lib/types';
@@ -136,6 +137,14 @@ const ProjectPage: React.FC = () => {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [submittingFinancial, setSubmittingFinancial] = useState(false);
+  const [costBreakdown, setCostBreakdown] = useState<{
+    totalWages: number;
+    totalReimbursements: number;
+    totalActualCost: number;
+    budget: number;
+    remaining: number;
+    percentUsed: number;
+  } | null>(null);
   
   // Expense management state
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -167,6 +176,9 @@ const ProjectPage: React.FC = () => {
         setActualCost(data.actualCost || 0);
         setStartDate(data.startDate ? (data.startDate.toDate ? data.startDate.toDate().toISOString().split('T')[0] : new Date(data.startDate).toISOString().split('T')[0]) : '');
         setEndDate(data.endDate ? (data.endDate.toDate ? data.endDate.toDate().toISOString().split('T')[0] : new Date(data.endDate).toISOString().split('T')[0]) : '');
+        
+        // Load cost breakdown (wages + reimbursements)
+        await loadCostBreakdown();
       }
       setLoading(false);
     };
@@ -199,9 +211,9 @@ const ProjectPage: React.FC = () => {
       setExpenses(expensesData);
       setExpensesLoading(false);
       
-      // Calculate total actual cost from expenses
+      // Note: actualCost is now calculated automatically from wages + reimbursements
+      // Don't recalculate from expenses here
       const totalExpenses = expensesData.reduce((sum, expense) => sum + (expense.amount || 0), 0);
-      setActualCost(totalExpenses);
       
       console.log('Expenses loading completed, total:', totalExpenses);
     }, (error) => {
@@ -241,6 +253,20 @@ const ProjectPage: React.FC = () => {
       return () => clearTimeout(timeout);
     }
   }, [photosLoading]);
+
+  // Load cost breakdown for project
+  const loadCostBreakdown = async () => {
+    if (!id) return;
+    try {
+      const breakdown = await getProjectCostBreakdown(id);
+      setCostBreakdown(breakdown);
+      // Update actualCost to match the breakdown
+      setActualCost(breakdown.totalActualCost);
+      console.log('Cost breakdown loaded:', breakdown);
+    } catch (error) {
+      console.error('Error loading cost breakdown:', error);
+    }
+  };
 
   // Load users for task assignment
   const loadCompanyUsers = async () => {
@@ -1589,15 +1615,21 @@ ${reportData.isOverBudget
 
           {/* Financial Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-50 rounded-xl p-4">
+            <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
               <div className="text-2xl font-bold text-blue-600">${budget.toLocaleString()}</div>
               <div className="text-sm text-blue-800">Total Budget</div>
             </div>
-            <div className="bg-orange-50 rounded-xl p-4">
+            <div className="bg-orange-50 rounded-xl p-4 border border-orange-200">
               <div className="text-2xl font-bold text-orange-600">${actualCost.toLocaleString()}</div>
               <div className="text-sm text-orange-800">Actual Cost</div>
+              {costBreakdown && (
+                <div className="text-xs text-orange-700 mt-1 space-y-0.5">
+                  <div>💼 Staff: ${costBreakdown.totalWages.toLocaleString()}</div>
+                  <div>💸 Materials: ${costBreakdown.totalReimbursements.toLocaleString()}</div>
+                </div>
+              )}
             </div>
-            <div className={`rounded-xl p-4 ${(budget - actualCost) >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+            <div className={`rounded-xl p-4 border ${(budget - actualCost) >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
               <div className={`text-2xl font-bold ${(budget - actualCost) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 ${Math.abs(budget - actualCost).toLocaleString()}
               </div>
@@ -1605,7 +1637,7 @@ ${reportData.isOverBudget
                 {budget >= actualCost ? 'Remaining' : 'Over Budget'}
               </div>
             </div>
-            <div className="bg-purple-50 rounded-xl p-4">
+            <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
               <div className="text-2xl font-bold text-purple-600">
                 {budget > 0 ? Math.round((actualCost / budget) * 100) : 0}%
               </div>

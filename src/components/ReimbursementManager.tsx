@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import type { Reimbursement, StaffMember } from '../lib/types';
+import { updateProjectActualCost } from '../lib/projectCosts';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Card from './ui/Card';
@@ -113,6 +114,13 @@ const ReimbursementManager: React.FC = () => {
       const selectedStaff = staff.find(s => s.id === formData.staffId);
       const selectedProject = projects.find(p => p.id === formData.projectId);
       
+      // Track old project ID if editing, to update both old and new project costs
+      let oldProjectId: string | null = null;
+      if (editingId) {
+        const oldReimbursement = reimbursements.find(r => r.id === editingId);
+        oldProjectId = oldReimbursement?.projectId || null;
+      }
+      
       const reimbursementData = {
         staffId: formData.staffId,
         staffName: selectedStaff?.name || 'Unknown',
@@ -137,6 +145,16 @@ const ReimbursementManager: React.FC = () => {
           ...reimbursementData,
           createdAt: serverTimestamp()
         });
+      }
+      
+      // Update project costs
+      // If the reimbursement has a project, update it
+      if (formData.projectId) {
+        await updateProjectActualCost(formData.projectId);
+      }
+      // If editing and the old project was different, update that too
+      if (oldProjectId && oldProjectId !== formData.projectId) {
+        await updateProjectActualCost(oldProjectId);
       }
       
       await loadData();
@@ -168,7 +186,17 @@ const ReimbursementManager: React.FC = () => {
     if (!confirm('Are you sure you want to delete this reimbursement?')) return;
     
     try {
+      // Get the reimbursement to find its projectId before deleting
+      const reimbursement = reimbursements.find(r => r.id === reimbursementId);
+      const projectId = reimbursement?.projectId;
+      
       await deleteDoc(doc(db, 'reimbursements', reimbursementId));
+      
+      // Update project costs if the reimbursement was linked to a project
+      if (projectId) {
+        await updateProjectActualCost(projectId);
+      }
+      
       await loadData();
     } catch (error) {
       console.error('Error deleting reimbursement:', error);
