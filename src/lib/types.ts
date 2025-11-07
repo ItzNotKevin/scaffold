@@ -120,8 +120,8 @@ export interface CheckIn {
 export interface StaffMember {
   id: string;
   name: string;
-  email: string;
-  phone?: string;
+  email?: string | null;
+  phone?: string | null;
   dailyRate: number; // Flat daily wage
   hireDate?: Date;
   status: 'active' | 'inactive';

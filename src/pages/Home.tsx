@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { sendProjectCreatedEmails } from '../lib/emailNotifications';
+import { updateAllProjectCosts } from '../lib/projectCosts';
 
 const Home: React.FC = () => {
   const { t } = useTranslation();
@@ -42,6 +43,13 @@ const Home: React.FC = () => {
     try {
       setLoading(true);
       
+      // Ensure project budgets reflect latest costs before displaying
+      try {
+        await updateAllProjectCosts();
+      } catch (costError) {
+        console.error('Error updating project cost totals:', costError);
+      }
+
       // Load all projects (no company filtering needed)
       const projectsQuery = query(collection(db, 'projects'));
       const projectsSnapshot = await getDocs(projectsQuery);

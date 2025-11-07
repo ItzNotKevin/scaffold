@@ -1,4 +1,4 @@
-import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
 /**
@@ -8,6 +8,8 @@ import { db } from './firebase';
  */
 export async function updateProjectActualCost(projectId: string): Promise<void> {
   try {
+    const roundToCents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
     // Get all task assignments for this project
     const assignmentsQuery = query(
       collection(db, 'taskAssignments'),
@@ -19,7 +21,7 @@ export async function updateProjectActualCost(projectId: string): Promise<void> 
     let totalWages = 0;
     assignmentsSnapshot.forEach(doc => {
       const data = doc.data();
-      totalWages += data.dailyRate || 0;
+      totalWages += Number(data.dailyRate) || 0;
     });
 
     // Get all approved reimbursements for this project
@@ -34,17 +36,21 @@ export async function updateProjectActualCost(projectId: string): Promise<void> 
     let totalReimbursements = 0;
     reimbursementsSnapshot.forEach(doc => {
       const data = doc.data();
-      totalReimbursements += data.amount || 0;
+      totalReimbursements += Number(data.amount) || 0;
     });
 
     // Calculate total actual cost
-    const totalActualCost = totalWages + totalReimbursements;
+    const wagesRounded = roundToCents(totalWages);
+    const reimbursementsRounded = roundToCents(totalReimbursements);
+    const totalActualCost = roundToCents(wagesRounded + reimbursementsRounded);
 
     // Update the project document
     const projectRef = doc(db, 'projects', projectId);
     await updateDoc(projectRef, {
       actualCost: totalActualCost,
-      updatedAt: new Date()
+      laborCost: wagesRounded,
+      reimbursementCost: reimbursementsRounded,
+      updatedAt: serverTimestamp()
     });
 
     console.log(`Updated project ${projectId} actualCost to $${totalActualCost.toFixed(2)} (Wages: $${totalWages.toFixed(2)}, Reimbursements: $${totalReimbursements.toFixed(2)})`);
@@ -106,7 +112,7 @@ export async function getProjectCostBreakdown(projectId: string): Promise<{
     let totalWages = 0;
     assignmentsSnapshot.forEach(doc => {
       const data = doc.data();
-      totalWages += data.dailyRate || 0;
+      totalWages += Number(data.dailyRate) || 0;
     });
 
     // Get all approved reimbursements for this project
@@ -120,16 +126,18 @@ export async function getProjectCostBreakdown(projectId: string): Promise<{
     let totalReimbursements = 0;
     reimbursementsSnapshot.forEach(doc => {
       const data = doc.data();
-      totalReimbursements += data.amount || 0;
+      totalReimbursements += Number(data.amount) || 0;
     });
 
-    const totalActualCost = totalWages + totalReimbursements;
-    const remaining = budget - totalActualCost;
+    const wagesRounded = Math.round((totalWages + Number.EPSILON) * 100) / 100;
+    const reimbursementsRounded = Math.round((totalReimbursements + Number.EPSILON) * 100) / 100;
+    const totalActualCost = Math.round((wagesRounded + reimbursementsRounded + Number.EPSILON) * 100) / 100;
+    const remaining = Math.round(((budget - totalActualCost) + Number.EPSILON) * 100) / 100;
     const percentUsed = budget > 0 ? (totalActualCost / budget) * 100 : 0;
 
     return {
-      totalWages,
-      totalReimbursements,
+      totalWages: wagesRounded,
+      totalReimbursements: reimbursementsRounded,
       totalActualCost,
       budget,
       remaining,

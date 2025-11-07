@@ -47,14 +47,18 @@ const StaffManager: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.email.trim()) return;
+    if (!formData.name.trim()) return;
 
     try {
       setSaving(true);
       
       const dataToSave = {
-        ...formData,
-        dailyRate: parseFloat(formData.dailyRate as string) || 0
+        name: formData.name.trim(),
+        email: formData.email.trim() || null,
+        phone: formData.phone.trim() || null,
+        dailyRate: parseFloat(formData.dailyRate as string) || 0,
+        status: formData.status,
+        notes: formData.notes.trim() || null
       };
 
       if (editingId) {
@@ -84,7 +88,7 @@ const StaffManager: React.FC = () => {
   const handleEdit = (staffMember: StaffMember) => {
     setFormData({
       name: staffMember.name,
-      email: staffMember.email,
+      email: staffMember.email || '',
       phone: staffMember.phone || '',
       dailyRate: staffMember.dailyRate,
       status: staffMember.status,
@@ -148,14 +152,13 @@ const StaffManager: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email *
+                  Email (optional)
                 </label>
                 <Input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="staff@example.com"
-                  required
                 />
               </div>
               <div>
@@ -244,7 +247,9 @@ const StaffManager: React.FC = () => {
                       </div>
                       <div>
                         <h4 className="font-medium text-gray-900">{staffMember.name}</h4>
-                        <p className="text-sm text-gray-500">{staffMember.email}</p>
+                        <p className="text-sm text-gray-500">
+                          {staffMember.email || 'No email provided'}
+                        </p>
                         {staffMember.phone && (
                           <p className="text-sm text-gray-500">{staffMember.phone}</p>
                         )}
