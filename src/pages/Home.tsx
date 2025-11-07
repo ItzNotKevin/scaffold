@@ -66,7 +66,37 @@ const Home: React.FC = () => {
   };
 
   const handleNewProject = () => {
-    navigate('/project/new');
+    const createProject = async () => {
+      try {
+        const newProjectRef = doc(collection(db, 'projects'));
+        const newProject = {
+          id: newProjectRef.id,
+          name: 'New Project',
+          description: '',
+          status: 'planning',
+          phase: 'Sales',
+          budget: 0,
+          actualCost: 0,
+          laborCost: 0,
+          reimbursementCost: 0,
+          progress: 0,
+          startDate: null,
+          endDate: null,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          team: []
+        };
+
+        await setDoc(newProjectRef, newProject);
+        setProjects(prev => [...prev, newProject]);
+        navigate(`/project/${newProjectRef.id}`);
+      } catch (error) {
+        console.error('Error creating project:', error);
+        alert('Failed to create project. Please try again.');
+      }
+    };
+
+    createProject();
   };
 
   const handleDeleteProject = async (projectId: string) => {
