@@ -173,17 +173,17 @@ const TaskTemplatesPage: React.FC = () => {
 
   return (
     <Layout title="Task Templates" currentRole="admin">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Task Templates</h1>
-            <p className="text-gray-600 mt-1">Create universal task templates that can be used across all projects</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Task Templates</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">Create universal task templates that can be used across all projects</p>
           </div>
-          <div className="flex gap-3">
-            <Button onClick={() => navigate('/')} variant="outline">
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <Button onClick={() => navigate('/')} variant="outline" className="w-full sm:w-auto">
               Back to Dashboard
             </Button>
-            <Button onClick={() => setShowForm(true)}>
+            <Button onClick={() => setShowForm(true)} className="w-full sm:w-auto">
               Add Template
             </Button>
           </div>
@@ -191,11 +191,11 @@ const TaskTemplatesPage: React.FC = () => {
 
         {/* Form */}
         {showForm && (
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
               {editingId ? 'Edit Template' : 'Create Template'}
             </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Task Title *
@@ -215,11 +215,11 @@ const TaskTemplatesPage: React.FC = () => {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Optional task description..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
                   rows={3}
                 />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Priority
@@ -227,7 +227,7 @@ const TaskTemplatesPage: React.FC = () => {
                   <select
                     value={formData.priority}
                     onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -242,7 +242,7 @@ const TaskTemplatesPage: React.FC = () => {
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
                   >
                     <option value="todo">To Do</option>
                     <option value="in-progress">In Progress</option>
@@ -264,7 +264,7 @@ const TaskTemplatesPage: React.FC = () => {
         )}
 
         {/* Templates List */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6">
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -279,28 +279,29 @@ const TaskTemplatesPage: React.FC = () => {
           ) : (
             <div className="space-y-3">
               {templates.map((template) => (
-                <div key={template.id} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h4 className="font-medium text-gray-900">{template.title}</h4>
+                <div key={template.id} className="p-3 sm:p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <h4 className="font-medium text-gray-900 text-sm sm:text-base break-words">{template.title}</h4>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(template.priority || 'medium')}`}>
                           {template.priority || 'medium'}
                         </span>
                         <span className="text-xs text-blue-600 font-medium">🌐 Universal</span>
                       </div>
                       {template.description && (
-                        <p className="text-sm text-gray-600 mb-2">{template.description}</p>
+                        <p className="text-sm text-gray-600 mb-2 break-words">{template.description}</p>
                       )}
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span>Status: {template.status || 'todo'}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-shrink-0">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleEdit(template)}
+                        className="flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
                       >
                         Edit
                       </Button>
@@ -308,7 +309,7 @@ const TaskTemplatesPage: React.FC = () => {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDelete(template.id)}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-red-600 hover:text-red-700 flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
                       >
                         Delete
                       </Button>

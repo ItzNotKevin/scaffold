@@ -123,22 +123,22 @@ const StaffManager: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
+    <div className="space-y-4 sm:space-y-6">
+      <Card className="p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Staff Management</h3>
-            <p className="text-sm text-gray-500">Manage non-user staff members for task assignments</p>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Staff Management</h3>
+            <p className="text-xs sm:text-sm text-gray-500">Manage non-user staff members for task assignments</p>
           </div>
-          <Button onClick={() => setShowForm(true)}>
+          <Button onClick={() => setShowForm(true)} className="w-full sm:w-auto">
             Add Staff Member
           </Button>
         </div>
 
         {/* Form */}
         {showForm && (
-          <form onSubmit={handleSubmit} className="space-y-4 mb-6 p-4 bg-gray-50 rounded-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Name *
@@ -191,7 +191,7 @@ const StaffManager: React.FC = () => {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'inactive' })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
@@ -206,7 +206,7 @@ const StaffManager: React.FC = () => {
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 placeholder="Additional notes..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation"
                 rows={3}
               />
             </div>
@@ -236,26 +236,26 @@ const StaffManager: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {staff.map((staffMember) => (
-              <div key={staffMember.id} className="p-4 bg-white border border-gray-200 rounded-xl">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <div key={staffMember.id} className="p-3 sm:p-4 bg-white border border-gray-200 rounded-xl">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-blue-600 font-medium text-sm">
                           {staffMember.name.charAt(0).toUpperCase()}
                         </span>
                       </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900">{staffMember.name}</h4>
-                        <p className="text-sm text-gray-500">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-medium text-gray-900 text-sm sm:text-base break-words">{staffMember.name}</h4>
+                        <p className="text-xs sm:text-sm text-gray-500 break-all">
                           {staffMember.email || 'No email provided'}
                         </p>
                         {staffMember.phone && (
-                          <p className="text-sm text-gray-500">{staffMember.phone}</p>
+                          <p className="text-xs sm:text-sm text-gray-500">{staffMember.phone}</p>
                         )}
                       </div>
                     </div>
-                    <div className="mt-3 flex items-center gap-4 text-sm">
+                    <div className="mt-2 sm:mt-3 flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm">
                       <span className="text-gray-600">
                         Daily Rate: <span className="font-medium">${staffMember.dailyRate.toFixed(2)}</span>
                       </span>
@@ -268,14 +268,15 @@ const StaffManager: React.FC = () => {
                       </span>
                     </div>
                     {staffMember.notes && (
-                      <p className="text-sm text-gray-600 mt-2">{staffMember.notes}</p>
+                      <p className="text-xs sm:text-sm text-gray-600 mt-2 break-words">{staffMember.notes}</p>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-shrink-0">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => handleEdit(staffMember)}
+                      className="flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
                     >
                       Edit
                     </Button>
@@ -283,7 +284,7 @@ const StaffManager: React.FC = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handleDelete(staffMember.id)}
-                      className="text-red-600 hover:text-red-700"
+                      className="text-red-600 hover:text-red-700 flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
                     >
                       Delete
                     </Button>

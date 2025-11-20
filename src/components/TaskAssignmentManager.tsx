@@ -565,17 +565,17 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
   return (
-    <div className="space-y-6">
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">{t('taskAssignment.title')}</h2>
+    <div className="space-y-4 sm:space-y-6">
+      <Card className="p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">{t('taskAssignment.title')}</h2>
           {onClose && (
-            <Button variant="outline" onClick={onClose}>{t('common.close')}</Button>
+            <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">{t('common.close')}</Button>
           )}
         </div>
 
         {/* Assignment Form */}
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">{t('taskAssignment.date')}</label>
             <Input
@@ -587,11 +587,11 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">{t('taskAssignment.project')}</label>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-            >
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation min-h-[44px]"
+              >
               <option value="">{t('taskAssignment.selectProject')}</option>
               {projects.map(project => (
                 <option key={project.id} value={project.id}>{project.name}</option>
@@ -600,17 +600,17 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
-            <label className="flex items-center">
+            <label className="flex items-center touch-manipulation min-h-[44px]">
               <input
                 type="checkbox"
                 checked={bulkMode}
                 onChange={(e) => setBulkMode(e.target.checked)}
-                className="mr-2"
+                className="mr-2 w-5 h-5"
               />
               <span className="text-sm font-medium text-gray-700">{t('taskAssignment.multipleStaff')}</span>
             </label>
             {selectedProjectId && (
-              <label className="flex items-center">
+              <label className="flex items-center touch-manipulation min-h-[44px]">
                 <input
                   type="checkbox"
                   checked={multiTaskMode}
@@ -621,7 +621,7 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                       setSelectedTaskId('');
                     }
                   }}
-                  className="mr-2"
+                  className="mr-2 w-5 h-5"
                 />
                 <span className="text-sm font-medium text-gray-700">{t('taskAssignment.multipleTasks')}</span>
               </label>
@@ -633,15 +633,15 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Select Staff Members
               </label>
-              <div className="border border-gray-300 rounded-xl p-3 max-h-48 overflow-y-auto">
-                {staff.map(member => (
-                  <label key={member.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedStaffIds.includes(member.id)}
-                      onChange={() => toggleStaffSelection(member.id)}
-                      className="mr-3"
-                    />
+                    <div className="border border-gray-300 rounded-xl p-3 max-h-48 overflow-y-auto">
+                      {staff.map(member => (
+                        <label key={member.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer touch-manipulation min-h-[44px]">
+                          <input
+                            type="checkbox"
+                            checked={selectedStaffIds.includes(member.id)}
+                            onChange={() => toggleStaffSelection(member.id)}
+                            className="mr-3 w-5 h-5"
+                          />
                     <div className="flex-1">
                       <span className="font-medium">{member.name}</span>
                       <span className="text-sm text-gray-500 ml-2">${member.dailyRate || 0}/day</span>
@@ -661,7 +661,7 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
               <select
                 value={selectedStaffId}
                 onChange={(e) => setSelectedStaffId(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation min-h-[44px]"
               >
                 <option value="">{t('taskAssignment.selectStaffMember')}</option>
                 {staff.map(member => (
@@ -695,12 +695,12 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                           🌐 Universal Templates
                         </div>
                         {templateTasks.map(task => (
-                          <label key={`template-${task.id}`} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                          <label key={`template-${task.id}`} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer touch-manipulation min-h-[44px]">
                             <input
                               type="checkbox"
                               checked={selectedTaskIds.includes(`template-${task.id}`)}
                               onChange={() => toggleTaskSelection(`template-${task.id}`)}
-                              className="mr-3"
+                              className="mr-3 w-5 h-5"
                             />
                             <div className="flex-1">
                               <span className="font-medium">{task.title}</span>
@@ -721,12 +721,12 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                           Project Tasks
                         </div>
                         {projectTasks.map(task => (
-                          <label key={task.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                          <label key={task.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer touch-manipulation min-h-[44px]">
                             <input
                               type="checkbox"
                               checked={selectedTaskIds.includes(task.id)}
                               onChange={() => toggleTaskSelection(task.id)}
-                              className="mr-3"
+                              className="mr-3 w-5 h-5"
                             />
                             <div className="flex-1">
                               <span className="font-medium">{task.title}</span>
@@ -746,12 +746,12 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                     {(templateTasks.length > 0 || projectTasks.length > 0) && (
                       <div className="border-t border-gray-200 mt-2"></div>
                     )}
-                    <label className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer border-t border-gray-200 mt-2 pt-2">
+                    <label className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer border-t border-gray-200 mt-2 pt-2 touch-manipulation min-h-[44px]">
                       <input
                         type="checkbox"
                         checked={selectedTaskIds.includes('custom')}
                         onChange={() => toggleTaskSelection('custom')}
-                        className="mr-3"
+                        className="mr-3 w-5 h-5"
                       />
                       <span className="font-medium">➕ Custom Task</span>
                     </label>
@@ -788,7 +788,7 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                         setTaskDescription(task?.title || '');
                       }
                     }}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base mb-2"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base mb-2 touch-manipulation min-h-[44px]"
                   >
                     <option value="">Select a task...</option>
                     {/* Template Tasks */}
@@ -843,7 +843,7 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
               placeholder={t('taskAssignment.notesPlaceholder')}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
               rows={3}
             />
           </div>
@@ -851,7 +851,7 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
           <Button
             onClick={handleAssign}
             disabled={saving || loading}
-            className="w-full"
+            className="w-full min-h-[44px]"
           >
             {saving ? t('taskAssignment.assigning') : t('taskAssignment.assignTask')}
           </Button>
@@ -859,8 +859,8 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
       </Card>
 
       {/* Today's Assignments */}
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <Card className="p-4 sm:p-6">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
           Assignments for {selectedDate}
         </h3>
         
@@ -871,14 +871,14 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
         ) : (
           <div className="space-y-3">
             {assignments.map(assignment => (
-              <div key={assignment.id} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{assignment.staffName}</p>
-                    <p className="text-sm text-gray-600 mt-1">{assignment.projectName}</p>
-                    <p className="text-sm text-gray-800 mt-2">{assignment.taskDescription}</p>
+              <div key={assignment.id} className="p-3 sm:p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm sm:text-base">{assignment.staffName}</p>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-1">{assignment.projectName}</p>
+                    <p className="text-xs sm:text-sm text-gray-800 mt-2 break-words">{assignment.taskDescription}</p>
                     {assignment.notes && (
-                      <p className="text-xs text-gray-500 mt-1 italic">{assignment.notes}</p>
+                      <p className="text-xs text-gray-500 mt-1 italic break-words">{assignment.notes}</p>
                     )}
                     <p className="text-xs text-gray-500 mt-2">
                       Rate: ${assignment.dailyRate.toFixed(2)}/day
@@ -886,7 +886,7 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                   </div>
                   <button
                     onClick={() => handleDeleteAssignment(assignment.id)}
-                    className="text-red-600 hover:text-red-700 text-sm ml-4"
+                    className="text-red-600 hover:text-red-700 text-sm sm:ml-4 touch-manipulation min-h-[44px] px-3 py-2 rounded-lg hover:bg-red-50 self-start sm:self-auto"
                   >
                     Delete
                   </button>

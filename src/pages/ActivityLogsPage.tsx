@@ -249,7 +249,7 @@ const ActivityLogsPage: React.FC = () => {
   const SortButton: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
     <button
       onClick={() => handleSort(field)}
-      className="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900"
+      className="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900 touch-manipulation min-h-[44px] px-2 py-1"
     >
       <span>{label}</span>
       {sortField === field && (
@@ -275,27 +275,27 @@ const ActivityLogsPage: React.FC = () => {
 
   return (
     <Layout title="Activity Logs" currentRole="admin">
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Activity Logs</h1>
-            <p className="text-gray-600 mt-1">Track staff assignments and reimbursements</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Activity Logs</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">Track staff assignments and reimbursements</p>
           </div>
-          <Button onClick={() => navigate('/')} variant="outline">
+          <Button onClick={() => navigate('/')} variant="outline" className="w-full sm:w-auto">
             Back to Dashboard
           </Button>
         </div>
 
         {/* Filters */}
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Filters</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Filters</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value as any)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
               >
                 <option value="all">All Types</option>
                 <option value="assignment">Assignments</option>
@@ -308,7 +308,7 @@ const ActivityLogsPage: React.FC = () => {
               <select
                 value={staffFilter}
                 onChange={(e) => setStaffFilter(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
               >
                 <option value="all">All Staff</option>
                 {staff.map(member => (
@@ -324,7 +324,7 @@ const ActivityLogsPage: React.FC = () => {
               <select
                 value={projectFilter}
                 onChange={(e) => setProjectFilter(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
               >
                 <option value="all">All Projects</option>
                 {projects.map(project => (
@@ -341,7 +341,7 @@ const ActivityLogsPage: React.FC = () => {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
                 >
                   <option value="all">All Statuses</option>
                   <option value="pending">Pending</option>
@@ -365,7 +365,7 @@ const ActivityLogsPage: React.FC = () => {
           {typeFilter === 'reimbursement' && (
             <div className="mt-4 pt-4 border-t border-gray-200">
               <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-wrap items-center gap-3">
                 <SortButton field="date" label="Date" />
                 <SortButton field="amount" label="Amount" />
                 <SortButton field="staffName" label="Staff" />
@@ -376,12 +376,12 @@ const ActivityLogsPage: React.FC = () => {
         </Card>
 
         {/* Activity List */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
+        <Card className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">
               Activities ({filteredAndSortedActivities.length})
             </h2>
-            <div className="flex items-center space-x-4 text-sm">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
               <SortButton field="date" label="Date" />
               {typeFilter === 'all' || typeFilter === 'reimbursement' ? (
                 <SortButton field="amount" label="Amount" />
@@ -406,57 +406,55 @@ const ActivityLogsPage: React.FC = () => {
               {filteredAndSortedActivities.map((activity) => (
                 <div
                   key={activity.id}
-                  className="p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors"
+                  className="p-3 sm:p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          activity.type === 'assignment'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-green-100 text-green-800'
-                        }`}>
-                          {activity.type === 'assignment' ? '📋 Assignment' : '💰 Reimbursement'}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        activity.type === 'assignment'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {activity.type === 'assignment' ? '📋 Assignment' : '💰 Reimbursement'}
+                      </span>
+                      {activity.status && (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(activity.status)}`}>
+                          {activity.status}
                         </span>
-                        {activity.status && (
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(activity.status)}`}>
-                            {activity.status}
-                          </span>
-                        )}
-                        <span className="text-sm text-gray-500">
-                          {formatDate(activity.date)}
+                      )}
+                      <span className="text-xs sm:text-sm text-gray-500">
+                        {formatDate(activity.date)}
+                      </span>
+                    </div>
+                    
+                    <div className="mb-2">
+                      <p className="font-medium text-gray-900 text-sm sm:text-base">
+                        {activity.staffName}
+                      </p>
+                      <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
+                        {activity.type === 'assignment' 
+                          ? activity.taskDescription || activity.description
+                          : activity.itemDescription || activity.description
+                        }
+                      </p>
+                      {activity.projectName && (
+                        <p className="text-xs text-gray-500 mt-1 break-words">
+                          Project: {activity.projectName}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
+                      {activity.type === 'assignment' && activity.dailyRate !== undefined && (
+                        <span>
+                          Rate: <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
                         </span>
-                      </div>
-                      
-                      <div className="mb-2">
-                        <p className="font-medium text-gray-900">
-                          {activity.staffName}
-                        </p>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {activity.type === 'assignment' 
-                            ? activity.taskDescription || activity.description
-                            : activity.itemDescription || activity.description
-                          }
-                        </p>
-                        {activity.projectName && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            Project: {activity.projectName}
-                          </p>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
-                        {activity.type === 'assignment' && activity.dailyRate !== undefined && (
-                          <span>
-                            Rate: <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
-                          </span>
-                        )}
-                        {activity.type === 'reimbursement' && activity.amount !== undefined && (
-                          <span>
-                            Amount: <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
-                          </span>
-                        )}
-                      </div>
+                      )}
+                      {activity.type === 'reimbursement' && activity.amount !== undefined && (
+                        <span>
+                          Amount: <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

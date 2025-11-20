@@ -245,14 +245,14 @@ const ReimbursementManager: React.FC = () => {
     .reduce((sum, r) => sum + r.amount, 0);
 
   return (
-    <div className="space-y-6">
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-6">
+    <div className="space-y-4 sm:space-y-6">
+      <Card className="p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Reimbursement Management</h3>
-            <p className="text-sm text-gray-500">Track material reimbursements for staff members</p>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Reimbursement Management</h3>
+            <p className="text-xs sm:text-sm text-gray-500">Track material reimbursements for staff members</p>
           </div>
-          <Button onClick={() => setShowForm(true)}>
+          <Button onClick={() => setShowForm(true)} className="w-full sm:w-auto">
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
@@ -261,7 +261,7 @@ const ReimbursementManager: React.FC = () => {
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
             <p className="text-sm text-blue-600 font-medium">Total Reimbursements</p>
             <p className="text-2xl font-bold text-blue-900 mt-1">{reimbursements.length}</p>
@@ -280,8 +280,8 @@ const ReimbursementManager: React.FC = () => {
 
         {/* Form */}
         {showForm && (
-          <form onSubmit={handleSubmit} className="space-y-4 mb-6 p-4 bg-gray-50 rounded-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Staff Member *
@@ -289,7 +289,7 @@ const ReimbursementManager: React.FC = () => {
                 <select
                   value={formData.staffId}
                   onChange={(e) => setFormData({ ...formData, staffId: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
                   required
                 >
                   <option value="">Select Staff Member</option>
@@ -305,7 +305,7 @@ const ReimbursementManager: React.FC = () => {
                 <select
                   value={formData.projectId}
                   onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
                 >
                   <option value="">No Project</option>
                   {projects.map(p => (
@@ -356,7 +356,7 @@ const ReimbursementManager: React.FC = () => {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
                 >
                   <option value="approved">Approved</option>
                   <option value="pending">Pending</option>
@@ -416,16 +416,16 @@ const ReimbursementManager: React.FC = () => {
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 placeholder="Additional notes..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation"
                 rows={2}
               />
             </div>
 
-            <div className="flex gap-2">
-              <Button type="submit" disabled={saving || uploadingReceipt}>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button type="submit" disabled={saving || uploadingReceipt} className="w-full sm:w-auto">
                 {saving ? 'Saving...' : (editingId ? 'Update' : 'Add')} Reimbursement
               </Button>
-              <Button type="button" variant="outline" onClick={resetForm}>
+              <Button type="button" variant="outline" onClick={resetForm} className="w-full sm:w-auto">
                 Cancel
               </Button>
             </div>
@@ -447,16 +447,16 @@ const ReimbursementManager: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {reimbursements.map((reimbursement) => (
-              <div key={reimbursement.id} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h4 className="font-medium text-gray-900">{reimbursement.itemDescription}</h4>
+              <div key={reimbursement.id} className="p-3 sm:p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <h4 className="font-medium text-gray-900 text-sm sm:text-base break-words">{reimbursement.itemDescription}</h4>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(reimbursement.status)}`}>
                         {reimbursement.status}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm text-gray-600">
                       <div>
                         <span className="font-medium">Staff:</span> {reimbursement.staffName}
                       </div>
@@ -468,19 +468,19 @@ const ReimbursementManager: React.FC = () => {
                       </div>
                       {reimbursement.projectName && (
                         <div>
-                          <span className="font-medium">Project:</span> {reimbursement.projectName}
+                          <span className="font-medium">Project:</span> <span className="break-words">{reimbursement.projectName}</span>
                         </div>
                       )}
                     </div>
                     {reimbursement.notes && (
-                      <p className="text-sm text-gray-600 mt-2">{reimbursement.notes}</p>
+                      <p className="text-xs sm:text-sm text-gray-600 mt-2 break-words">{reimbursement.notes}</p>
                     )}
                     {reimbursement.receiptUrl && (
                       <a
                         href={reimbursement.receiptUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 mt-2"
+                        className="inline-flex items-center gap-1 text-xs sm:text-sm text-blue-600 hover:text-blue-700 mt-2 touch-manipulation min-h-[44px]"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -489,11 +489,12 @@ const ReimbursementManager: React.FC = () => {
                       </a>
                     )}
                   </div>
-                  <div className="flex gap-2 ml-4">
+                  <div className="flex gap-2 flex-shrink-0 sm:ml-4">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => handleEdit(reimbursement)}
+                      className="flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
                     >
                       Edit
                     </Button>
@@ -501,7 +502,7 @@ const ReimbursementManager: React.FC = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handleDelete(reimbursement.id)}
-                      className="text-red-600 hover:text-red-700"
+                      className="text-red-600 hover:text-red-700 flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
                     >
                       Delete
                     </Button>

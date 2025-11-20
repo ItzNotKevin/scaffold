@@ -59,7 +59,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {permissions?.canManageUsers && (
             <button
               onClick={() => navigate('/task-templates')}
-              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
             >
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -76,7 +76,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
           <button
             onClick={() => navigate('/staff-assignments')}
-            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
           >
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -94,7 +94,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {permissions?.canManageUsers && (
             <button
               onClick={() => navigate('/staff-management')}
-              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
             >
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -112,7 +112,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => navigate('/reimbursement')}
-            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
           >
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -129,7 +129,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => navigate('/activity-logs')}
-            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
           >
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -147,7 +147,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {permissions?.canManageUsers && (
             <button
               onClick={() => navigate('/payroll')}
-              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
             >
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">

@@ -25,15 +25,15 @@ const ReimbursementPage: React.FC = () => {
 
   return (
     <Layout title="Reimbursement" currentRole="admin">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Reimbursement Management</h1>
-            <p className="text-gray-600 mt-1">Track material reimbursements for staff members</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Reimbursement Management</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">Track material reimbursements for staff members</p>
           </div>
           <button
             onClick={() => navigate('/')}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
+            className="w-full sm:w-auto px-4 py-2.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors touch-manipulation min-h-[44px]"
           >
             Back to Dashboard
           </button>
