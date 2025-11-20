@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/useAuth';
-import StaffManager from './StaffManager';
+import { useNavigate } from 'react-router-dom';
 import PendingUsersManager from './PendingUsersManager';
-import TaskAssignmentManager from './TaskAssignmentManager';
-import ReimbursementManager from './ReimbursementManager';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -25,30 +23,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const { t } = useTranslation();
   const { userProfile } = useAuth();
-  const [showTaskManager, setShowTaskManager] = useState(false);
-  const [todayAssignments, setTodayAssignments] = useState(0);
-  const [todayLaborCost, setTodayLaborCost] = useState(0);
+  const navigate = useNavigate();
 
-  const loadTodayStats = React.useCallback(async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const assignmentsQuery = query(
-        collection(db, 'taskAssignments'),
-        where('date', '==', today)
-      );
-      const snapshot = await getDocs(assignmentsQuery);
-      const assignments = snapshot.docs.map(doc => doc.data());
-      
-      setTodayAssignments(assignments.length);
-      setTodayLaborCost(assignments.reduce((sum: number, a: any) => sum + (a.dailyRate || 0), 0));
-    } catch (error) {
-      console.error('Error loading today stats:', error);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadTodayStats();
-  }, [loadTodayStats]);
 
   const getPhaseColor = (phase: string) => {
     switch (phase) {
@@ -74,10 +50,119 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
+      {/* Welcome Section with Navigation Buttons */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-4 sm:p-6 text-white">
-        <h2 className="text-lg sm:text-xl font-bold mb-2">{t('adminDashboard.welcome')}, {userProfile?.name || 'Admin'}!</h2>
-        <p className="text-blue-100 text-sm leading-relaxed">{t('adminDashboard.subtitle')}</p>
+        <h2 className="text-lg sm:text-xl font-bold mb-4">{t('adminDashboard.welcome')}, {userProfile?.name || 'Admin'}!</h2>
+        
+        {/* Navigation Buttons */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+          {permissions?.canManageUsers && (
+            <button
+              onClick={() => navigate('/task-templates')}
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+            >
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-white text-sm">Task Templates</p>
+                  <p className="text-xs text-blue-100 truncate">Universal tasks</p>
+                </div>
+              </div>
+            </button>
+          )}
+          <button
+            onClick={() => navigate('/staff-assignments')}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white text-sm">Staff Assignments</p>
+                <p className="text-xs text-blue-100 truncate">Assign daily tasks</p>
+              </div>
+            </div>
+          </button>
+
+          {permissions?.canManageUsers && (
+            <button
+              onClick={() => navigate('/staff-management')}
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+            >
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-white text-sm">Staff Management</p>
+                  <p className="text-xs text-blue-100 truncate">Manage staff members</p>
+                </div>
+              </div>
+            </button>
+          )}
+
+          <button
+            onClick={() => navigate('/reimbursement')}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white text-sm">Reimbursement</p>
+                <p className="text-xs text-blue-100 truncate">Track expenses</p>
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => navigate('/activity-logs')}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white text-sm">Activity Logs</p>
+                <p className="text-xs text-blue-100 truncate">View all activity</p>
+              </div>
+            </div>
+          </button>
+
+          {permissions?.canManageUsers && (
+            <button
+              onClick={() => navigate('/payroll')}
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30"
+            >
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-white text-sm">Payroll</p>
+                  <p className="text-xs text-blue-100 truncate">View payroll reports</p>
+                </div>
+              </div>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Quick Stats */}
@@ -206,68 +291,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
       </div>
 
-      {/* Task Assignment Section */}
-      {!showTaskManager && (
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">{t('taskAssignment.staffTaskAssignments')}</h3>
-              <p className="text-sm text-gray-500">{t('taskAssignment.assignDailyTasks')}</p>
-            </div>
-            <button 
-              onClick={() => setShowTaskManager(true)} 
-              className="px-4 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors touch-manipulation"
-            >
-              {t('taskAssignment.manageAssignments')}
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 bg-green-50 rounded-xl border border-green-100">
-              <p className="text-sm text-green-600 font-medium">{t('taskAssignment.tasksAssignedToday')}</p>
-              <p className="text-2xl font-bold text-green-900 mt-1">{todayAssignments}</p>
-            </div>
-            <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-              <p className="text-sm text-blue-600 font-medium">{t('taskAssignment.staffWorkingToday')}</p>
-              <p className="text-2xl font-bold text-blue-900 mt-1">{todayAssignments}</p>
-            </div>
-            <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
-              <p className="text-sm text-purple-600 font-medium">{t('taskAssignment.todayLaborCost')}</p>
-              <p className="text-2xl font-bold text-purple-900 mt-1">${todayLaborCost.toFixed(2)}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Task Assignment Manager Modal */}
-      {showTaskManager && (
-        <TaskAssignmentManager 
-          onClose={() => {
-            setShowTaskManager(false);
-            loadTodayStats();
-          }}
-          onAssignmentCreated={() => {
-            // Refresh stats immediately when assignment is created
-            // Small delay to allow Firebase to index the new document
-            setTimeout(() => loadTodayStats(), 100);
-          }}
-        />
-      )}
-
       {/* Pending Users Section */}
-      {!showTaskManager && (
-        <PendingUsersManager />
-      )}
-
-      {/* Staff Management Section */}
-      {permissions?.canManageUsers && !showTaskManager && (
-        <StaffManager />
-      )}
-
-      {/* Reimbursement Management Section */}
-      {!showTaskManager && (
-        <ReimbursementManager />
-      )}
+      <PendingUsersManager />
     </div>
   );
 };

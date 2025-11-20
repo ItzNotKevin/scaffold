@@ -25,6 +25,8 @@ interface ProjectTask {
   id: string;
   title: string;
   status: string;
+  isTemplate?: boolean;
+  projectId?: string | null;
 }
 
 const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, onAssignmentCreated }) => {
@@ -35,8 +37,10 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
+  const [templateTasks, setTemplateTasks] = useState<ProjectTask[]>([]);
   const [assignments, setAssignments] = useState<TaskAssignment[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   
   // Form state
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -52,6 +56,7 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
 
   useEffect(() => {
     loadData();
+    loadTemplateTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -66,66 +71,176 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
     setLoading(true);
     try {
       // Load staff members
-      const staffSnapshot = await getDocs(collection(db, 'staffMembers'));
-      const staffData = staffSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as StaffMember));
-      setStaff(staffData);
+      try {
+        const staffSnapshot = await getDocs(collection(db, 'staffMembers'));
+        const staffData = staffSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.name || 'Unknown Staff',
+            dailyRate: typeof data.dailyRate === 'number' ? data.dailyRate : 0,
+            ...data
+          } as StaffMember;
+        });
+        setStaff(staffData);
+        console.log(`Loaded ${staffData.length} staff members`);
+      } catch (staffError: any) {
+        console.error('Error loading staff members:', staffError);
+        alert(`Error loading staff members: ${staffError?.message || 'Unknown error'}\n\nPlease refresh the page.`);
+        setStaff([]);
+      }
 
       // Load projects
-      const projectsSnapshot = await getDocs(collection(db, 'projects'));
-      const projectsData = projectsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name || 'Unnamed Project'
-      }));
-      setProjects(projectsData);
-    } catch (error) {
+      try {
+        const projectsSnapshot = await getDocs(collection(db, 'projects'));
+        const projectsData = projectsSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.name || 'Unnamed Project'
+          };
+        });
+        setProjects(projectsData);
+        console.log(`Loaded ${projectsData.length} projects`);
+      } catch (projectsError: any) {
+        console.error('Error loading projects:', projectsError);
+        alert(`Error loading projects: ${projectsError?.message || 'Unknown error'}\n\nPlease refresh the page.`);
+        setProjects([]);
+      }
+    } catch (error: any) {
       console.error('Error loading data:', error);
+      alert(`Error loading data: ${error?.message || 'Unknown error'}\n\nPlease refresh the page.`);
     } finally {
       setLoading(false);
     }
   };
 
   const loadAssignments = async () => {
+    if (!selectedDate) {
+      setAssignments([]);
+      return;
+    }
+
     try {
       const assignmentsQuery = query(
         collection(db, 'taskAssignments'),
         where('date', '==', selectedDate)
       );
       const assignmentsSnapshot = await getDocs(assignmentsQuery);
-      const assignmentsData = assignmentsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as TaskAssignment[];
+      const assignmentsData = assignmentsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          projectId: data.projectId || '',
+          projectName: data.projectName || 'Unknown Project',
+          staffId: data.staffId || '',
+          staffName: data.staffName || 'Unknown Staff',
+          taskDescription: data.taskDescription || '',
+          taskId: data.taskId || undefined,
+          date: data.date || selectedDate,
+          dailyRate: typeof data.dailyRate === 'number' ? data.dailyRate : 0,
+          notes: data.notes || '',
+          createdBy: data.createdBy || '',
+          createdAt: data.createdAt || null
+        } as TaskAssignment;
+      });
       setAssignments(assignmentsData);
-    } catch (error) {
+      console.log(`Loaded ${assignmentsData.length} assignments for ${selectedDate}`);
+    } catch (error: any) {
       console.error('Error loading assignments:', error);
+      // Don't show alert for loading errors - just log them
+      // This prevents annoying alerts when the component first loads
+      if (error?.code === 'failed-precondition') {
+        console.error('Firestore index may be missing for date query. Check Firebase Console.');
+      }
+      setAssignments([]);
+    }
+  };
+
+  const loadTemplateTasks = async () => {
+    setLoadingTemplates(true);
+    try {
+      // Load template tasks (isTemplate === true)
+      const templatesQuery = query(
+        collection(db, 'tasks'),
+        where('isTemplate', '==', true)
+      );
+      const templatesSnapshot = await getDocs(templatesQuery);
+      const templatesData = templatesSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          title: data.title || 'Untitled Task',
+          status: data.status || 'todo'
+        };
+      });
+      setTemplateTasks(templatesData);
+      console.log(`Loaded ${templatesData.length} template tasks`);
+    } catch (error: any) {
+      console.error('Error loading template tasks:', error);
+      // Fallback: try loading all tasks and filter
+      try {
+        const allTasksQuery = query(collection(db, 'tasks'));
+        const allTasksSnapshot = await getDocs(allTasksQuery);
+        const allTasks = allTasksSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            title: data.title || 'Untitled Task',
+            status: data.status || 'todo',
+            isTemplate: data.isTemplate || false,
+            projectId: data.projectId || null
+          };
+        });
+        const templateTasks = allTasks.filter(
+          task => task.isTemplate === true || task.projectId === null
+        );
+        setTemplateTasks(templateTasks);
+        console.log(`Loaded ${templateTasks.length} template tasks (fallback method)`);
+      } catch (fallbackError) {
+        console.error('Error in fallback template loading:', fallbackError);
+        setTemplateTasks([]);
+      }
+    } finally {
+      setLoadingTemplates(false);
     }
   };
 
   const loadProjectTasks = async (projectId: string) => {
-    if (!projectId) {
+    if (!projectId || projectId.trim() === '') {
       setProjectTasks([]);
       return;
     }
 
     setLoadingTasks(true);
     try {
+      // Only load tasks that belong to this project (not templates)
       const tasksQuery = query(
         collection(db, 'tasks'),
         where('projectId', '==', projectId)
       );
       const tasksSnapshot = await getDocs(tasksQuery);
-      const tasksData = tasksSnapshot.docs.map(doc => ({
-        id: doc.id,
-        title: doc.data().title || 'Untitled Task',
-        status: doc.data().status || 'todo'
-      }));
+      const tasksData = tasksSnapshot.docs
+        .map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            title: data.title || 'Untitled Task',
+            status: data.status || 'todo',
+            isTemplate: data.isTemplate || false
+          };
+        })
+        .filter(task => task.isTemplate !== true); // Exclude templates from project tasks
       setProjectTasks(tasksData);
-    } catch (error) {
+      console.log(`Loaded ${tasksData.length} tasks for project ${projectId}`);
+    } catch (error: any) {
       console.error('Error loading project tasks:', error);
+      if (error?.code === 'failed-precondition') {
+        console.error('Firestore index may be missing for projectId query. Check Firebase Console.');
+      }
       setProjectTasks([]);
+      // Don't show alert - just log the error
+      // User can still create custom tasks
     } finally {
       setLoadingTasks(false);
     }
@@ -144,9 +259,54 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
   }, [selectedProjectId]);
 
   const handleAssign = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      alert('Error: You must be logged in to create assignments');
+      return;
+    }
 
-    const staffIds = bulkMode ? selectedStaffIds : [selectedStaffId];
+    // Validate date
+    if (!selectedDate || selectedDate.trim() === '') {
+      alert('Error: Please select a date');
+      return;
+    }
+
+    // Validate project
+    if (!selectedProjectId || selectedProjectId.trim() === '') {
+      alert('Error: Please select a project');
+      return;
+    }
+
+    const project = projects.find(p => p.id === selectedProjectId);
+    if (!project) {
+      alert('Error: Selected project not found. Please refresh the page.');
+      return;
+    }
+
+    // Get and validate staff IDs
+    const staffIds = bulkMode 
+      ? selectedStaffIds.filter(id => id && id.trim() !== '')
+      : selectedStaffId && selectedStaffId.trim() !== '' 
+        ? [selectedStaffId] 
+        : [];
+    
+    if (staffIds.length === 0) {
+      alert('Error: Please select at least one staff member');
+      return;
+    }
+
+    // Validate staff members exist
+    const validStaffMembers = staffIds
+      .map(id => staff.find(s => s.id === id))
+      .filter((member): member is StaffMember => member !== undefined);
+    
+    if (validStaffMembers.length === 0) {
+      alert('Error: Selected staff members not found. Please refresh the page.');
+      return;
+    }
+
+    if (validStaffMembers.length !== staffIds.length) {
+      alert(`Warning: ${staffIds.length - validStaffMembers.length} staff member(s) not found. Continuing with ${validStaffMembers.length} valid staff member(s).`);
+    }
     
     // Get task IDs to assign
     let taskIdsToAssign: string[] = [];
@@ -155,96 +315,204 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
     if (multiTaskMode) {
       // Multiple tasks selected
       if (selectedTaskIds.length === 0) {
-        alert('Please select at least one task');
-        return;
-      }
-      taskIdsToAssign = selectedTaskIds;
-      taskDescriptions = selectedTaskIds.map(taskId => {
-        if (taskId === 'custom') {
-          return { taskId: undefined, description: taskDescription.trim() };
-        } else {
-          const task = projectTasks.find(t => t.id === taskId);
-          return { taskId, description: task?.title || 'Unknown Task' };
+        // No tasks selected - create assignment without task description
+        taskDescriptions = [{ taskId: undefined, description: 'General Work' }];
+      } else {
+        // Validate custom task has description if selected
+        if (selectedTaskIds.includes('custom') && !taskDescription.trim()) {
+          alert('Error: Please enter a description for the custom task');
+          return;
         }
-      });
+
+        taskIdsToAssign = selectedTaskIds;
+        taskDescriptions = selectedTaskIds.map(taskId => {
+          if (taskId === 'custom') {
+            if (!taskDescription.trim()) {
+              throw new Error('Custom task description is required');
+            }
+            return { taskId: undefined, description: taskDescription.trim() };
+          } else if (taskId.startsWith('template-')) {
+            // Handle template task
+            const templateId = taskId.replace('template-', '');
+            const task = templateTasks.find(t => t.id === templateId);
+            if (!task) {
+              console.warn(`Template task ${templateId} not found`);
+              return { taskId: undefined, description: 'Unknown Template Task' };
+            }
+            return { taskId: undefined, description: task.title || 'Untitled Task' };
+          } else {
+            // Handle project task
+            const task = projectTasks.find(t => t.id === taskId);
+            if (!task) {
+              console.warn(`Task ${taskId} not found in project tasks`);
+              return { taskId, description: 'Unknown Task' };
+            }
+            return { taskId, description: task.title || 'Untitled Task' };
+          }
+        }).filter(task => task.description.trim() !== ''); // Filter out empty descriptions
+
+        if (taskDescriptions.length === 0) {
+          // Fallback if all tasks filtered out
+          taskDescriptions = [{ taskId: undefined, description: 'General Work' }];
+        }
+      }
     } else {
       // Single task
       let finalTaskDescription = taskDescription.trim();
       let finalTaskId: string | undefined = undefined;
       
       if (selectedTaskId && selectedTaskId !== 'custom') {
-        const selectedTask = projectTasks.find(t => t.id === selectedTaskId);
-        finalTaskDescription = selectedTask?.title || taskDescription.trim();
-        finalTaskId = selectedTaskId;
+        if (selectedTaskId.startsWith('template-')) {
+          // Handle template task
+          const templateId = selectedTaskId.replace('template-', '');
+          const selectedTask = templateTasks.find(t => t.id === templateId);
+          if (selectedTask) {
+            finalTaskDescription = selectedTask.title || taskDescription.trim();
+            finalTaskId = undefined; // Template tasks don't have a project taskId
+          } else {
+            console.warn(`Selected template task ${templateId} not found`);
+          }
+        } else {
+          // Handle project task
+          const selectedTask = projectTasks.find(t => t.id === selectedTaskId);
+          if (selectedTask) {
+            finalTaskDescription = selectedTask.title || taskDescription.trim();
+            finalTaskId = selectedTaskId;
+          } else {
+            console.warn(`Selected task ${selectedTaskId} not found`);
+          }
+        }
       }
       
-      if (!finalTaskDescription) {
-        alert('Please select a task or enter a description');
-        return;
+      // If no task description, use default
+      if (!finalTaskDescription || finalTaskDescription.trim() === '') {
+        finalTaskDescription = 'General Work';
       }
       
       taskDescriptions = [{ taskId: finalTaskId, description: finalTaskDescription }];
     }
-    
-    if (staffIds.length === 0 || !selectedProjectId) {
-      alert('Please fill in all required fields');
-      return;
-    }
 
     setSaving(true);
-    try {
-      const project = projects.find(p => p.id === selectedProjectId);
-      let assignmentCount = 0;
-      
-      for (const staffId of staffIds) {
-        const staffMember = staff.find(s => s.id === staffId);
-        if (!staffMember) continue;
+    let assignmentCount = 0;
+    const createdAssignmentIds: string[] = [];
+    const errors: string[] = [];
 
-        // Create one assignment per task for this staff member
+    try {
+      // Create assignments
+      for (const staffMember of validStaffMembers) {
         for (const taskInfo of taskDescriptions) {
-          await addDoc(collection(db, 'taskAssignments'), {
-            projectId: selectedProjectId,
-            projectName: project?.name || 'Unknown Project',
-            staffId: staffMember.id,
-            staffName: staffMember.name,
-            taskDescription: taskInfo.description,
-            taskId: taskInfo.taskId,
-            date: selectedDate,
-            dailyRate: staffMember.dailyRate || 0,
-            notes: notes.trim() || '',
-            createdBy: currentUser.uid,
-            createdAt: serverTimestamp()
-          });
-          assignmentCount++;
+          try {
+            // Validate required fields before creating
+            if (!staffMember.id || !staffMember.name) {
+              throw new Error(`Invalid staff member: missing id or name`);
+            }
+            if (!taskInfo.description || taskInfo.description.trim() === '') {
+              throw new Error(`Invalid task description`);
+            }
+            if (!selectedProjectId) {
+              throw new Error(`Invalid project ID`);
+            }
+            if (!selectedDate) {
+              throw new Error(`Invalid date`);
+            }
+
+            // Build assignment data, excluding undefined values
+            const assignmentData: any = {
+              projectId: selectedProjectId,
+              projectName: project.name || 'Unknown Project',
+              staffId: staffMember.id,
+              staffName: staffMember.name,
+              taskDescription: taskInfo.description.trim(),
+              date: selectedDate,
+              dailyRate: typeof staffMember.dailyRate === 'number' ? staffMember.dailyRate : 0,
+              createdBy: currentUser.uid,
+              createdAt: serverTimestamp()
+            };
+
+            // Only add optional fields if they have values
+            if (taskInfo.taskId) {
+              assignmentData.taskId = taskInfo.taskId;
+            }
+            if (notes.trim()) {
+              assignmentData.notes = notes.trim();
+            }
+
+            console.log('Creating assignment:', assignmentData);
+            const docRef = await addDoc(collection(db, 'taskAssignments'), assignmentData);
+            createdAssignmentIds.push(docRef.id);
+            assignmentCount++;
+          } catch (error: any) {
+            const errorMessage = error?.message || 'Unknown error';
+            const errorCode = error?.code || 'unknown';
+            console.error(`Error creating assignment for ${staffMember.name}:`, error);
+            errors.push(`${staffMember.name}: ${errorMessage} (${errorCode})`);
+          }
         }
       }
 
-      // Update project actual cost
-      await updateProjectActualCost(selectedProjectId);
-      
-      // Reset form
-      setSelectedStaffId('');
-      setSelectedStaffIds([]);
-      setSelectedTaskId('');
-      setSelectedTaskIds([]);
-      setTaskDescription('');
-      setNotes('');
-      // Don't reset project so user can assign multiple tasks to same project
-      
-      // Reload assignments to show updated list
-      await loadAssignments();
-      
-      // Notify parent component to refresh stats immediately
-      if (onAssignmentCreated) {
-        onAssignmentCreated();
+      // Only update project cost if we created at least one assignment
+      if (assignmentCount > 0) {
+        try {
+          await updateProjectActualCost(selectedProjectId);
+        } catch (costError: any) {
+          console.error('Error updating project cost (assignments were created):', costError);
+          // Don't fail the whole operation if cost update fails
+          errors.push(`Warning: Cost update failed: ${costError?.message || 'Unknown error'}`);
+        }
       }
       
-      // Show success message without blocking
-      const totalCost = assignmentCount * (staff.find(s => s.id === staffIds[0])?.dailyRate || 0);
-      alert(`✓ Successfully created ${assignmentCount} assignment(s)\n${staffIds.length} staff × ${taskDescriptions.length} task(s)\nTotal cost: $${totalCost.toFixed(2)}`);
-    } catch (error) {
-      console.error('Error creating assignment:', error);
-      alert('Failed to create assignment');
+      // Show results
+      if (assignmentCount > 0) {
+        // Reset form only on success
+        setSelectedStaffId('');
+        setSelectedStaffIds([]);
+        setSelectedTaskId('');
+        setSelectedTaskIds([]);
+        setTaskDescription('');
+        setNotes('');
+        // Don't reset project so user can assign multiple tasks to same project
+        
+        // Reload assignments to show updated list
+        try {
+          await loadAssignments();
+        } catch (loadError) {
+          console.error('Error reloading assignments:', loadError);
+        }
+        
+        // Notify parent component to refresh stats immediately
+        if (onAssignmentCreated) {
+          onAssignmentCreated();
+        }
+        
+        // Show success message
+        const totalCost = validStaffMembers.reduce((sum, member) => {
+          const rate = typeof member.dailyRate === 'number' ? member.dailyRate : 0;
+          return sum + (rate * taskDescriptions.length);
+        }, 0);
+
+        let message = `✓ Successfully created ${assignmentCount} assignment(s)\n${validStaffMembers.length} staff × ${taskDescriptions.length} task(s)\nTotal cost: $${totalCost.toFixed(2)}`;
+        if (errors.length > 0) {
+          message += `\n\nWarnings:\n${errors.join('\n')}`;
+        }
+        alert(message);
+      } else {
+        // No assignments were created
+        const errorMsg = errors.length > 0 
+          ? `Failed to create assignments:\n\n${errors.join('\n')}`
+          : 'Failed to create assignments. Please check the console for details.';
+        alert(errorMsg);
+      }
+    } catch (error: any) {
+      console.error('Error in handleAssign:', error);
+      const errorMessage = error?.message || 'Unknown error occurred';
+      const errorCode = error?.code || 'unknown';
+      alert(`Failed to create assignments: ${errorMessage}\n\nError code: ${errorCode}\n\nPlease check the browser console for more details.`);
+      
+      // If we created some assignments but then failed, try to clean up
+      // (In production, you might want to keep them or provide a way to retry)
+      if (createdAssignmentIds.length > 0) {
+        console.warn(`${createdAssignmentIds.length} assignment(s) were created before the error occurred. They are not being deleted.`);
+      }
     } finally {
       setSaving(false);
     }
@@ -412,31 +680,71 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Task(s) *
-              {loadingTasks && <span className="text-xs text-gray-500 ml-2">(Loading tasks...)</span>}
+              Task(s) (Optional)
+              {(loadingTasks || loadingTemplates) && <span className="text-xs text-gray-500 ml-2">(Loading tasks...)</span>}
             </label>
             {selectedProjectId ? (
               multiTaskMode ? (
                 // Multi-task selection mode
                 <div>
                   <div className="border border-gray-300 rounded-xl p-3 max-h-64 overflow-y-auto mb-2">
-                    {projectTasks.length > 0 ? (
-                      projectTasks.map(task => (
-                        <label key={task.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedTaskIds.includes(task.id)}
-                            onChange={() => toggleTaskSelection(task.id)}
-                            className="mr-3"
-                          />
-                          <div className="flex-1">
-                            <span className="font-medium">{task.title}</span>
-                            <span className="text-sm text-gray-500 ml-2">({task.status})</span>
-                          </div>
-                        </label>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-500 p-2">No tasks found in this project</p>
+                    {/* Template Tasks Section */}
+                    {templateTasks.length > 0 && (
+                      <>
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-2">
+                          🌐 Universal Templates
+                        </div>
+                        {templateTasks.map(task => (
+                          <label key={`template-${task.id}`} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedTaskIds.includes(`template-${task.id}`)}
+                              onChange={() => toggleTaskSelection(`template-${task.id}`)}
+                              className="mr-3"
+                            />
+                            <div className="flex-1">
+                              <span className="font-medium">{task.title}</span>
+                              <span className="text-xs text-blue-600 ml-2">🌐</span>
+                            </div>
+                          </label>
+                        ))}
+                      </>
+                    )}
+                    
+                    {/* Project Tasks Section */}
+                    {projectTasks.length > 0 && (
+                      <>
+                        {templateTasks.length > 0 && (
+                          <div className="border-t border-gray-200 my-2"></div>
+                        )}
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-2">
+                          Project Tasks
+                        </div>
+                        {projectTasks.map(task => (
+                          <label key={task.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedTaskIds.includes(task.id)}
+                              onChange={() => toggleTaskSelection(task.id)}
+                              className="mr-3"
+                            />
+                            <div className="flex-1">
+                              <span className="font-medium">{task.title}</span>
+                              <span className="text-sm text-gray-500 ml-2">({task.status})</span>
+                            </div>
+                          </label>
+                        ))}
+                      </>
+                    )}
+                    
+                    {/* Show message if no tasks */}
+                    {templateTasks.length === 0 && projectTasks.length === 0 && (
+                      <p className="text-sm text-gray-500 p-2">No tasks found. Create template tasks or project tasks.</p>
+                    )}
+                    
+                    {/* Custom Task Option */}
+                    {(templateTasks.length > 0 || projectTasks.length > 0) && (
+                      <div className="border-t border-gray-200 mt-2"></div>
                     )}
                     <label className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer border-t border-gray-200 mt-2 pt-2">
                       <input
@@ -471,6 +779,10 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                       setSelectedTaskId(e.target.value);
                       if (e.target.value === 'custom') {
                         setTaskDescription('');
+                      } else if (e.target.value.startsWith('template-')) {
+                        const templateId = e.target.value.replace('template-', '');
+                        const task = templateTasks.find(t => t.id === templateId);
+                        setTaskDescription(task?.title || '');
                       } else {
                         const task = projectTasks.find(t => t.id === e.target.value);
                         setTaskDescription(task?.title || '');
@@ -478,12 +790,27 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                     }}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base mb-2"
                   >
-                    <option value="">Select a task from project...</option>
-                    {projectTasks.map(task => (
-                      <option key={task.id} value={task.id}>
-                        {task.title} ({task.status})
-                      </option>
-                    ))}
+                    <option value="">Select a task...</option>
+                    {/* Template Tasks */}
+                    {templateTasks.length > 0 && (
+                      <optgroup label="🌐 Universal Templates">
+                        {templateTasks.map(task => (
+                          <option key={`template-${task.id}`} value={`template-${task.id}`}>
+                            {task.title} 🌐
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {/* Project Tasks */}
+                    {projectTasks.length > 0 && (
+                      <optgroup label="Project Tasks">
+                        {projectTasks.map(task => (
+                          <option key={task.id} value={task.id}>
+                            {task.title} ({task.status})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                     <option value="custom">{t('taskAssignment.customTask')}</option>
                   </select>
                   
@@ -498,6 +825,7 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                   {selectedTaskId && selectedTaskId !== 'custom' && (
                     <p className="text-sm text-gray-600 mt-2">
                       {t('taskAssignment.selected')}: {taskDescription}
+                      {selectedTaskId.startsWith('template-') && <span className="text-blue-600 ml-1">🌐</span>}
                     </p>
                   )}
                 </>

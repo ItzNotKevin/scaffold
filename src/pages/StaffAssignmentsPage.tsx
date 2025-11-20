@@ -1,0 +1,99 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '../lib/useAuth';
+import { useNavigate } from 'react-router-dom';
+import Layout from '../components/Layout';
+import TaskAssignmentManager from '../components/TaskAssignmentManager';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import Card from '../components/ui/Card';
+
+const StaffAssignmentsPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { currentUser, userProfile, permissions } = useAuth();
+  const navigate = useNavigate();
+  const [todayAssignments, setTodayAssignments] = useState(0);
+  const [todayLaborCost, setTodayLaborCost] = useState(0);
+
+  const loadTodayStats = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const assignmentsQuery = query(
+        collection(db, 'taskAssignments'),
+        where('date', '==', today)
+      );
+      const snapshot = await getDocs(assignmentsQuery);
+      const assignments = snapshot.docs.map(doc => doc.data());
+      
+      setTodayAssignments(assignments.length);
+      setTodayLaborCost(assignments.reduce((sum: number, a: any) => sum + (a.dailyRate || 0), 0));
+    } catch (error) {
+      console.error('Error loading today stats:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTodayStats();
+  }, [loadTodayStats]);
+
+  if (!currentUser || !userProfile) {
+    return (
+      <Layout title={t('taskAssignment.title')} currentRole="admin">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-gray-500 text-sm mt-4">Loading...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout title={t('taskAssignment.title')} currentRole="admin">
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">{t('taskAssignment.title')}</h1>
+            <p className="text-gray-600 mt-1">{t('taskAssignment.assignDailyTasks')}</p>
+          </div>
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+
+        {/* Today's Stats */}
+        <Card className="p-5">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('taskAssignment.staffTaskAssignments')}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 bg-green-50 rounded-xl border border-green-100">
+              <p className="text-sm text-green-600 font-medium">{t('taskAssignment.tasksAssignedToday')}</p>
+              <p className="text-2xl font-bold text-green-900 mt-1">{todayAssignments}</p>
+            </div>
+            <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+              <p className="text-sm text-blue-600 font-medium">{t('taskAssignment.staffWorkingToday')}</p>
+              <p className="text-2xl font-bold text-blue-900 mt-1">{todayAssignments}</p>
+            </div>
+            <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+              <p className="text-sm text-purple-600 font-medium">{t('taskAssignment.todayLaborCost')}</p>
+              <p className="text-2xl font-bold text-purple-900 mt-1">${todayLaborCost.toFixed(2)}</p>
+            </div>
+          </div>
+        </Card>
+
+        <TaskAssignmentManager 
+          onAssignmentCreated={() => {
+            // Refresh stats immediately when assignment is created
+            setTimeout(() => loadTodayStats(), 100);
+          }}
+        />
+      </div>
+    </Layout>
+  );
+};
+
+export default StaffAssignmentsPage;
+

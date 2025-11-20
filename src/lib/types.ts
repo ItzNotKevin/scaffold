@@ -27,17 +27,18 @@ export interface TeamMember {
 
 export interface Task {
   id: string;
-  projectId: string;
+  projectId?: string | null; // null for template tasks
   title: string;
   description: string;
   status: 'todo' | 'in-progress' | 'review' | 'completed';
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  assignedTo: string;
-  dueDate: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  assignedTo?: string;
+  dueDate?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
   recurrence?: 'none' | 'daily' | 'weekly' | 'monthly';
   parentTaskId?: string; // Reference to the original task for recurring tasks
+  isTemplate?: boolean; // true for universal template tasks
 }
 
 export interface Activity {
@@ -138,6 +139,7 @@ export interface TaskAssignment {
   staffId: string; // References StaffMember.id
   staffName: string;
   taskDescription: string;
+  taskId?: string; // Optional reference to task.id if assigned to a project task
   date: string; // YYYY-MM-DD format
   dailyRate: number; // Snapshot of rate at assignment time
   notes?: string;

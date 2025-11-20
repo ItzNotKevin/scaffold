@@ -7,7 +7,7 @@ import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import { sendPhaseUpdateEmails } from '../lib/emailNotifications';
 import { usePushNotifications } from '../lib/usePushNotifications';
-import { getProjectCostBreakdown } from '../lib/projectCosts';
+import { getProjectCostBreakdown, updateProjectActualCost } from '../lib/projectCosts';
 import DailyReportForm from '../components/DailyReportForm';
 import DailyReportList from '../components/DailyReportList';
 import type { DailyReport } from '../lib/types';
@@ -912,6 +912,12 @@ ${reportData.isOverBudget
         updatedAt: serverTimestamp(),
       });
 
+      // Update project actual cost to include the new expense
+      await updateProjectActualCost(id);
+      
+      // Reload cost breakdown to reflect the updated costs
+      await loadCostBreakdown();
+
       // Reset form
       setNewExpenseCategory('materials');
       setNewExpenseDescription('');
@@ -932,6 +938,13 @@ ${reportData.isOverBudget
 
     try {
       await deleteDoc(doc(db, 'expenses', expenseId));
+      
+      // Update project actual cost after deleting expense
+      await updateProjectActualCost(id);
+      
+      // Reload cost breakdown to reflect the updated costs
+      await loadCostBreakdown();
+      
       showProjectNotification('Expense deleted successfully', projectName);
     } catch (error) {
       console.error('Error deleting expense:', error);

@@ -65,38 +65,54 @@ const Home: React.FC = () => {
     }
   };
 
-  const handleNewProject = () => {
-    const createProject = async () => {
-      try {
-        const newProjectRef = doc(collection(db, 'projects'));
-        const newProject = {
-          id: newProjectRef.id,
-          name: 'New Project',
-          description: '',
-          status: 'planning',
-          phase: 'Sales',
-          budget: 0,
-          actualCost: 0,
-          laborCost: 0,
-          reimbursementCost: 0,
-          progress: 0,
-          startDate: null,
-          endDate: null,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          team: []
-        };
+  const handleNewProject = async () => {
+    // Prompt for project name
+    const projectName = prompt('Enter project name:');
+    
+    // If user cancelled or entered empty name, don't create project
+    if (!projectName || projectName.trim() === '') {
+      return;
+    }
 
-        await setDoc(newProjectRef, newProject);
-        setProjects(prev => [...prev, newProject]);
+    try {
+      const trimmedName = projectName.trim();
+      const newProjectRef = doc(collection(db, 'projects'));
+      const newProject = {
+        id: newProjectRef.id,
+        name: trimmedName,
+        description: '',
+        status: 'planning',
+        phase: 'Sales',
+        budget: 0,
+        actualCost: 0,
+        laborCost: 0,
+        reimbursementCost: 0,
+        progress: 0,
+        startDate: null,
+        endDate: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        team: []
+      };
+
+      // Wait for the document to be written to Firestore
+      await setDoc(newProjectRef, newProject);
+      
+      // Verify the document was written by reading it back
+      const docSnapshot = await getDoc(newProjectRef);
+      if (docSnapshot.exists()) {
+        const savedData = docSnapshot.data();
+        // Update local state with the actual saved data
+        setProjects(prev => [...prev, { id: newProjectRef.id, ...savedData }]);
+        // Navigate after confirming the document exists
         navigate(`/project/${newProjectRef.id}`);
-      } catch (error) {
-        console.error('Error creating project:', error);
-        alert('Failed to create project. Please try again.');
+      } else {
+        throw new Error('Project was not created successfully');
       }
-    };
-
-    createProject();
+    } catch (error) {
+      console.error('Error creating project:', error);
+      alert('Failed to create project. Please try again.');
+    }
   };
 
   const handleDeleteProject = async (projectId: string) => {

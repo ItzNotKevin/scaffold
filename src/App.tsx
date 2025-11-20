@@ -14,6 +14,11 @@ import ProjectPage from './pages/ProjectPage.tsx';
 import ProfilePage from './pages/ProfilePage.tsx';
 import DebugPage from './pages/DebugPage';
 import PayrollPage from './pages/PayrollPage.tsx';
+import StaffAssignmentsPage from './pages/StaffAssignmentsPage';
+import StaffManagementPage from './pages/StaffManagementPage';
+import ReimbursementPage from './pages/ReimbursementPage';
+import TaskTemplatesPage from './pages/TaskTemplatesPage';
+import ActivityLogsPage from './pages/ActivityLogsPage';
 
 function App() {
   return (
@@ -55,6 +60,46 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <PayrollPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/staff-assignments"
+                  element={
+                    <ProtectedRoute>
+                      <StaffAssignmentsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/staff-management"
+                  element={
+                    <ProtectedRoute>
+                      <StaffManagementPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/reimbursement"
+                  element={
+                    <ProtectedRoute>
+                      <ReimbursementPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/task-templates"
+                  element={
+                    <ProtectedRoute>
+                      <TaskTemplatesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/activity-logs"
+                  element={
+                    <ProtectedRoute>
+                      <ActivityLogsPage />
                     </ProtectedRoute>
                   }
                 />

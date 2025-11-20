@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../lib/useAuth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import LanguageSwitcher from './LanguageSwitcher';
 // import TaskReminderSettings from './TaskReminderSettings';
 
@@ -11,8 +11,10 @@ interface TopBarProps {
 }
 
 const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick, currentRole }) => {
-  const { currentUser, userProfile, logout } = useAuth();
+  const { currentUser, userProfile, logout, permissions } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [showMenu, setShowMenu] = useState(false);
 
   const handleLogin = () => {
     navigate('/auth');
@@ -26,11 +28,109 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick, currentRole }) => {
     }
   };
 
+  const menuItems = [
+    { path: '/', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+    { path: '/staff-assignments', label: 'Staff Assignments', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+    ...(permissions?.canManageUsers ? [{ path: '/staff-management', label: 'Staff Management', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' }] : []),
+    { path: '/reimbursement', label: 'Reimbursement', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+    { path: '/activity-logs', label: 'Activity Logs', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+    ...(permissions?.canManageUsers ? [
+      { path: '/task-templates', label: 'Task Templates', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+      { path: '/payroll', label: 'Payroll', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' }
+    ] : []),
+  ];
+
+  const handleMenuClick = (path: string) => {
+    navigate(path);
+    setShowMenu(false);
+  };
+
   return (
     <header className="bg-white/95 backdrop-blur-sm shadow-sm border-b border-gray-100 sticky top-0 z-50 pt-safe">
       <div className="flex items-center justify-between px-4 py-3 px-safe">
         <div className="flex items-center space-x-2 min-w-0 flex-1">
-          {onMenuClick && (
+          {/* Hamburger Menu */}
+          {currentUser && (
+            <div className="relative flex-shrink-0">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="p-2.5 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation"
+                aria-label="Menu"
+              >
+                <svg
+                  className="w-5 h-5 text-gray-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
+              </button>
+              
+              {/* Dropdown Menu */}
+              {showMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowMenu(false)}
+                  />
+                  <div className="absolute left-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-lg border border-gray-200 py-2 z-50">
+                    {menuItems.map((item) => {
+                      const isActive = location.pathname === item.path;
+                      return (
+                        <button
+                          key={item.path}
+                          onClick={() => handleMenuClick(item.path)}
+                          className={`w-full flex items-center space-x-3 px-4 py-3 text-left transition-colors ${
+                            isActive
+                              ? 'bg-blue-50 text-blue-700'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <svg
+                            className="w-5 h-5 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d={item.icon}
+                            />
+                          </svg>
+                          <span className="font-medium">{item.label}</span>
+                          {isActive && (
+                            <svg
+                              className="w-4 h-4 ml-auto text-blue-600"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          
+          {onMenuClick && !currentUser && (
             <button
               onClick={onMenuClick}
               className="p-2.5 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation flex-shrink-0"
@@ -80,16 +180,9 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick, currentRole }) => {
               <div className="flex items-center space-x-2">
                 <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-blue-50 rounded-xl">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-blue-900 truncate max-w-32">
-                      {currentUser.displayName || currentUser.email}
-                    </span>
-                    {currentRole && (
-                      <span className="text-xs text-blue-700 capitalize">
-                        {currentRole}
-                      </span>
-                    )}
-                  </div>
+                  <span className="text-sm font-medium text-blue-900 truncate max-w-32">
+                    {currentUser.displayName || currentUser.email}
+                  </span>
                 </div>
                 {/* Mobile user indicator */}
                 <button
@@ -100,18 +193,6 @@ const TopBar: React.FC<TopBarProps> = ({ title, onMenuClick, currentRole }) => {
                     {(currentUser.displayName || currentUser.email).charAt(0).toUpperCase()}
                   </span>
                 </button>
-                {/* Admin Payroll link */}
-                {currentRole === 'admin' && (
-                  <button
-                    onClick={() => navigate('/payroll')}
-                    className="hidden sm:flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors touch-manipulation"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Payroll</span>
-                  </button>
-                )}
                 {/* Desktop profile link */}
                 <button
                   onClick={() => navigate('/profile')}
