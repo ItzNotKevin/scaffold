@@ -183,12 +183,22 @@ export interface PendingUser {
 }
 
 // Reimbursement for materials bought by staff
+export interface Vendor {
+  id: string;
+  name: string;
+  createdAt: any;
+  updatedAt: any;
+  createdBy?: string;
+}
+
 export interface Reimbursement {
   id: string;
   staffId: string;
   staffName: string;
   projectId?: string;
   projectName?: string;
+  vendorId?: string;
+  vendorName?: string;
   itemDescription: string;
   amount: number;
   date: string; // YYYY-MM-DD format

@@ -4,7 +4,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
-import type { Reimbursement, StaffMember } from '../lib/types';
+import type { Reimbursement, StaffMember, Vendor } from '../lib/types';
 import { updateProjectActualCost } from '../lib/projectCosts';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -16,16 +16,21 @@ const ReimbursementManager: React.FC = () => {
   const [reimbursements, setReimbursements] = useState<Reimbursement[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [projects, setProjects] = useState<Array<{id: string, name: string}>>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [savingVendor, setSavingVendor] = useState(false);
+  const [showAddVendorInput, setShowAddVendorInput] = useState(false);
+  const [newVendorName, setNewVendorName] = useState('');
   
   // Form state
   const [formData, setFormData] = useState({
     staffId: '',
     projectId: '',
+    vendorId: '',
     itemDescription: '',
     amount: '' as string | number,
     date: new Date().toISOString().split('T')[0],
@@ -34,32 +39,60 @@ const ReimbursementManager: React.FC = () => {
     status: 'approved' as 'pending' | 'approved' | 'rejected'
   });
 
+  const fetchVendors = async () => {
+    try {
+      const vendorSnapshot = await getDocs(
+        query(collection(db, 'vendors'), orderBy('name', 'asc'))
+      );
+      const vendorData = vendorSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Vendor));
+      setVendors(vendorData);
+    } catch (error) {
+      console.error('Error loading vendors:', error);
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
       
-      // Load staff members
-      const staffSnapshot = await getDocs(collection(db, 'staffMembers'));
+      const reimbursementsQuery = query(
+        collection(db, 'reimbursements'),
+        orderBy('date', 'desc')
+      );
+
+      const [
+        staffSnapshot,
+        projectsSnapshot,
+        vendorSnapshot,
+        reimbursementsSnapshot
+      ] = await Promise.all([
+        getDocs(collection(db, 'staffMembers')),
+        getDocs(collection(db, 'projects')),
+        getDocs(query(collection(db, 'vendors'), orderBy('name', 'asc'))),
+        getDocs(reimbursementsQuery)
+      ]);
+
       const staffData = staffSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as StaffMember));
       setStaff(staffData);
 
-      // Load projects
-      const projectsSnapshot = await getDocs(collection(db, 'projects'));
       const projectsData = projectsSnapshot.docs.map(doc => ({
         id: doc.id,
         name: doc.data().name || 'Unnamed Project'
       }));
       setProjects(projectsData);
 
-      // Load reimbursements
-      const reimbursementsQuery = query(
-        collection(db, 'reimbursements'),
-        orderBy('date', 'desc')
-      );
-      const reimbursementsSnapshot = await getDocs(reimbursementsQuery);
+      const vendorData = vendorSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Vendor));
+      setVendors(vendorData);
+
       const reimbursementsData = reimbursementsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -103,6 +136,35 @@ const ReimbursementManager: React.FC = () => {
     }
   };
 
+  const handleAddVendor = async () => {
+    if (!newVendorName.trim() || !currentUser) return;
+
+    try {
+      setSavingVendor(true);
+      const vendorRef = await addDoc(collection(db, 'vendors'), {
+        name: newVendorName.trim(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: currentUser.uid
+      });
+      
+      // Refresh vendors list
+      await fetchVendors();
+      
+      // Select the newly added vendor
+      setFormData({ ...formData, vendorId: vendorRef.id });
+      
+      // Reset add vendor UI
+      setNewVendorName('');
+      setShowAddVendorInput(false);
+    } catch (error) {
+      console.error('Error adding vendor:', error);
+      alert('Failed to add vendor. Please try again.');
+    } finally {
+      setSavingVendor(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amountValue = parseFloat(formData.amount as string) || 0;
@@ -113,6 +175,7 @@ const ReimbursementManager: React.FC = () => {
       
       const selectedStaff = staff.find(s => s.id === formData.staffId);
       const selectedProject = projects.find(p => p.id === formData.projectId);
+      const selectedVendor = vendors.find(v => v.id === formData.vendorId);
       
       // Track old project ID if editing, to update both old and new project costs
       let oldProjectId: string | null = null;
@@ -126,6 +189,8 @@ const ReimbursementManager: React.FC = () => {
         staffName: selectedStaff?.name || 'Unknown',
         projectId: formData.projectId || null,
         projectName: selectedProject?.name || null,
+        vendorId: formData.vendorId || null,
+        vendorName: selectedVendor?.name || null,
         itemDescription: formData.itemDescription,
         amount: amountValue,
         date: formData.date,
@@ -171,6 +236,7 @@ const ReimbursementManager: React.FC = () => {
     setFormData({
       staffId: reimbursement.staffId,
       projectId: reimbursement.projectId || '',
+      vendorId: reimbursement.vendorId || '',
       itemDescription: reimbursement.itemDescription,
       amount: reimbursement.amount,
       date: reimbursement.date,
@@ -208,6 +274,7 @@ const ReimbursementManager: React.FC = () => {
     setFormData({
       staffId: '',
       projectId: '',
+      vendorId: '',
       itemDescription: '',
       amount: '',
       date: new Date().toISOString().split('T')[0],
@@ -217,6 +284,8 @@ const ReimbursementManager: React.FC = () => {
     });
     setEditingId(null);
     setShowForm(false);
+    setShowAddVendorInput(false);
+    setNewVendorName('');
   };
 
   const formatCurrency = (amount: number) => {
@@ -312,6 +381,71 @@ const ReimbursementManager: React.FC = () => {
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Vendor (Optional)
+                </label>
+                <select
+                  value={showAddVendorInput ? 'add-new' : formData.vendorId}
+                  onChange={(e) => {
+                    if (e.target.value === 'add-new') {
+                      setShowAddVendorInput(true);
+                      setFormData({ ...formData, vendorId: '' });
+                    } else {
+                      setFormData({ ...formData, vendorId: e.target.value });
+                      setShowAddVendorInput(false);
+                    }
+                  }}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+                >
+                  <option value="">No Vendor</option>
+                  {vendors.map(v => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                  <option value="add-new">+ Add New Vendor</option>
+                </select>
+                {showAddVendorInput && (
+                  <div className="mt-2 flex gap-2">
+                    <Input
+                      value={newVendorName}
+                      onChange={(e) => setNewVendorName(e.target.value)}
+                      placeholder="Enter vendor name"
+                      className="flex-1"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddVendor();
+                        } else if (e.key === 'Escape') {
+                          setShowAddVendorInput(false);
+                          setNewVendorName('');
+                          setFormData({ ...formData, vendorId: '' });
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleAddVendor}
+                      disabled={savingVendor || !newVendorName.trim()}
+                      className="min-w-[100px]"
+                    >
+                      {savingVendor ? 'Saving...' : 'Add'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowAddVendorInput(false);
+                        setNewVendorName('');
+                        setFormData({ ...formData, vendorId: '' });
+                      }}
+                      className="min-w-[80px]"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -469,6 +603,11 @@ const ReimbursementManager: React.FC = () => {
                       {reimbursement.projectName && (
                         <div>
                           <span className="font-medium">Project:</span> <span className="break-words">{reimbursement.projectName}</span>
+                        </div>
+                      )}
+                      {reimbursement.vendorName && (
+                        <div>
+                          <span className="font-medium">Vendor:</span> <span className="break-words">{reimbursement.vendorName}</span>
                         </div>
                       )}
                     </div>
