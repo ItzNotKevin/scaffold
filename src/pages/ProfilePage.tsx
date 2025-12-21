@@ -5,6 +5,7 @@ import { updateProfile, updatePassword, updateEmail, reauthenticateWithCredentia
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { doc, updateDoc } from 'firebase/firestore';
 import { storage, db } from '../lib/firebase';
+import { compressImage } from '../lib/imageCompression';
 import Layout from '../components/Layout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -17,6 +18,7 @@ const ProfilePage: React.FC = () => {
   const { currentUser, userProfile, updateUserProfile } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const profileGalleryInputRef = useRef<HTMLInputElement>(null);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -59,14 +61,9 @@ const ProfilePage: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file || !currentUser) return;
 
-    // Validate file type and size
+    // Validate file type
     if (!file.type.startsWith('image/')) {
       setError(t('profile.invalidFile'));
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      setError(t('profile.fileTooLarge'));
       return;
     }
 
@@ -84,9 +81,15 @@ const ProfilePage: React.FC = () => {
         }
       }
 
-      // Upload new image
+      // Compress the image before upload
+      const compressedFile = await compressImage(file, {
+        maxSizeMB: 0.5, // Profile pictures can be smaller
+        maxWidthOrHeight: 800 // Profile pictures don't need to be huge
+      });
+
+      // Upload new compressed image
       const imageRef = ref(storage, `profile-pictures/${currentUser.uid}/${Date.now()}`);
-      const snapshot = await uploadBytes(imageRef, file);
+      const snapshot = await uploadBytes(imageRef, compressedFile);
       const downloadURL = await getDownloadURL(snapshot.ref);
 
       // Update user profile in Firestore
@@ -293,17 +296,37 @@ const ProfilePage: React.FC = () => {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                capture="user"
                 onChange={handleImageUpload}
                 className="hidden"
               />
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                variant="outline"
-                size="sm"
-                loading={loading}
-              >
-                {profilePicture ? t('profile.changePicture') : t('profile.uploadPicture')}
-              </Button>
+              <input
+                ref={profileGalleryInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="outline"
+                  size="sm"
+                  loading={loading}
+                  className="flex-1"
+                >
+                  📷 Take Photo
+                </Button>
+                <Button
+                  onClick={() => profileGalleryInputRef.current?.click()}
+                  variant="outline"
+                  size="sm"
+                  loading={loading}
+                  className="flex-1"
+                >
+                  🖼️ Choose from Library
+                </Button>
+              </div>
               {profilePicture && (
                 <Button
                   onClick={handleRemoveProfilePicture}

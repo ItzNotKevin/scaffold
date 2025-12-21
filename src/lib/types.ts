@@ -191,6 +191,15 @@ export interface Vendor {
   createdBy?: string;
 }
 
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  createdAt: any;
+  updatedAt: any;
+  lastUsed?: any; // Timestamp of when category was last used
+  createdBy?: string;
+}
+
 export interface Reimbursement {
   id: string;
   staffId: string;
@@ -199,6 +208,8 @@ export interface Reimbursement {
   projectName?: string;
   vendorId?: string;
   vendorName?: string;
+  categoryId?: string;
+  categoryName?: string;
   itemDescription: string;
   amount: number;
   date: string; // YYYY-MM-DD format

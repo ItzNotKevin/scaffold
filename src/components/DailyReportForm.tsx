@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { storage, db } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
+import { compressImage } from '../lib/imageCompression';
 import type { DailyReport, WeatherData, WorkLogEntry, SafetyCheck, EquipmentEntry, MaterialEntry, IssueEntry, SubcontractorEntry, DailyReportPhoto } from '../lib/types';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -56,6 +57,8 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
   const [uploadedPhotos, setUploadedPhotos] = useState<DailyReportPhoto[]>(
     existingReport?.photos || []
   );
+  const dailyReportCameraInputRef = useRef<HTMLInputElement>(null);
+  const dailyReportGalleryInputRef = useRef<HTMLInputElement>(null);
   const [notes, setNotes] = useState(existingReport?.notes || '');
   const [issues, setIssues] = useState<IssueEntry[]>(
     existingReport?.issues || []
@@ -243,13 +246,19 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
     setLoading(true);
     try {
       const uploadPromises = Array.from(files).map(async (file) => {
-        const storageRef = ref(storage, `daily-reports/${projectId}/${Date.now()}-${file.name}`);
-        const snapshot = await uploadBytes(storageRef, file);
+        // Compress the image before upload
+        const compressedFile = await compressImage(file, {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920
+        });
+        
+        const storageRef = ref(storage, `daily-reports/${projectId}/${Date.now()}-${compressedFile.name}`);
+        const snapshot = await uploadBytes(storageRef, compressedFile);
         const url = await getDownloadURL(snapshot.ref);
         return {
           id: Date.now().toString() + Math.random(),
           url,
-          caption: file.name,
+          caption: compressedFile.name,
           category: 'general' as const,
           uploadedAt: new Date()
         } as DailyReportPhoto;
@@ -847,13 +856,41 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
       {/* Photos */}
       <Card className="p-4">
         <h3 className="text-lg font-medium mb-3">Photos</h3>
-        <input
-          type="file"
-          multiple
-          accept="image/*"
-          onChange={(e) => e.target.files && handlePhotoUpload(e.target.files)}
-          className="w-full p-2 border border-gray-300 rounded-md"
-        />
+        <div className="flex flex-col sm:flex-row gap-2 mb-2">
+          <input
+            ref={dailyReportCameraInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => e.target.files && handlePhotoUpload(e.target.files)}
+            className="hidden"
+          />
+          <input
+            ref={dailyReportGalleryInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={(e) => e.target.files && handlePhotoUpload(e.target.files)}
+            className="hidden"
+          />
+          <Button
+            type="button"
+            onClick={() => dailyReportCameraInputRef.current?.click()}
+            variant="outline"
+            className="flex-1"
+          >
+            📷 Take Photo
+          </Button>
+          <Button
+            type="button"
+            onClick={() => dailyReportGalleryInputRef.current?.click()}
+            variant="outline"
+            className="flex-1"
+          >
+            🖼️ Choose from Library
+          </Button>
+        </div>
         
         {uploadedPhotos.length > 0 && (
           <div className="mt-4">

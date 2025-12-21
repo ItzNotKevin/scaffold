@@ -44,6 +44,7 @@ const ActivityLogsPage: React.FC = () => {
   const [staffFilter, setStaffFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [monthFilter, setMonthFilter] = useState<string>('all');
   
   // Sorting
   const [sortField, setSortField] = useState<SortField>('date');
@@ -141,6 +142,41 @@ const ActivityLogsPage: React.FC = () => {
     }
   };
 
+  // Get available months from activities
+  const availableMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+    activities.forEach(activity => {
+      if (activity.date) {
+        try {
+          const date = new Date(activity.date);
+          if (!isNaN(date.getTime())) {
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            monthsSet.add(monthKey);
+          }
+        } catch {
+          // Invalid date, skip
+        }
+      }
+    });
+    
+    // Convert to array and sort descending (most recent first)
+    return Array.from(monthsSet).sort((a, b) => {
+      if (a > b) return -1;
+      if (a < b) return 1;
+      return 0;
+    });
+  }, [activities]);
+
+  const formatMonthOption = (monthKey: string): string => {
+    try {
+      const [year, month] = monthKey.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    } catch {
+      return monthKey;
+    }
+  };
+
   // Filter and sort activities
   const filteredAndSortedActivities = useMemo(() => {
     let filtered = [...activities];
@@ -165,6 +201,21 @@ const ActivityLogsPage: React.FC = () => {
       filtered = filtered.filter(activity => 
         activity.type === 'reimbursement' ? activity.status === statusFilter : true
       );
+    }
+    
+    // Apply month filter
+    if (monthFilter !== 'all') {
+      filtered = filtered.filter(activity => {
+        if (!activity.date) return false;
+        try {
+          const date = new Date(activity.date);
+          if (isNaN(date.getTime())) return false;
+          const activityMonthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          return activityMonthKey === monthFilter;
+        } catch {
+          return false;
+        }
+      });
     }
     
     // Sort
@@ -201,7 +252,7 @@ const ActivityLogsPage: React.FC = () => {
     });
     
     return filtered;
-  }, [activities, typeFilter, staffFilter, projectFilter, statusFilter, sortField, sortDirection]);
+  }, [activities, typeFilter, staffFilter, projectFilter, statusFilter, monthFilter, sortField, sortDirection]);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
@@ -290,6 +341,22 @@ const ActivityLogsPage: React.FC = () => {
         <Card className="p-4 sm:p-6">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Filters</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Month</label>
+              <select
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+              >
+                <option value="all">All Months</option>
+                {availableMonths.map(monthKey => (
+                  <option key={monthKey} value={monthKey}>
+                    {formatMonthOption(monthKey)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
               <select
@@ -402,59 +469,58 @@ const ActivityLogsPage: React.FC = () => {
               <p className="text-gray-400 text-xs mt-1">Try adjusting your filters</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {filteredAndSortedActivities.map((activity) => (
                 <div
                   key={activity.id}
-                  className="p-3 sm:p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors"
+                  className="p-2.5 sm:p-3 bg-white border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
                 >
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        activity.type === 'assignment'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {activity.type === 'assignment' ? '📋 Assignment' : '💰 Reimbursement'}
-                      </span>
-                      {activity.status && (
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(activity.status)}`}>
-                          {activity.status}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
+                          activity.type === 'assignment'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {activity.type === 'assignment' ? '📋' : '💰'}
                         </span>
-                      )}
-                      <span className="text-xs sm:text-sm text-gray-500">
-                        {formatDate(activity.date)}
-                      </span>
-                    </div>
-                    
-                    <div className="mb-2">
-                      <p className="font-medium text-gray-900 text-sm sm:text-base">
-                        {activity.staffName}
-                      </p>
-                      <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
-                        {activity.type === 'assignment' 
-                          ? activity.taskDescription || activity.description
-                          : activity.itemDescription || activity.description
-                        }
-                      </p>
-                      {activity.projectName && (
-                        <p className="text-xs text-gray-500 mt-1 break-words">
-                          Project: {activity.projectName}
-                        </p>
-                      )}
-                    </div>
-                    
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
-                      {activity.type === 'assignment' && activity.dailyRate !== undefined && (
-                        <span>
-                          Rate: <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
+                        {activity.status && (
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium border ${getStatusColor(activity.status)}`}>
+                            {activity.status}
+                          </span>
+                        )}
+                        <span className="text-[10px] sm:text-xs text-gray-500">
+                          {formatDate(activity.date)}
                         </span>
-                      )}
-                      {activity.type === 'reimbursement' && activity.amount !== undefined && (
-                        <span>
-                          Amount: <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
+                        {activity.type === 'assignment' && activity.dailyRate !== undefined && (
+                          <span className="text-[10px] sm:text-xs text-gray-600">
+                            Rate: <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
+                          </span>
+                        )}
+                        {activity.type === 'reimbursement' && activity.amount !== undefined && (
+                          <span className="text-[10px] sm:text-xs text-gray-600">
+                            <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                        <span className="font-medium text-gray-900 text-xs sm:text-sm">
+                          {activity.staffName}
                         </span>
-                      )}
+                        <span className="text-[10px] sm:text-xs text-gray-600 break-words">
+                          {activity.type === 'assignment' 
+                            ? activity.taskDescription || activity.description
+                            : activity.itemDescription || activity.description
+                          }
+                        </span>
+                        {activity.projectName && (
+                          <span className="text-[10px] sm:text-xs text-gray-500 break-words">
+                            • {activity.projectName}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
