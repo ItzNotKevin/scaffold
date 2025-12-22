@@ -26,7 +26,19 @@ const StaffAssignmentsPage: React.FC = () => {
       const assignments = snapshot.docs.map(doc => doc.data());
       
       setTodayAssignments(assignments.length);
-      setTodayLaborCost(assignments.reduce((sum: number, a: any) => sum + (a.dailyRate || 0), 0));
+      
+      // Calculate labor cost - only count each staff member's wage once per day
+      const dailyWages = new Map<string, number>(); // key: staffId, value: dailyRate
+      assignments.forEach((a: any) => {
+        const staffId = a.staffId || '';
+        const dailyRate = a.dailyRate || 0;
+        // Only add if we haven't seen this staff member yet today
+        if (!dailyWages.has(staffId)) {
+          dailyWages.set(staffId, dailyRate);
+        }
+      });
+      const todayCost = Array.from(dailyWages.values()).reduce((sum: number, rate: number) => sum + rate, 0);
+      setTodayLaborCost(todayCost);
     } catch (error) {
       console.error('Error loading today stats:', error);
     }

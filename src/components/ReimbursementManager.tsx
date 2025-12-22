@@ -38,7 +38,6 @@ const ReimbursementManager: React.FC = () => {
     projectId: '',
     vendorId: '',
     categoryId: '',
-    itemDescription: '',
     amount: '' as string | number,
     date: new Date().toISOString().split('T')[0],
     receiptUrl: '',
@@ -245,7 +244,7 @@ const ReimbursementManager: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amountValue = parseFloat(formData.amount as string) || 0;
-    if (!formData.staffId || !formData.itemDescription || amountValue <= 0 || !currentUser) return;
+    if (!formData.staffId || !formData.categoryId || amountValue <= 0 || !currentUser) return;
 
     try {
       setSaving(true);
@@ -271,7 +270,7 @@ const ReimbursementManager: React.FC = () => {
         vendorName: selectedVendor?.name || null,
         categoryId: formData.categoryId || null,
         categoryName: selectedCategory?.name || null,
-        itemDescription: formData.itemDescription,
+        itemDescription: selectedCategory?.name || '', // Use category name as item description
         amount: amountValue,
         date: formData.date,
         receiptUrl: formData.receiptUrl || null,
@@ -320,7 +319,7 @@ const ReimbursementManager: React.FC = () => {
   const handleSubmitAndAddAnother = async (e: React.FormEvent) => {
     e.preventDefault();
     const amountValue = parseFloat(formData.amount as string) || 0;
-    if (!formData.staffId || !formData.itemDescription || amountValue <= 0 || !currentUser) return;
+    if (!formData.staffId || !formData.categoryId || amountValue <= 0 || !currentUser) return;
 
     try {
       setSaving(true);
@@ -339,7 +338,7 @@ const ReimbursementManager: React.FC = () => {
         vendorName: selectedVendor?.name || null,
         categoryId: formData.categoryId || null,
         categoryName: selectedCategory?.name || null,
-        itemDescription: formData.itemDescription,
+        itemDescription: selectedCategory?.name || '', // Use category name as item description
         amount: amountValue,
         date: formData.date,
         receiptUrl: formData.receiptUrl || null,
@@ -381,7 +380,6 @@ const ReimbursementManager: React.FC = () => {
       projectId: reimbursement.projectId || '',
       vendorId: reimbursement.vendorId || '',
       categoryId: reimbursement.categoryId || '',
-      itemDescription: reimbursement.itemDescription,
       amount: reimbursement.amount,
       date: reimbursement.date,
       receiptUrl: reimbursement.receiptUrl || '',
@@ -420,7 +418,6 @@ const ReimbursementManager: React.FC = () => {
       projectId: '',
       vendorId: '',
       categoryId: '',
-      itemDescription: '',
       amount: '',
       date: new Date().toISOString().split('T')[0],
       receiptUrl: '',
@@ -440,7 +437,6 @@ const ReimbursementManager: React.FC = () => {
     // Clear only the fields that typically change between reimbursements
     setFormData({
       ...formData,
-      itemDescription: '',
       amount: '',
       date: new Date().toISOString().split('T')[0],
       receiptUrl: '',
@@ -661,7 +657,7 @@ const ReimbursementManager: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Category (Optional)
+                      Category *
                     </label>
                     <select
                       value={showAddCategoryInput ? 'add-new' : formData.categoryId}
@@ -675,8 +671,9 @@ const ReimbursementManager: React.FC = () => {
                         }
                       }}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+                      required
                     >
-                      <option value="">No Category</option>
+                      <option value="">Select Category</option>
                       {(() => {
                         const { recentCategories, otherCategories } = getCategoriesOrganized();
                         return (
@@ -741,17 +738,6 @@ const ReimbursementManager: React.FC = () => {
                         </Button>
                       </div>
                     )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Item Description *
-                    </label>
-                    <Input
-                      value={formData.itemDescription}
-                      onChange={(e) => setFormData({ ...formData, itemDescription: e.target.value })}
-                      placeholder="e.g., Lumber, Paint, Tools"
-                      required
-                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
