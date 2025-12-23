@@ -132,19 +132,25 @@ export interface StaffMember {
 }
 
 // Task assignment for staff by admin
+export interface TaskAssignmentTask {
+  taskDescription: string;
+  taskId?: string; // Optional reference to task.id if assigned to a project task
+  notes?: string;
+}
+
+// Task assignment for staff by admin - one document per staff member per day per project
 export interface TaskAssignment {
   id: string;
   projectId: string;
   projectName: string;
   staffId: string; // References StaffMember.id
   staffName: string;
-  taskDescription: string;
-  taskId?: string; // Optional reference to task.id if assigned to a project task
+  tasks: TaskAssignmentTask[]; // Array of tasks for this assignment
   date: string; // YYYY-MM-DD format
   dailyRate: number; // Snapshot of rate at assignment time
-  notes?: string;
   createdBy: string; // Admin who assigned
   createdAt: any;
+  updatedAt?: any; // Updated when tasks are added/removed
 }
 
 // Pay period configuration

@@ -23,9 +23,24 @@ const StaffAssignmentsPage: React.FC = () => {
         where('date', '==', today)
       );
       const snapshot = await getDocs(assignmentsQuery);
-      const assignments = snapshot.docs.map(doc => doc.data());
+      const assignments = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          // Handle both old format (single task) and new format (tasks array)
+          tasks: data.tasks && Array.isArray(data.tasks) 
+            ? data.tasks 
+            : data.taskDescription 
+              ? [{ taskDescription: data.taskDescription, taskId: data.taskId, notes: data.notes }]
+              : []
+        };
+      });
       
-      setTodayAssignments(assignments.length);
+      // Count total tasks assigned today (sum of all tasks in all assignments)
+      const totalTasks = assignments.reduce((sum: number, a: any) => {
+        return sum + (a.tasks?.length || 0);
+      }, 0);
+      setTodayAssignments(totalTasks);
       
       // Calculate labor cost - only count each staff member's wage once per day
       const dailyWages = new Map<string, number>(); // key: staffId, value: dailyRate
