@@ -23,37 +23,10 @@ const StaffAssignmentsPage: React.FC = () => {
         where('date', '==', today)
       );
       const snapshot = await getDocs(assignmentsQuery);
-      const assignments = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          // Handle both old format (single task) and new format (tasks array)
-          tasks: data.tasks && Array.isArray(data.tasks) 
-            ? data.tasks 
-            : data.taskDescription 
-              ? [{ taskDescription: data.taskDescription, taskId: data.taskId, notes: data.notes }]
-              : []
-        };
-      });
+      const assignments = snapshot.docs.map(doc => doc.data());
       
-      // Count total tasks assigned today (sum of all tasks in all assignments)
-      const totalTasks = assignments.reduce((sum: number, a: any) => {
-        return sum + (a.tasks?.length || 0);
-      }, 0);
-      setTodayAssignments(totalTasks);
-      
-      // Calculate labor cost - only count each staff member's wage once per day
-      const dailyWages = new Map<string, number>(); // key: staffId, value: dailyRate
-      assignments.forEach((a: any) => {
-        const staffId = a.staffId || '';
-        const dailyRate = a.dailyRate || 0;
-        // Only add if we haven't seen this staff member yet today
-        if (!dailyWages.has(staffId)) {
-          dailyWages.set(staffId, dailyRate);
-        }
-      });
-      const todayCost = Array.from(dailyWages.values()).reduce((sum: number, rate: number) => sum + rate, 0);
-      setTodayLaborCost(todayCost);
+      setTodayAssignments(assignments.length);
+      setTodayLaborCost(assignments.reduce((sum: number, a: any) => sum + (a.dailyRate || 0), 0));
     } catch (error) {
       console.error('Error loading today stats:', error);
     }

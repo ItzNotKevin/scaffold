@@ -5,9 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { TaskAssignment, Reimbursement, StaffMember } from '../lib/types';
+import { updateProjectActualCost } from '../lib/projectCosts';
+import Input from '../components/ui/Input';
 
 interface ActivityLog {
   id: string;
@@ -52,6 +54,21 @@ const ActivityLogsPage: React.FC = () => {
   
   // Projects list for filtering
   const [projects, setProjects] = useState<Array<{id: string, name: string}>>([]);
+  
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editFormData, setEditFormData] = useState<{
+    staffId: string;
+    projectId: string;
+    date: string;
+    taskDescription?: string;
+    dailyRate?: number;
+    notes?: string;
+    itemDescription?: string;
+    amount?: number;
+    status?: 'pending' | 'approved' | 'rejected';
+  } | null>(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -142,41 +159,6 @@ const ActivityLogsPage: React.FC = () => {
     }
   };
 
-  // Get available months from activities
-  const availableMonths = useMemo(() => {
-    const monthsSet = new Set<string>();
-    activities.forEach(activity => {
-      if (activity.date) {
-        try {
-          const date = new Date(activity.date);
-          if (!isNaN(date.getTime())) {
-            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            monthsSet.add(monthKey);
-          }
-        } catch {
-          // Invalid date, skip
-        }
-      }
-    });
-    
-    // Convert to array and sort descending (most recent first)
-    return Array.from(monthsSet).sort((a, b) => {
-      if (a > b) return -1;
-      if (a < b) return 1;
-      return 0;
-    });
-  }, [activities]);
-
-  const formatMonthOption = (monthKey: string): string => {
-    try {
-      const [year, month] = monthKey.split('-');
-      const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    } catch {
-      return monthKey;
-    }
-  };
-
   // Filter and sort activities
   const filteredAndSortedActivities = useMemo(() => {
     let filtered = [...activities];
@@ -208,10 +190,9 @@ const ActivityLogsPage: React.FC = () => {
       filtered = filtered.filter(activity => {
         if (!activity.date) return false;
         try {
-          const date = new Date(activity.date);
-          if (isNaN(date.getTime())) return false;
-          const activityMonthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-          return activityMonthKey === monthFilter;
+          const activityDate = new Date(activity.date);
+          const activityMonth = activityDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+          return activityMonth === monthFilter;
         } catch {
           return false;
         }
@@ -268,6 +249,28 @@ const ActivityLogsPage: React.FC = () => {
     }
   };
 
+  // Generate list of unique months from activities
+  const availableMonths = useMemo(() => {
+    const monthSet = new Set<string>();
+    activities.forEach(activity => {
+      if (activity.date) {
+        try {
+          const date = new Date(activity.date);
+          const monthStr = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+          monthSet.add(monthStr);
+        } catch {
+          // Ignore invalid dates
+        }
+      }
+    });
+    // Sort months in descending order (most recent first)
+    return Array.from(monthSet).sort((a, b) => {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [activities]);
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -294,6 +297,114 @@ const ActivityLogsPage: React.FC = () => {
     } else {
       setSortField(field);
       setSortDirection('desc');
+    }
+  };
+
+  const handleStartEdit = (activity: ActivityLog) => {
+    setEditingId(activity.id);
+    const selectedStaff = staff.find(s => s.id === activity.staffId);
+    setEditFormData({
+      staffId: activity.staffId,
+      projectId: activity.projectId || '',
+      date: activity.date,
+      taskDescription: activity.taskDescription,
+      dailyRate: activity.dailyRate,
+      notes: undefined, // We don't have notes in ActivityLog, but we can add it
+      itemDescription: activity.itemDescription,
+      amount: activity.amount,
+      status: activity.status
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditFormData(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editFormData || !currentUser) return;
+
+    const activity = activities.find(a => a.id === editingId);
+    if (!activity) return;
+
+    try {
+      setSaving(true);
+
+      if (activity.type === 'assignment') {
+        // Validate assignment fields
+        if (!editFormData.staffId || !editFormData.taskDescription?.trim()) {
+          alert('Please fill in all required fields');
+          return;
+        }
+
+        const selectedStaff = staff.find(s => s.id === editFormData.staffId);
+        const selectedProject = projects.find(p => p.id === editFormData.projectId);
+
+        const updateData: any = {
+          staffId: editFormData.staffId,
+          staffName: selectedStaff?.name || activity.staffName,
+          projectId: editFormData.projectId || null,
+          projectName: selectedProject?.name || null,
+          date: editFormData.date,
+          taskDescription: editFormData.taskDescription.trim(),
+          dailyRate: typeof editFormData.dailyRate === 'number' ? editFormData.dailyRate : activity.dailyRate || 0,
+          updatedAt: serverTimestamp()
+        };
+
+        // Update assignment
+        await updateDoc(doc(db, 'taskAssignments', editingId), updateData);
+
+        // Update project costs if project changed
+        const oldProjectId = activity.projectId;
+        if (oldProjectId !== editFormData.projectId) {
+          if (oldProjectId) await updateProjectActualCost(oldProjectId);
+          if (editFormData.projectId) await updateProjectActualCost(editFormData.projectId);
+        } else if (editFormData.projectId) {
+          await updateProjectActualCost(editFormData.projectId);
+        }
+      } else if (activity.type === 'reimbursement') {
+        // Validate reimbursement fields
+        if (!editFormData.staffId || !editFormData.itemDescription?.trim() || !editFormData.amount || editFormData.amount <= 0) {
+          alert('Please fill in all required fields');
+          return;
+        }
+
+        const selectedStaff = staff.find(s => s.id === editFormData.staffId);
+        const selectedProject = projects.find(p => p.id === editFormData.projectId);
+
+        const updateData: any = {
+          staffId: editFormData.staffId,
+          staffName: selectedStaff?.name || activity.staffName,
+          projectId: editFormData.projectId || null,
+          projectName: selectedProject?.name || null,
+          date: editFormData.date,
+          itemDescription: editFormData.itemDescription.trim(),
+          amount: editFormData.amount,
+          status: editFormData.status || 'pending',
+          updatedAt: serverTimestamp()
+        };
+
+        // Update reimbursement
+        await updateDoc(doc(db, 'reimbursements', editingId), updateData);
+
+        // Update project costs if project changed
+        const oldProjectId = activity.projectId;
+        if (oldProjectId !== editFormData.projectId) {
+          if (oldProjectId) await updateProjectActualCost(oldProjectId);
+          if (editFormData.projectId) await updateProjectActualCost(editFormData.projectId);
+        } else if (editFormData.projectId) {
+          await updateProjectActualCost(editFormData.projectId);
+        }
+      }
+
+      // Reload data to reflect changes
+      await loadData();
+      handleCancelEdit();
+    } catch (error) {
+      console.error('Error updating activity:', error);
+      alert('Failed to update entry. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -341,22 +452,6 @@ const ActivityLogsPage: React.FC = () => {
         <Card className="p-4 sm:p-6">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Filters</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Month</label>
-              <select
-                value={monthFilter}
-                onChange={(e) => setMonthFilter(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
-              >
-                <option value="all">All Months</option>
-                {availableMonths.map(monthKey => (
-                  <option key={monthKey} value={monthKey}>
-                    {formatMonthOption(monthKey)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
               <select
@@ -428,6 +523,21 @@ const ActivityLogsPage: React.FC = () => {
             )}
           </div>
           
+          {/* Month Filter */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Month</label>
+            <select
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+            >
+              <option value="all">All Months</option>
+              {availableMonths.map(month => (
+                <option key={month} value={month}>{month}</option>
+              ))}
+            </select>
+          </div>
+          
           {/* Sort controls (when status filter is shown) */}
           {typeFilter === 'reimbursement' && (
             <div className="mt-4 pt-4 border-t border-gray-200">
@@ -469,60 +579,212 @@ const ActivityLogsPage: React.FC = () => {
               <p className="text-gray-400 text-xs mt-1">Try adjusting your filters</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {filteredAndSortedActivities.map((activity) => (
                 <div
                   key={activity.id}
-                  className="p-2.5 sm:p-3 bg-white border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                  className="p-3 sm:p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
+                  {editingId === activity.id && editFormData ? (
+                    // Edit Form
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           activity.type === 'assignment'
                             ? 'bg-blue-100 text-blue-800'
                             : 'bg-green-100 text-green-800'
                         }`}>
-                          {activity.type === 'assignment' ? '📋' : '💰'}
+                          {activity.type === 'assignment' ? '📋 Assignment' : '💰 Reimbursement'}
                         </span>
-                        {activity.status && (
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] sm:text-xs font-medium border ${getStatusColor(activity.status)}`}>
-                            {activity.status}
-                          </span>
-                        )}
-                        <span className="text-[10px] sm:text-xs text-gray-500">
-                          {formatDate(activity.date)}
-                        </span>
-                        {activity.type === 'assignment' && activity.dailyRate !== undefined && (
-                          <span className="text-[10px] sm:text-xs text-gray-600">
-                            Rate: <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
-                          </span>
-                        )}
-                        {activity.type === 'reimbursement' && activity.amount !== undefined && (
-                          <span className="text-[10px] sm:text-xs text-gray-600">
-                            <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
-                          </span>
-                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleSaveEdit}
+                            disabled={saving}
+                            size="sm"
+                            variant="outline"
+                          >
+                            {saving ? 'Saving...' : 'Save'}
+                          </Button>
+                          <Button
+                            onClick={handleCancelEdit}
+                            disabled={saving}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
                       
-                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                        <span className="font-medium text-gray-900 text-xs sm:text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Staff</label>
+                          <select
+                            value={editFormData.staffId}
+                            onChange={(e) => {
+                              const selectedStaff = staff.find(s => s.id === e.target.value);
+                              setEditFormData({
+                                ...editFormData, 
+                                staffId: e.target.value,
+                                // Auto-update daily rate if editing assignment and staff changed
+                                dailyRate: activity.type === 'assignment' && selectedStaff 
+                                  ? selectedStaff.dailyRate 
+                                  : editFormData.dailyRate
+                              });
+                            }}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          >
+                            {staff.map(s => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Project</label>
+                          <select
+                            value={editFormData.projectId}
+                            onChange={(e) => setEditFormData({...editFormData, projectId: e.target.value})}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">No Project</option>
+                            {projects.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                          <Input
+                            type="date"
+                            value={editFormData.date}
+                            onChange={(e) => setEditFormData({...editFormData, date: e.target.value})}
+                            className="text-sm"
+                          />
+                        </div>
+                        
+                        {activity.type === 'assignment' ? (
+                          <>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Daily Rate ($)</label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={editFormData.dailyRate || ''}
+                                onChange={(e) => setEditFormData({...editFormData, dailyRate: parseFloat(e.target.value) || 0})}
+                                className="text-sm"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Task Description</label>
+                              <Input
+                                value={editFormData.taskDescription || ''}
+                                onChange={(e) => setEditFormData({...editFormData, taskDescription: e.target.value})}
+                                className="text-sm"
+                                placeholder="Enter task description..."
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Amount ($)</label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={editFormData.amount || ''}
+                                onChange={(e) => setEditFormData({...editFormData, amount: parseFloat(e.target.value) || 0})}
+                                className="text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                              <select
+                                value={editFormData.status || 'pending'}
+                                onChange={(e) => setEditFormData({...editFormData, status: e.target.value as any})}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                              >
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                              </select>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Item Description</label>
+                              <Input
+                                value={editFormData.itemDescription || ''}
+                                onChange={(e) => setEditFormData({...editFormData, itemDescription: e.target.value})}
+                                className="text-sm"
+                                placeholder="Enter item description..."
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    // Display View
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            activity.type === 'assignment'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {activity.type === 'assignment' ? '📋 Assignment' : '💰 Reimbursement'}
+                          </span>
+                          {activity.status && (
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(activity.status)}`}>
+                              {activity.status}
+                            </span>
+                          )}
+                          <span className="text-xs sm:text-sm text-gray-500">
+                            {formatDate(activity.date)}
+                          </span>
+                        </div>
+                        <Button
+                          onClick={() => handleStartEdit(activity)}
+                          size="sm"
+                          variant="outline"
+                          className="text-xs"
+                        >
+                          Edit
+                        </Button>
+                      </div>
+                      
+                      <div className="mb-2">
+                        <p className="font-medium text-gray-900 text-sm sm:text-base">
                           {activity.staffName}
-                        </span>
-                        <span className="text-[10px] sm:text-xs text-gray-600 break-words">
+                        </p>
+                        <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
                           {activity.type === 'assignment' 
                             ? activity.taskDescription || activity.description
                             : activity.itemDescription || activity.description
                           }
-                        </span>
+                        </p>
                         {activity.projectName && (
-                          <span className="text-[10px] sm:text-xs text-gray-500 break-words">
-                            • {activity.projectName}
+                          <p className="text-xs text-gray-500 mt-1 break-words">
+                            Project: {activity.projectName}
+                          </p>
+                        )}
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
+                        {activity.type === 'assignment' && activity.dailyRate !== undefined && (
+                          <span>
+                            Rate: <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
+                          </span>
+                        )}
+                        {activity.type === 'reimbursement' && activity.amount !== undefined && (
+                          <span>
+                            Amount: <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
                           </span>
                         )}
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>

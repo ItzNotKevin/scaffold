@@ -19,20 +19,11 @@ export async function updateProjectActualCost(projectId: string): Promise<void> 
     const assignmentsSnapshot = await getDocs(assignmentsQuery);
     
     // Calculate total wages from task assignments
-    // Only count each staff member's wage once per day
-    const dailyWages = new Map<string, number>(); // key: `${staffId}_${date}`, value: dailyRate
+    let totalWages = 0;
     assignmentsSnapshot.forEach(doc => {
       const data = doc.data();
-      const staffId = data.staffId || '';
-      const date = data.date || '';
-      const dailyRate = Number(data.dailyRate) || 0;
-      const key = `${staffId}_${date}`;
-      // Only add if we haven't seen this staff member on this date yet
-      if (!dailyWages.has(key)) {
-        dailyWages.set(key, dailyRate);
-      }
+      totalWages += Number(data.dailyRate) || 0;
     });
-    const totalWages = Array.from(dailyWages.values()).reduce((sum, rate) => sum + rate, 0);
 
     // Get all approved reimbursements for this project
     const reimbursementsQuery = query(
@@ -134,21 +125,11 @@ export async function getProjectCostBreakdown(projectId: string): Promise<{
     );
     const assignmentsSnapshot = await getDocs(assignmentsQuery);
     
-    // Calculate total wages from task assignments
-    // Only count each staff member's wage once per day
-    const dailyWages = new Map<string, number>(); // key: `${staffId}_${date}`, value: dailyRate
+    let totalWages = 0;
     assignmentsSnapshot.forEach(doc => {
       const data = doc.data();
-      const staffId = data.staffId || '';
-      const date = data.date || '';
-      const dailyRate = Number(data.dailyRate) || 0;
-      const key = `${staffId}_${date}`;
-      // Only add if we haven't seen this staff member on this date yet
-      if (!dailyWages.has(key)) {
-        dailyWages.set(key, dailyRate);
-      }
+      totalWages += Number(data.dailyRate) || 0;
     });
-    const totalWages = Array.from(dailyWages.values()).reduce((sum, rate) => sum + rate, 0);
 
     // Get all approved reimbursements for this project
     const reimbursementsQuery = query(

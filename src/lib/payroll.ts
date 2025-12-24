@@ -90,22 +90,9 @@ export const getAssignmentsForPeriod = async (
 
 /**
  * Calculate total wages for a staff member in a period
- * Only counts wage once per day, even if staff has multiple tasks that day
  */
 export const calculateWages = (assignments: TaskAssignment[]): number => {
-  // Group by staffId and date, only count each staff member's wage once per day
-  const dailyWages = new Map<string, number>(); // key: `${staffId}_${date}`, value: dailyRate
-  
-  assignments.forEach(assignment => {
-    const key = `${assignment.staffId}_${assignment.date}`;
-    // Only add if we haven't seen this staff member on this date yet
-    if (!dailyWages.has(key)) {
-      dailyWages.set(key, assignment.dailyRate);
-    }
-  });
-  
-  // Sum all unique daily wages
-  return Array.from(dailyWages.values()).reduce((sum, rate) => sum + rate, 0);
+  return assignments.reduce((sum, assignment) => sum + assignment.dailyRate, 0);
 };
 
 /**

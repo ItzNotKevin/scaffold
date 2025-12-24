@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { collection, getDocs, query, where, addDoc, serverTimestamp, doc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, serverTimestamp, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import type { TaskAssignment } from '../lib/types';
@@ -129,33 +129,19 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
       const assignmentsSnapshot = await getDocs(assignmentsQuery);
       const assignmentsData = assignmentsSnapshot.docs.map(doc => {
         const data = doc.data();
-        
-        // Handle both old format (single task) and new format (tasks array)
-        let tasks: any[] = [];
-        if (data.tasks && Array.isArray(data.tasks)) {
-          // New format with tasks array
-          tasks = data.tasks;
-        } else if (data.taskDescription) {
-          // Old format - convert to new format
-          tasks = [{
-            taskDescription: data.taskDescription || '',
-            taskId: data.taskId || undefined,
-            notes: data.notes || undefined
-          }];
-        }
-        
         return {
           id: doc.id,
           projectId: data.projectId || '',
           projectName: data.projectName || 'Unknown Project',
           staffId: data.staffId || '',
           staffName: data.staffName || 'Unknown Staff',
-          tasks: tasks,
+          taskDescription: data.taskDescription || '',
+          taskId: data.taskId || undefined,
           date: data.date || selectedDate,
           dailyRate: typeof data.dailyRate === 'number' ? data.dailyRate : 0,
+          notes: data.notes || '',
           createdBy: data.createdBy || '',
-          createdAt: data.createdAt || null,
-          updatedAt: data.updatedAt || null
+          createdAt: data.createdAt || null
         } as TaskAssignment;
       });
       setAssignments(assignmentsData);
@@ -412,109 +398,55 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
     const errors: string[] = [];
 
     try {
-      // Create or update assignments - merge tasks into existing assignments per staff+project+date
+      // Create assignments
       for (const staffMember of validStaffMembers) {
-        try {
-          // Validate required fields
-          if (!staffMember.id || !staffMember.name) {
-            throw new Error(`Invalid staff member: missing id or name`);
-          }
-          if (!selectedProjectId) {
-            throw new Error(`Invalid project ID`);
-          }
-          if (!selectedDate) {
-            throw new Error(`Invalid date`);
-          }
-
-          // Prepare new tasks to add
-          const newTasks = taskDescriptions.map(taskInfo => {
+        for (const taskInfo of taskDescriptions) {
+          try {
+            // Validate required fields before creating
+            if (!staffMember.id || !staffMember.name) {
+              throw new Error(`Invalid staff member: missing id or name`);
+            }
             if (!taskInfo.description || taskInfo.description.trim() === '') {
               throw new Error(`Invalid task description`);
             }
-            
-            const task: any = {
-              taskDescription: taskInfo.description.trim()
-            };
-            
-            if (taskInfo.taskId) {
-              task.taskId = taskInfo.taskId;
+            if (!selectedProjectId) {
+              throw new Error(`Invalid project ID`);
             }
-            if (notes.trim()) {
-              task.notes = notes.trim();
+            if (!selectedDate) {
+              throw new Error(`Invalid date`);
             }
-            
-            return task;
-          });
 
-          // Check if assignment already exists for this staff+project+date combination
-          // Query by date (we already have this date selected) and filter in code to avoid index requirements
-          const existingAssignmentQuery = query(
-            collection(db, 'taskAssignments'),
-            where('date', '==', selectedDate)
-          );
-          const existingSnapshot = await getDocs(existingAssignmentQuery);
-          // Filter to find matching staff+project combination
-          const existingAssignmentDoc = existingSnapshot.docs.find(doc => {
-            const data = doc.data();
-            return data.staffId === staffMember.id && data.projectId === selectedProjectId;
-          });
-          
-          if (existingAssignmentDoc) {
-            // Update existing assignment - merge tasks
-            const existingData = existingAssignmentDoc.data();
-            // Handle both old format (single task) and new format (tasks array)
-            let existingTasks: any[] = [];
-            if (existingData.tasks && Array.isArray(existingData.tasks)) {
-              existingTasks = existingData.tasks;
-            } else if (existingData.taskDescription) {
-              // Old format - convert to new format
-              existingTasks = [{
-                taskDescription: existingData.taskDescription || '',
-                taskId: existingData.taskId || undefined,
-                notes: existingData.notes || undefined
-              }];
-            }
-            
-            // Merge new tasks with existing tasks (avoid duplicates by checking description)
-            const mergedTasks = [...existingTasks];
-            newTasks.forEach(newTask => {
-              // Only add if not already present (check by description)
-              if (!mergedTasks.some(t => t.taskDescription === newTask.taskDescription)) {
-                mergedTasks.push(newTask);
-              }
-            });
-            
-            await updateDoc(doc(db, 'taskAssignments', existingAssignmentDoc.id), {
-              tasks: mergedTasks,
-              updatedAt: serverTimestamp()
-            });
-            
-            createdAssignmentIds.push(existingAssignmentDoc.id);
-            assignmentCount += mergedTasks.length - existingTasks.length; // Count newly added tasks
-          } else {
-            // Create new assignment with tasks array
+            // Build assignment data, excluding undefined values
             const assignmentData: any = {
               projectId: selectedProjectId,
               projectName: project.name || 'Unknown Project',
               staffId: staffMember.id,
               staffName: staffMember.name,
-              tasks: newTasks,
+              taskDescription: taskInfo.description.trim(),
               date: selectedDate,
               dailyRate: typeof staffMember.dailyRate === 'number' ? staffMember.dailyRate : 0,
               createdBy: currentUser.uid,
               createdAt: serverTimestamp()
             };
 
+            // Only add optional fields if they have values
+            if (taskInfo.taskId) {
+              assignmentData.taskId = taskInfo.taskId;
+            }
+            if (notes.trim()) {
+              assignmentData.notes = notes.trim();
+            }
+
             console.log('Creating assignment:', assignmentData);
             const docRef = await addDoc(collection(db, 'taskAssignments'), assignmentData);
             createdAssignmentIds.push(docRef.id);
-            assignmentCount += newTasks.length;
+            assignmentCount++;
+          } catch (error: any) {
+            const errorMessage = error?.message || 'Unknown error';
+            const errorCode = error?.code || 'unknown';
+            console.error(`Error creating assignment for ${staffMember.name}:`, error);
+            errors.push(`${staffMember.name}: ${errorMessage} (${errorCode})`);
           }
-        } catch (error: any) {
-          const errorMessage = error?.message || 'Unknown error';
-          const errorCode = error?.code || 'unknown';
-          console.error(`Error creating/updating assignment for ${staffMember.name}:`, error);
-          errors.push(`${staffMember.name}: ${errorMessage} (${errorCode})`);
         }
       }
 
@@ -553,15 +485,12 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
         }
         
         // Show success message
-        // Only count each staff member's wage once per day, regardless of number of tasks
         const totalCost = validStaffMembers.reduce((sum, member) => {
           const rate = typeof member.dailyRate === 'number' ? member.dailyRate : 0;
-          return sum + rate; // Count each staff member once, not multiplied by tasks
+          return sum + (rate * taskDescriptions.length);
         }, 0);
 
-        const tasksAdded = assignmentCount;
-        const assignmentsUpdated = createdAssignmentIds.length;
-        let message = `✓ Successfully added ${tasksAdded} task(s) to ${assignmentsUpdated} assignment(s)\n${validStaffMembers.length} staff member(s)\nTotal cost: $${totalCost.toFixed(2)}`;
+        let message = `✓ Successfully created ${assignmentCount} assignment(s)\n${validStaffMembers.length} staff × ${taskDescriptions.length} task(s)\nTotal cost: $${totalCost.toFixed(2)}`;
         if (errors.length > 0) {
           message += `\n\nWarnings:\n${errors.join('\n')}`;
         }
@@ -589,47 +518,8 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
     }
   };
 
-  const handleDeleteTask = async (assignmentId: string, taskIndex: number) => {
-    const assignment = assignments.find(a => a.id === assignmentId);
-    if (!assignment || !assignment.tasks[taskIndex]) return;
-    
-    const task = assignment.tasks[taskIndex];
-    if (!confirm(`Are you sure you want to delete the task "${task.taskDescription}"?`)) return;
-
-    try {
-      const updatedTasks = assignment.tasks.filter((_, index) => index !== taskIndex);
-      
-      if (updatedTasks.length === 0) {
-        // If no tasks left, delete the entire assignment
-        await handleDeleteAssignment(assignmentId);
-        return;
-      }
-      
-      // Update assignment with remaining tasks
-      await updateDoc(doc(db, 'taskAssignments', assignmentId), {
-        tasks: updatedTasks,
-        updatedAt: serverTimestamp()
-      });
-      
-      // Update project costs
-      if (assignment.projectId) {
-        await updateProjectActualCost(assignment.projectId);
-      }
-      
-      await loadAssignments();
-      
-      // Notify parent component to refresh stats
-      if (onAssignmentCreated) {
-        onAssignmentCreated();
-      }
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      alert('Failed to delete task');
-    }
-  };
-
   const handleDeleteAssignment = async (assignmentId: string) => {
-    if (!confirm('Are you sure you want to delete this assignment and all its tasks?')) return;
+    if (!confirm('Are you sure you want to delete this assignment?')) return;
 
     try {
       // Get the assignment to find its projectId before deleting
@@ -673,18 +563,6 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
 
   const selectedStaff = staff.find(s => s.id === selectedStaffId);
   const selectedProject = projects.find(p => p.id === selectedProjectId);
-
-  // Calculate total daily labor cost - only count each staff member's wage once per day
-  const totalDailyLaborCost = useMemo(() => {
-    const dailyWages = new Map<string, number>(); // key: `${staffId}_${date}`, value: dailyRate
-    assignments.forEach(assignment => {
-      const key = `${assignment.staffId}_${assignment.date}`;
-      if (!dailyWages.has(key)) {
-        dailyWages.set(key, assignment.dailyRate);
-      }
-    });
-    return Array.from(dailyWages.values()).reduce((sum, rate) => sum + rate, 0);
-  }, [assignments]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -996,42 +874,21 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
               <div key={assignment.id} className="p-3 sm:p-4 bg-gray-50 rounded-xl border border-gray-100">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="font-medium text-gray-900 text-sm sm:text-base">{assignment.staffName}</p>
-                        <p className="text-xs sm:text-sm text-gray-600 mt-0.5">{assignment.projectName}</p>
-                      </div>
-                      <p className="text-xs text-gray-500 ml-4">
-                        ${assignment.dailyRate.toFixed(2)}/day
-                      </p>
-                    </div>
-                    
-                    {/* List all tasks */}
-                    <div className="space-y-2 mt-3">
-                      {assignment.tasks.map((task, taskIndex) => (
-                        <div key={taskIndex} className="flex items-start justify-between gap-2 pl-3 border-l-2 border-gray-300">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs sm:text-sm text-gray-800 break-words">{task.taskDescription}</p>
-                            {task.notes && (
-                              <p className="text-xs text-gray-500 mt-1 italic break-words">{task.notes}</p>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => handleDeleteTask(assignment.id, taskIndex)}
-                            className="text-red-600 hover:text-red-700 text-xs sm:text-sm ml-2 touch-manipulation px-2 py-1 rounded hover:bg-red-50 shrink-0"
-                            title="Delete this task"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="font-medium text-gray-900 text-sm sm:text-base">{assignment.staffName}</p>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-1">{assignment.projectName}</p>
+                    <p className="text-xs sm:text-sm text-gray-800 mt-2 break-words">{assignment.taskDescription}</p>
+                    {assignment.notes && (
+                      <p className="text-xs text-gray-500 mt-1 italic break-words">{assignment.notes}</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      Rate: ${assignment.dailyRate.toFixed(2)}/day
+                    </p>
                   </div>
                   <button
                     onClick={() => handleDeleteAssignment(assignment.id)}
                     className="text-red-600 hover:text-red-700 text-sm sm:ml-4 touch-manipulation min-h-[44px] px-3 py-2 rounded-lg hover:bg-red-50 self-start sm:self-auto"
                   >
-                    Delete All
+                    Delete
                   </button>
                 </div>
               </div>
@@ -1039,7 +896,7 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
             
             <div className="pt-3 border-t border-gray-200">
               <p className="text-sm font-medium text-gray-900">
-                Total Daily Labor Cost: ${totalDailyLaborCost.toFixed(2)}
+                Total Daily Labor Cost: ${assignments.reduce((sum, a) => sum + a.dailyRate, 0).toFixed(2)}
               </p>
             </div>
           </div>

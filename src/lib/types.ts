@@ -132,25 +132,19 @@ export interface StaffMember {
 }
 
 // Task assignment for staff by admin
-export interface TaskAssignmentTask {
-  taskDescription: string;
-  taskId?: string; // Optional reference to task.id if assigned to a project task
-  notes?: string;
-}
-
-// Task assignment for staff by admin - one document per staff member per day per project
 export interface TaskAssignment {
   id: string;
   projectId: string;
   projectName: string;
   staffId: string; // References StaffMember.id
   staffName: string;
-  tasks: TaskAssignmentTask[]; // Array of tasks for this assignment
+  taskDescription: string;
+  taskId?: string; // Optional reference to task.id if assigned to a project task
   date: string; // YYYY-MM-DD format
   dailyRate: number; // Snapshot of rate at assignment time
+  notes?: string;
   createdBy: string; // Admin who assigned
   createdAt: any;
-  updatedAt?: any; // Updated when tasks are added/removed
 }
 
 // Pay period configuration
@@ -189,33 +183,12 @@ export interface PendingUser {
 }
 
 // Reimbursement for materials bought by staff
-export interface Vendor {
-  id: string;
-  name: string;
-  createdAt: any;
-  updatedAt: any;
-  createdBy?: string;
-}
-
-export interface ExpenseCategory {
-  id: string;
-  name: string;
-  createdAt: any;
-  updatedAt: any;
-  lastUsed?: any; // Timestamp of when category was last used
-  createdBy?: string;
-}
-
 export interface Reimbursement {
   id: string;
   staffId: string;
   staffName: string;
   projectId?: string;
   projectName?: string;
-  vendorId?: string;
-  vendorName?: string;
-  categoryId?: string;
-  categoryName?: string;
   itemDescription: string;
   amount: number;
   date: string; // YYYY-MM-DD format

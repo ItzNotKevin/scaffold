@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/useAuth';
 import { updateProfile, updatePassword, updateEmail, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { compressImage } from '../lib/imageCompression';
 import { doc, updateDoc } from 'firebase/firestore';
 import { storage, db } from '../lib/firebase';
-import { compressImage } from '../lib/imageCompression';
 import Layout from '../components/Layout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -18,11 +18,11 @@ const ProfilePage: React.FC = () => {
   const { currentUser, userProfile, updateUserProfile } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const profileGalleryInputRef = useRef<HTMLInputElement>(null);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [compressProfilePicture, setCompressProfilePicture] = useState(true);
   const [profileLoadingTimeout, setProfileLoadingTimeout] = useState(false);
   
   // Profile form state
@@ -61,9 +61,14 @@ const ProfilePage: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file || !currentUser) return;
 
-    // Validate file type
+    // Validate file type and size
     if (!file.type.startsWith('image/')) {
       setError(t('profile.invalidFile'));
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      setError(t('profile.fileTooLarge'));
       return;
     }
 
@@ -81,15 +86,15 @@ const ProfilePage: React.FC = () => {
         }
       }
 
-      // Compress the image before upload
-      const compressedFile = await compressImage(file, {
-        maxSizeMB: 0.5, // Profile pictures can be smaller
-        maxWidthOrHeight: 800 // Profile pictures don't need to be huge
-      });
-
-      // Upload new compressed image
+      // Compress image if option is enabled
+      let fileToUpload = file;
+      if (compressProfilePicture && file.type.startsWith('image/')) {
+        fileToUpload = await compressImage(file);
+      }
+      
+      // Upload new image
       const imageRef = ref(storage, `profile-pictures/${currentUser.uid}/${Date.now()}`);
-      const snapshot = await uploadBytes(imageRef, compressedFile);
+      const snapshot = await uploadBytes(imageRef, fileToUpload);
       const downloadURL = await getDownloadURL(snapshot.ref);
 
       // Update user profile in Firestore
@@ -292,41 +297,30 @@ const ProfilePage: React.FC = () => {
               )}
             </div>
             <div className="flex flex-col space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <input
+                  type="checkbox"
+                  checked={compressProfilePicture}
+                  onChange={(e) => setCompressProfilePicture(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Compress image (faster upload, smaller file)</span>
+              </label>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="user"
                 onChange={handleImageUpload}
                 className="hidden"
               />
-              <input
-                ref={profileGalleryInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  variant="outline"
-                  size="sm"
-                  loading={loading}
-                  className="flex-1"
-                >
-                  📷 Take Photo
-                </Button>
-                <Button
-                  onClick={() => profileGalleryInputRef.current?.click()}
-                  variant="outline"
-                  size="sm"
-                  loading={loading}
-                  className="flex-1"
-                >
-                  🖼️ Choose from Library
-                </Button>
-              </div>
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                variant="outline"
+                size="sm"
+                loading={loading}
+              >
+                {profilePicture ? t('profile.changePicture') : t('profile.uploadPicture')}
+              </Button>
               {profilePicture && (
                 <Button
                   onClick={handleRemoveProfilePicture}

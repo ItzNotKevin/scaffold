@@ -7,8 +7,6 @@ import Layout from '../components/Layout';
 import AdminDashboard from '../components/AdminDashboard';
 import BackButton from '../components/ui/BackButton';
 import PageHeader from '../components/ui/PageHeader';
-import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -26,26 +24,6 @@ const Home: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
-  const [projectName, setProjectName] = useState('');
-  const [creating, setCreating] = useState(false);
-
-  // Load saved project name from localStorage when component mounts
-  useEffect(() => {
-    const savedName = localStorage.getItem('draftProjectName');
-    if (savedName) {
-      setProjectName(savedName);
-    }
-  }, []);
-
-  // Save project name to localStorage whenever it changes
-  useEffect(() => {
-    if (projectName.trim()) {
-      localStorage.setItem('draftProjectName', projectName);
-    } else {
-      localStorage.removeItem('draftProjectName');
-    }
-  }, [projectName]);
 
   const handleMenuClick = () => {
     // No company selection needed - just refresh
@@ -87,25 +65,17 @@ const Home: React.FC = () => {
     }
   };
 
-  const handleNewProject = () => {
-    // Open the modal (with saved name if available)
-    setShowNewProjectModal(true);
-  };
-
-  const handleCreateProject = async (e?: React.FormEvent) => {
-    if (e) {
-      e.preventDefault();
-    }
+  const handleNewProject = async () => {
+    // Prompt for project name
+    const projectName = prompt('Enter project name:');
     
-    const trimmedName = projectName.trim();
-    
-    // If empty name, don't create project
-    if (!trimmedName) {
+    // If user cancelled or entered empty name, don't create project
+    if (!projectName || projectName.trim() === '') {
       return;
     }
 
     try {
-      setCreating(true);
+      const trimmedName = projectName.trim();
       const newProjectRef = doc(collection(db, 'projects'));
       const newProject = {
         id: newProjectRef.id,
@@ -134,12 +104,6 @@ const Home: React.FC = () => {
         const savedData = docSnapshot.data();
         // Update local state with the actual saved data
         setProjects(prev => [...prev, { id: newProjectRef.id, ...savedData }]);
-        
-        // Clear the saved project name from localStorage
-        localStorage.removeItem('draftProjectName');
-        setProjectName('');
-        setShowNewProjectModal(false);
-        
         // Navigate after confirming the document exists
         navigate(`/project/${newProjectRef.id}`);
       } else {
@@ -148,15 +112,7 @@ const Home: React.FC = () => {
     } catch (error) {
       console.error('Error creating project:', error);
       alert('Failed to create project. Please try again.');
-    } finally {
-      setCreating(false);
     }
-  };
-
-  const handleCloseModal = () => {
-    // Don't clear the project name, just close the modal
-    // The name will persist in localStorage
-    setShowNewProjectModal(false);
   };
 
   const handleDeleteProject = async (projectId: string) => {
@@ -228,62 +184,6 @@ const Home: React.FC = () => {
           onNavigateToProject={handleNavigateToProject}
           permissions={permissions}
         />
-
-        {/* New Project Modal */}
-        {showNewProjectModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl max-w-md w-full">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Create New Project</h2>
-                <button
-                  onClick={handleCloseModal}
-                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <form onSubmit={handleCreateProject} className="p-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Project Name *
-                    </label>
-                    <Input
-                      type="text"
-                      value={projectName}
-                      onChange={(e) => setProjectName(e.target.value)}
-                      placeholder="Enter project name"
-                      required
-                      autoFocus
-                    />
-                  </div>
-                  
-                  <div className="flex gap-3 pt-2">
-                    <Button
-                      type="button"
-                      onClick={handleCloseModal}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      loading={creating}
-                      disabled={!projectName.trim()}
-                      className="flex-1"
-                    >
-                      Create Project
-                    </Button>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
     </Layout>
   );

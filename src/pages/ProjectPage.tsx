@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot, getDocs, deleteDoc } from 'firebase/firestore';
@@ -11,7 +11,7 @@ import { getProjectCostBreakdown, updateProjectActualCost } from '../lib/project
 import { compressImage } from '../lib/imageCompression';
 import DailyReportForm from '../components/DailyReportForm';
 import DailyReportList from '../components/DailyReportList';
-import type { DailyReport, ExpenseCategory } from '../lib/types';
+import type { DailyReport } from '../lib/types';
 
 const phases = ['Sales','Contract','Materials','Construction','Completion'] as const;
 type Phase = typeof phases[number];
@@ -72,9 +72,7 @@ interface Expense {
   projectId: string;
   description: string;
   amount: number;
-  category?: 'materials' | 'labor' | 'equipment' | 'permits' | 'utilities' | 'other'; // Legacy field
-  categoryId?: string;
-  categoryName?: string;
+  category: 'materials' | 'labor' | 'equipment' | 'permits' | 'utilities' | 'other';
   date: any;
   userId: string;
   userName?: string;
@@ -125,9 +123,8 @@ const ProjectPage: React.FC = () => {
   const [photosLoading, setPhotosLoading] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
-  const photoCameraInputRef = useRef<HTMLInputElement>(null);
-  const photoGalleryInputRef = useRef<HTMLInputElement>(null);
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
+  const [compressPhotos, setCompressPhotos] = useState(true);
   
   // Daily Reports state
   const [showDailyReportForm, setShowDailyReportForm] = useState(false);
@@ -155,11 +152,7 @@ const ProjectPage: React.FC = () => {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
-  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
-  const [newExpenseCategoryId, setNewExpenseCategoryId] = useState<string>('');
-  const [showAddCategoryInput, setShowAddCategoryInput] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [savingCategory, setSavingCategory] = useState(false);
+  const [newExpenseCategory, setNewExpenseCategory] = useState<'materials' | 'labor' | 'equipment' | 'permits' | 'utilities' | 'other'>('materials');
   const [newExpenseDescription, setNewExpenseDescription] = useState('');
   const [newExpenseAmount, setNewExpenseAmount] = useState<number>(0);
   const [newExpenseDate, setNewExpenseDate] = useState<string>('');
@@ -193,103 +186,6 @@ const ProjectPage: React.FC = () => {
     };
     load();
   }, [id]);
-
-  // Fetch categories
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const categorySnapshot = await getDocs(collection(db, 'expenseCategories'));
-        const categoryData = categorySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as ExpenseCategory));
-        setCategories(categoryData);
-      } catch (error) {
-        console.error('Error loading categories:', error);
-      }
-    };
-    fetchCategories();
-  }, []);
-
-  const updateCategoryLastUsed = async (categoryId: string) => {
-    try {
-      await updateDoc(doc(db, 'expenseCategories', categoryId), {
-        lastUsed: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-      // Refresh categories to reflect the updated lastUsed
-      const categorySnapshot = await getDocs(collection(db, 'expenseCategories'));
-      const categoryData = categorySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as ExpenseCategory));
-      setCategories(categoryData);
-    } catch (error) {
-      console.error('Error updating category last used:', error);
-    }
-  };
-
-  const handleAddCategory = async () => {
-    if (!newCategoryName.trim() || !currentUser) return;
-
-    try {
-      setSavingCategory(true);
-      const categoryRef = await addDoc(collection(db, 'expenseCategories'), {
-        name: newCategoryName.trim(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastUsed: serverTimestamp(),
-        createdBy: currentUser.uid
-      });
-      
-      // Refresh categories list
-      const categorySnapshot = await getDocs(collection(db, 'expenseCategories'));
-      const categoryData = categorySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as ExpenseCategory));
-      setCategories(categoryData);
-      
-      // Select the newly added category
-      setNewExpenseCategoryId(categoryRef.id);
-      
-      // Reset add category UI
-      setNewCategoryName('');
-      setShowAddCategoryInput(false);
-    } catch (error) {
-      console.error('Error adding category:', error);
-      alert('Failed to add category. Please try again.');
-    } finally {
-      setSavingCategory(false);
-    }
-  };
-
-  // Get recently used categories (top 3) and all others
-  const getCategoriesOrganized = () => {
-    const categoriesWithLastUsed = categories
-      .filter(cat => cat.lastUsed)
-      .sort((a, b) => {
-        try {
-          const aTime = a.lastUsed && typeof a.lastUsed === 'object' && 'toMillis' in a.lastUsed
-            ? (a.lastUsed as any).toMillis()
-            : new Date(a.lastUsed as any).getTime();
-          const bTime = b.lastUsed && typeof b.lastUsed === 'object' && 'toMillis' in b.lastUsed
-            ? (b.lastUsed as any).toMillis()
-            : new Date(b.lastUsed as any).getTime();
-          return bTime - aTime;
-        } catch {
-          return 0;
-        }
-      })
-      .slice(0, 3);
-    
-    const recentIds = new Set(categoriesWithLastUsed.map(c => c.id));
-    const otherCategories = categories
-      .filter(cat => !recentIds.has(cat.id))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    
-    return { recentCategories: categoriesWithLastUsed, otherCategories };
-  };
 
   // Fetch expenses with real-time updates
   useEffect(() => {
@@ -1006,17 +902,9 @@ ${reportData.isOverBudget
 
     setSubmittingExpense(true);
     try {
-      const selectedCategory = categories.find(c => c.id === newExpenseCategoryId);
-      
-      // Update category lastUsed if a category is selected
-      if (newExpenseCategoryId && selectedCategory) {
-        await updateCategoryLastUsed(newExpenseCategoryId);
-      }
-
       await addDoc(collection(db, 'expenses'), {
         projectId: id,
-        categoryId: newExpenseCategoryId || null,
-        categoryName: selectedCategory?.name || null,
+        category: newExpenseCategory,
         description: newExpenseDescription.trim(),
         amount: newExpenseAmount,
         date: newExpenseDate ? new Date(newExpenseDate) : new Date(),
@@ -1033,13 +921,11 @@ ${reportData.isOverBudget
       await loadCostBreakdown();
 
       // Reset form
-      setNewExpenseCategoryId('');
+      setNewExpenseCategory('materials');
       setNewExpenseDescription('');
       setNewExpenseAmount(0);
       setNewExpenseDate('');
       setShowExpenseForm(false);
-      setShowAddCategoryInput(false);
-      setNewCategoryName('');
       
       showProjectNotification('Expense added successfully', projectName);
     } catch (error) {
@@ -1434,30 +1320,30 @@ ${reportData.isOverBudget
         const file = validFiles[i];
         console.log('Processing file:', file.name, 'Size:', file.size, 'Type:', file.type);
         
+        // Compress image if option is enabled
+        let fileToUpload = file;
+        if (compressPhotos && file.type.startsWith('image/')) {
+          fileToUpload = await compressImage(file);
+        }
+        
         // Update progress
         setUploadProgress({current: i, total: validFiles.length});
         
         try {
-          // Compress the image before upload
-          const compressedFile = await compressImage(file, {
-            maxSizeMB: 1,
-            maxWidthOrHeight: 1920
-          });
-          
           // Create unique filename
           const timestamp = Date.now();
-          const fileName = `${timestamp}_${compressedFile.name}`;
+          const fileName = `${timestamp}_${fileToUpload.name}`;
           const photoRef = ref(storage, `projects/${id}/photos/${fileName}`);
           console.log('Uploading to:', photoRef.fullPath);
           console.log('File details for upload:', {
-            name: compressedFile.name,
-            size: compressedFile.size,
-            type: compressedFile.type,
-            originalSize: file.size
+            name: fileToUpload.name,
+            size: fileToUpload.size,
+            type: fileToUpload.type,
+            lastModified: fileToUpload.lastModified
           });
           
           // Add individual file timeout
-          const uploadPromise = uploadBytes(photoRef, compressedFile, {
+          const uploadPromise = uploadBytes(photoRef, fileToUpload, {
             customMetadata: {
               uploadedBy: currentUser.uid,
               uploadedAt: new Date().toISOString()
@@ -1465,16 +1351,16 @@ ${reportData.isOverBudget
           });
           
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`Upload timeout for ${file.name}`)), 120000) // 2 minutes
+            setTimeout(() => reject(new Error(`Upload timeout for ${fileToUpload.name}`)), 120000) // 2 minutes
           );
           
-          console.log('Starting upload for:', compressedFile.name, `(${(compressedFile.size / (1024 * 1024)).toFixed(2)}MB)`);
+          console.log('Starting upload for:', fileToUpload.name, `(${(fileToUpload.size / (1024 * 1024)).toFixed(2)}MB)`);
           
           // Add upload progress monitoring
           const startTime = Date.now();
           const progressInterval = setInterval(() => {
             const elapsed = Date.now() - startTime;
-            console.log(`Upload in progress for ${file.name}: ${Math.round(elapsed / 1000)}s elapsed`);
+            console.log(`Upload in progress for ${fileToUpload.name}: ${Math.round(elapsed / 1000)}s elapsed`);
           }, 10000); // Log every 10 seconds
           
           try {
@@ -1482,7 +1368,7 @@ ${reportData.isOverBudget
             const snapshot = await Promise.race([uploadPromise, timeoutPromise]);
             clearInterval(progressInterval);
             const uploadTime = Date.now() - startTime;
-            console.log('Upload successful for:', file.name, `in ${Math.round(uploadTime / 1000)}s`, 'Snapshot:', snapshot);
+            console.log('Upload successful for:', fileToUpload.name, `in ${Math.round(uploadTime / 1000)}s`, 'Snapshot:', snapshot);
             successCount++;
           } catch (error) {
             clearInterval(progressInterval);
@@ -2002,55 +1888,35 @@ ${reportData.isOverBudget
                           <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
-                          <div className="mt-4 space-y-3">
-                            <div className="flex flex-col sm:flex-row gap-2">
-                              <Button
-                                type="button"
-                                onClick={() => photoCameraInputRef.current?.click()}
-                                disabled={uploadingPhoto}
-                                variant="outline"
-                                className="flex-1"
-                              >
-                                📷 Take Photo
-                              </Button>
-                              <Button
-                                type="button"
-                                onClick={() => photoGalleryInputRef.current?.click()}
-                                disabled={uploadingPhoto}
-                                variant="outline"
-                                className="flex-1"
-                              >
-                                🖼️ Choose from Library
-                              </Button>
+                          <div className="mt-4">
+                            <div className="mb-3">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={compressPhotos}
+                                  onChange={(e) => setCompressPhotos(e.target.checked)}
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700">Compress images (faster upload, smaller files)</span>
+                              </label>
                             </div>
+                            <label htmlFor="photo-upload" className="cursor-pointer">
+                              <span className="mt-2 block text-sm font-medium text-gray-900">
+                                {uploadingPhoto ? 'Uploading...' : 'Click to upload photos'}
+                              </span>
+                              <span className="mt-1 block text-xs text-gray-500">
+                                PNG, JPG, GIF up to 10MB each
+                              </span>
+                            </label>
                             <input
-                              ref={photoCameraInputRef}
+                              id="photo-upload"
                               type="file"
                               multiple
                               accept="image/*"
-                              capture="environment"
                               onChange={handlePhotoUpload}
                               disabled={uploadingPhoto}
                               className="hidden"
                             />
-                            <input
-                              ref={photoGalleryInputRef}
-                              type="file"
-                              multiple
-                              accept="image/*"
-                              onChange={handlePhotoUpload}
-                              disabled={uploadingPhoto}
-                              className="hidden"
-                            />
-                            <p className="text-xs text-gray-500 text-center">
-                              PNG, JPG, GIF up to 10MB each
-                            </p>
-                            {uploadingPhoto && (
-                              <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                                <span>Uploading...</span>
-                              </div>
-                            )}
                           </div>
                         </>
                       ) : (
@@ -3042,85 +2908,19 @@ ${reportData.isOverBudget
             <div className="p-6">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Category (Optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                   <select
-                    value={showAddCategoryInput ? 'add-new' : newExpenseCategoryId}
-                    onChange={(e) => {
-                      if (e.target.value === 'add-new') {
-                        setShowAddCategoryInput(true);
-                        setNewExpenseCategoryId('');
-                      } else {
-                        setNewExpenseCategoryId(e.target.value);
-                        setShowAddCategoryInput(false);
-                      }
-                    }}
+                    value={newExpenseCategory}
+                    onChange={(e) => setNewExpenseCategory(e.target.value as any)}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   >
-                    <option value="">No Category</option>
-                    {(() => {
-                      const { recentCategories, otherCategories } = getCategoriesOrganized();
-                      return (
-                        <>
-                          {recentCategories.length > 0 && (
-                            <optgroup label="Recently Used">
-                              {recentCategories.map(cat => (
-                                <option key={cat.id} value={cat.id}>{cat.name}</option>
-                              ))}
-                            </optgroup>
-                          )}
-                          {otherCategories.length > 0 && (
-                            <optgroup label="All Categories">
-                              {otherCategories.map(cat => (
-                                <option key={cat.id} value={cat.id}>{cat.name}</option>
-                              ))}
-                            </optgroup>
-                          )}
-                        </>
-                      );
-                    })()}
-                    <option value="add-new">+ Add New Category</option>
+                    <option value="materials">🔨 Materials</option>
+                    <option value="labor">👷 Labor</option>
+                    <option value="equipment">🚜 Equipment</option>
+                    <option value="permits">📋 Permits</option>
+                    <option value="utilities">⚡ Utilities</option>
+                    <option value="other">💰 Other</option>
                   </select>
-                  {showAddCategoryInput && (
-                    <div className="mt-2 flex gap-2">
-                      <input
-                        type="text"
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                        placeholder="Category name"
-                        className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddCategory();
-                          } else if (e.key === 'Escape') {
-                            setShowAddCategoryInput(false);
-                            setNewCategoryName('');
-                            setNewExpenseCategoryId('');
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddCategory}
-                        disabled={savingCategory || !newCategoryName.trim()}
-                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
-                      >
-                        {savingCategory ? 'Saving...' : 'Add'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAddCategoryInput(false);
-                          setNewCategoryName('');
-                          setNewExpenseCategoryId('');
-                        }}
-                        className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors min-w-[80px]"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>

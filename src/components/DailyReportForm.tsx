@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { storage, db } from '../lib/firebase';
@@ -27,6 +27,7 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [compressPhotos, setCompressPhotos] = useState(true);
   
   // Form state
   const [reportDate, setReportDate] = useState(
@@ -57,8 +58,6 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
   const [uploadedPhotos, setUploadedPhotos] = useState<DailyReportPhoto[]>(
     existingReport?.photos || []
   );
-  const dailyReportCameraInputRef = useRef<HTMLInputElement>(null);
-  const dailyReportGalleryInputRef = useRef<HTMLInputElement>(null);
   const [notes, setNotes] = useState(existingReport?.notes || '');
   const [issues, setIssues] = useState<IssueEntry[]>(
     existingReport?.issues || []
@@ -246,19 +245,19 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
     setLoading(true);
     try {
       const uploadPromises = Array.from(files).map(async (file) => {
-        // Compress the image before upload
-        const compressedFile = await compressImage(file, {
-          maxSizeMB: 1,
-          maxWidthOrHeight: 1920
-        });
+        // Compress image if option is enabled
+        let fileToUpload = file;
+        if (compressPhotos && file.type.startsWith('image/')) {
+          fileToUpload = await compressImage(file);
+        }
         
-        const storageRef = ref(storage, `daily-reports/${projectId}/${Date.now()}-${compressedFile.name}`);
-        const snapshot = await uploadBytes(storageRef, compressedFile);
+        const storageRef = ref(storage, `daily-reports/${projectId}/${Date.now()}-${fileToUpload.name}`);
+        const snapshot = await uploadBytes(storageRef, fileToUpload);
         const url = await getDownloadURL(snapshot.ref);
         return {
           id: Date.now().toString() + Math.random(),
           url,
-          caption: compressedFile.name,
+          caption: file.name,
           category: 'general' as const,
           uploadedAt: new Date()
         } as DailyReportPhoto;
@@ -856,41 +855,24 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
       {/* Photos */}
       <Card className="p-4">
         <h3 className="text-lg font-medium mb-3">Photos</h3>
-        <div className="flex flex-col sm:flex-row gap-2 mb-2">
-          <input
-            ref={dailyReportCameraInputRef}
-            type="file"
-            multiple
-            accept="image/*"
-            capture="environment"
-            onChange={(e) => e.target.files && handlePhotoUpload(e.target.files)}
-            className="hidden"
-          />
-          <input
-            ref={dailyReportGalleryInputRef}
-            type="file"
-            multiple
-            accept="image/*"
-            onChange={(e) => e.target.files && handlePhotoUpload(e.target.files)}
-            className="hidden"
-          />
-          <Button
-            type="button"
-            onClick={() => dailyReportCameraInputRef.current?.click()}
-            variant="outline"
-            className="flex-1"
-          >
-            📷 Take Photo
-          </Button>
-          <Button
-            type="button"
-            onClick={() => dailyReportGalleryInputRef.current?.click()}
-            variant="outline"
-            className="flex-1"
-          >
-            🖼️ Choose from Library
-          </Button>
+        <div className="mb-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={compressPhotos}
+              onChange={(e) => setCompressPhotos(e.target.checked)}
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">Compress images (faster upload, smaller files)</span>
+          </label>
         </div>
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          onChange={(e) => e.target.files && handlePhotoUpload(e.target.files)}
+          className="w-full p-2 border border-gray-300 rounded-md"
+        />
         
         {uploadedPhotos.length > 0 && (
           <div className="mt-4">
