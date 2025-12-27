@@ -200,6 +200,21 @@ export interface Reimbursement {
   updatedAt: any;
 }
 
+// Project photo entry with description
+export interface ProjectPhotoEntry {
+  id: string;
+  projectId: string;
+  projectName: string;
+  photoUrl: string; // URL to photo in Firebase Storage
+  photoName: string; // Original filename
+  description: string;
+  date: string; // YYYY-MM-DD format
+  uploadedBy: string; // User ID
+  uploadedByName: string; // User name
+  createdAt: any;
+  updatedAt: any;
+}
+
 export interface Feedback {
   id: string;
   projectId: string;

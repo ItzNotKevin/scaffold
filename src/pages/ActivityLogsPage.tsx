@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import { collection, getDocs, query, orderBy, where, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { TaskAssignment, Reimbursement, StaffMember } from '../lib/types';
 import { updateProjectActualCost } from '../lib/projectCosts';
@@ -13,10 +13,10 @@ import Input from '../components/ui/Input';
 
 interface ActivityLog {
   id: string;
-  type: 'assignment' | 'reimbursement';
+  type: 'assignment' | 'reimbursement' | 'photo';
   date: string;
-  staffId: string;
-  staffName: string;
+  staffId?: string;
+  staffName?: string;
   projectId?: string;
   projectName?: string;
   description: string;
@@ -28,6 +28,9 @@ interface ActivityLog {
   // Reimbursement-specific
   itemDescription?: string;
   status?: 'pending' | 'approved' | 'rejected';
+  // Photo-specific
+  photoUrl?: string;
+  uploadedByName?: string;
 }
 
 type SortField = 'date' | 'amount' | 'staffName' | 'projectName';
@@ -42,11 +45,12 @@ const ActivityLogsPage: React.FC = () => {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   
   // Filters
-  const [typeFilter, setTypeFilter] = useState<'all' | 'assignment' | 'reimbursement'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'assignment' | 'reimbursement' | 'photo'>('all');
   const [staffFilter, setStaffFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [monthFilter, setMonthFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Sorting
   const [sortField, setSortField] = useState<SortField>('date');
@@ -59,7 +63,7 @@ const ActivityLogsPage: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editFormData, setEditFormData] = useState<{
-    staffId: string;
+    staffId?: string;
     projectId: string;
     date: string;
     taskDescription?: string;
@@ -68,6 +72,7 @@ const ActivityLogsPage: React.FC = () => {
     itemDescription?: string;
     amount?: number;
     status?: 'pending' | 'approved' | 'rejected';
+    description?: string; // For photos
   } | null>(null);
 
   useEffect(() => {
@@ -143,8 +148,29 @@ const ActivityLogsPage: React.FC = () => {
         };
       });
       
+      // Load project photos
+      const photosQuery = query(
+        collection(db, 'projectPhotos'),
+        orderBy('createdAt', 'desc')
+      );
+      const photosSnapshot = await getDocs(photosQuery);
+      const photosData: ActivityLog[] = photosSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: 'photo',
+          date: data.date || '',
+          projectId: data.projectId || '',
+          projectName: data.projectName || 'Unknown Project',
+          description: data.description || '',
+          photoUrl: data.photoUrl || '',
+          uploadedByName: data.uploadedByName || 'Unknown User',
+          createdAt: data.createdAt
+        };
+      });
+      
       // Combine and sort by creation date
-      const allActivities = [...assignmentsData, ...reimbursementsData];
+      const allActivities = [...assignmentsData, ...reimbursementsData, ...photosData];
       allActivities.sort((a, b) => {
         const aTime = a.createdAt?.toMillis?.() || a.createdAt || 0;
         const bTime = b.createdAt?.toMillis?.() || b.createdAt || 0;
@@ -159,6 +185,28 @@ const ActivityLogsPage: React.FC = () => {
     }
   };
 
+  // Helper functions for formatting (used in search filter)
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  };
+
   // Filter and sort activities
   const filteredAndSortedActivities = useMemo(() => {
     let filtered = [...activities];
@@ -168,9 +216,11 @@ const ActivityLogsPage: React.FC = () => {
       filtered = filtered.filter(activity => activity.type === typeFilter);
     }
     
-    // Apply staff filter
+    // Apply staff filter (photos don't have staff, so exclude them when filtering by staff)
     if (staffFilter !== 'all') {
-      filtered = filtered.filter(activity => activity.staffId === staffFilter);
+      filtered = filtered.filter(activity => 
+        activity.type !== 'photo' && activity.staffId === staffFilter
+      );
     }
     
     // Apply project filter
@@ -196,6 +246,81 @@ const ActivityLogsPage: React.FC = () => {
         } catch {
           return false;
         }
+      });
+    }
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(activity => {
+        // Search in description
+        const description = activity.description?.toLowerCase() || '';
+        if (description.includes(query)) return true;
+        
+        // Search in task description (for assignments)
+        const taskDescription = activity.taskDescription?.toLowerCase() || '';
+        if (taskDescription.includes(query)) return true;
+        
+        // Search in item description (for reimbursements)
+        const itemDescription = activity.itemDescription?.toLowerCase() || '';
+        if (itemDescription.includes(query)) return true;
+        
+        // Search in staff name
+        const staffName = activity.staffName?.toLowerCase() || '';
+        if (staffName.includes(query)) return true;
+        
+        // Search in project name
+        const projectName = activity.projectName?.toLowerCase() || '';
+        if (projectName.includes(query)) return true;
+        
+        // Search in uploaded by name (for photos)
+        const uploadedByName = activity.uploadedByName?.toLowerCase() || '';
+        if (uploadedByName.includes(query)) return true;
+        
+        // Search in amount (convert to string)
+        if (activity.amount !== undefined) {
+          const amountStr = activity.amount.toString();
+          if (amountStr.includes(query)) return true;
+          // Also check formatted currency
+          const formattedAmount = formatCurrency(activity.amount).toLowerCase();
+          if (formattedAmount.includes(query)) return true;
+        }
+        
+        // Search in daily rate (for assignments)
+        if (activity.dailyRate !== undefined) {
+          const dailyRateStr = activity.dailyRate.toString();
+          if (dailyRateStr.includes(query)) return true;
+          // Also check formatted currency
+          const formattedRate = formatCurrency(activity.dailyRate).toLowerCase();
+          if (formattedRate.includes(query)) return true;
+        }
+        
+        // Search in date (try multiple formats)
+        if (activity.date) {
+          try {
+            const date = new Date(activity.date);
+            // Check formatted date string
+            const dateStr = formatDate(activity.date).toLowerCase();
+            if (dateStr.includes(query)) return true;
+            
+            // Check ISO date string
+            const isoDate = activity.date.toLowerCase();
+            if (isoDate.includes(query)) return true;
+            
+            // Check month/year format
+            const monthYear = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toLowerCase();
+            if (monthYear.includes(query)) return true;
+            
+            // Check full date string
+            const fullDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase();
+            if (fullDate.includes(query)) return true;
+          } catch {
+            // If date parsing fails, just check the raw date string
+            if (activity.date.toLowerCase().includes(query)) return true;
+          }
+        }
+        
+        return false;
       });
     }
     
@@ -233,21 +358,7 @@ const ActivityLogsPage: React.FC = () => {
     });
     
     return filtered;
-  }, [activities, typeFilter, staffFilter, projectFilter, statusFilter, monthFilter, sortField, sortDirection]);
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    } catch {
-      return dateString;
-    }
-  };
+  }, [activities, typeFilter, staffFilter, projectFilter, statusFilter, monthFilter, searchQuery, sortField, sortDirection]);
 
   // Generate list of unique months from activities
   const availableMonths = useMemo(() => {
@@ -270,13 +381,6 @@ const ActivityLogsPage: React.FC = () => {
       return dateB.getTime() - dateA.getTime();
     });
   }, [activities]);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
 
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -312,13 +416,61 @@ const ActivityLogsPage: React.FC = () => {
       notes: undefined, // We don't have notes in ActivityLog, but we can add it
       itemDescription: activity.itemDescription,
       amount: activity.amount,
-      status: activity.status
+      status: activity.status,
+      description: activity.description // For photos
     });
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
     setEditFormData(null);
+  };
+
+  const handleDelete = async () => {
+    if (!editingId || !currentUser) return;
+
+    const activity = activities.find(a => a.id === editingId);
+    if (!activity) return;
+
+    if (!confirm(`Are you sure you want to delete this ${activity.type}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      if (activity.type === 'assignment') {
+        // Delete assignment
+        await deleteDoc(doc(db, 'taskAssignments', editingId));
+
+        // Update project costs if project exists
+        if (activity.projectId) {
+          await updateProjectActualCost(activity.projectId);
+        }
+      } else if (activity.type === 'reimbursement') {
+        // Delete reimbursement
+        await deleteDoc(doc(db, 'reimbursements', editingId));
+
+        // Update project costs if project exists
+        if (activity.projectId) {
+          await updateProjectActualCost(activity.projectId);
+        }
+      } else if (activity.type === 'photo') {
+        // Delete photo entry
+        await deleteDoc(doc(db, 'projectPhotos', editingId));
+        // Note: Photo file in storage is not deleted to avoid breaking references
+        // If you want to delete the file too, you'd need to use Firebase Storage deleteObject
+      }
+
+      // Reload data to reflect changes
+      await loadData();
+      handleCancelEdit();
+    } catch (error) {
+      console.error('Error deleting activity:', error);
+      alert('Failed to delete entry. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -395,6 +547,26 @@ const ActivityLogsPage: React.FC = () => {
         } else if (editFormData.projectId) {
           await updateProjectActualCost(editFormData.projectId);
         }
+      } else if (activity.type === 'photo') {
+        // Validate photo fields
+        if (!editFormData.description?.trim() || !editFormData.projectId) {
+          alert('Please fill in all required fields (description and project)');
+          setSaving(false);
+          return;
+        }
+
+        const selectedProject = projects.find(p => p.id === editFormData.projectId);
+
+        const updateData: any = {
+          projectId: editFormData.projectId,
+          projectName: selectedProject?.name || activity.projectName,
+          date: editFormData.date,
+          description: editFormData.description.trim(),
+          updatedAt: serverTimestamp()
+        };
+
+        // Update photo entry
+        await updateDoc(doc(db, 'projectPhotos', editingId), updateData);
       }
 
       // Reload data to reflect changes
@@ -448,6 +620,25 @@ const ActivityLogsPage: React.FC = () => {
           </Button>
         </div>
 
+        {/* Search */}
+        <Card className="p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Search</h2>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <Input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by description, name, amount, date, project..."
+              className="pl-10"
+            />
+          </div>
+        </Card>
+
         {/* Filters */}
         <Card className="p-4 sm:p-6">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Filters</h2>
@@ -462,6 +653,7 @@ const ActivityLogsPage: React.FC = () => {
                 <option value="all">All Types</option>
                 <option value="assignment">Assignments</option>
                 <option value="reimbursement">Reimbursements</option>
+                <option value="photo">Photos</option>
               </select>
             </div>
             
@@ -592,9 +784,11 @@ const ActivityLogsPage: React.FC = () => {
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           activity.type === 'assignment'
                             ? 'bg-blue-100 text-blue-800'
-                            : 'bg-green-100 text-green-800'
+                            : activity.type === 'reimbursement'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-purple-100 text-purple-800'
                         }`}>
-                          {activity.type === 'assignment' ? '📋 Assignment' : '💰 Reimbursement'}
+                          {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Reimbursement' : '📸 Photo'}
                         </span>
                         <div className="flex gap-2">
                           <Button
@@ -613,32 +807,43 @@ const ActivityLogsPage: React.FC = () => {
                           >
                             Cancel
                           </Button>
+                          <Button
+                            onClick={handleDelete}
+                            disabled={saving}
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 border-red-300 hover:bg-red-50"
+                          >
+                            {saving ? 'Deleting...' : 'Delete'}
+                          </Button>
                         </div>
                       </div>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Staff</label>
-                          <select
-                            value={editFormData.staffId}
-                            onChange={(e) => {
-                              const selectedStaff = staff.find(s => s.id === e.target.value);
-                              setEditFormData({
-                                ...editFormData, 
-                                staffId: e.target.value,
-                                // Auto-update daily rate if editing assignment and staff changed
-                                dailyRate: activity.type === 'assignment' && selectedStaff 
-                                  ? selectedStaff.dailyRate 
-                                  : editFormData.dailyRate
-                              });
-                            }}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          >
-                            {staff.map(s => (
-                              <option key={s.id} value={s.id}>{s.name}</option>
-                            ))}
-                          </select>
-                        </div>
+                        {activity.type !== 'photo' && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Staff</label>
+                            <select
+                              value={editFormData.staffId || ''}
+                              onChange={(e) => {
+                                const selectedStaff = staff.find(s => s.id === e.target.value);
+                                setEditFormData({
+                                  ...editFormData, 
+                                  staffId: e.target.value,
+                                  // Auto-update daily rate if editing assignment and staff changed
+                                  dailyRate: activity.type === 'assignment' && selectedStaff 
+                                    ? selectedStaff.dailyRate 
+                                    : editFormData.dailyRate
+                                });
+                              }}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            >
+                              {staff.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                         
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-1">Project</label>
@@ -664,7 +869,17 @@ const ActivityLogsPage: React.FC = () => {
                           />
                         </div>
                         
-                        {activity.type === 'assignment' ? (
+                        {activity.type === 'photo' ? (
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+                            <Input
+                              value={editFormData.description || ''}
+                              onChange={(e) => setEditFormData({...editFormData, description: e.target.value})}
+                              className="text-sm"
+                              placeholder="Enter photo description..."
+                            />
+                          </div>
+                        ) : activity.type === 'assignment' ? (
                           <>
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Daily Rate ($)</label>
@@ -731,9 +946,11 @@ const ActivityLogsPage: React.FC = () => {
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                             activity.type === 'assignment'
                               ? 'bg-blue-100 text-blue-800'
-                              : 'bg-green-100 text-green-800'
+                              : activity.type === 'reimbursement'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-purple-100 text-purple-800'
                           }`}>
-                            {activity.type === 'assignment' ? '📋 Assignment' : '💰 Reimbursement'}
+                            {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Reimbursement' : '📸 Photo'}
                           </span>
                           {activity.status && (
                             <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(activity.status)}`}>
@@ -755,34 +972,65 @@ const ActivityLogsPage: React.FC = () => {
                       </div>
                       
                       <div className="mb-2">
-                        <p className="font-medium text-gray-900 text-sm sm:text-base">
-                          {activity.staffName}
-                        </p>
-                        <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
-                          {activity.type === 'assignment' 
-                            ? activity.taskDescription || activity.description
-                            : activity.itemDescription || activity.description
-                          }
-                        </p>
-                        {activity.projectName && (
-                          <p className="text-xs text-gray-500 mt-1 break-words">
-                            Project: {activity.projectName}
-                          </p>
+                        {activity.type === 'photo' ? (
+                          <>
+                            {activity.photoUrl && (
+                              <div className="mb-2">
+                                <img
+                                  src={activity.photoUrl}
+                                  alt={activity.description}
+                                  className="w-full max-w-xs rounded-lg border border-gray-200"
+                                  onClick={() => window.open(activity.photoUrl, '_blank')}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                              </div>
+                            )}
+                            <p className="font-medium text-gray-900 text-sm sm:text-base">
+                              {activity.uploadedByName || 'Unknown User'}
+                            </p>
+                            <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
+                              {activity.description}
+                            </p>
+                            {activity.projectName && (
+                              <p className="text-xs text-gray-500 mt-1 break-words">
+                                Project: {activity.projectName}
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-medium text-gray-900 text-sm sm:text-base">
+                              {activity.staffName}
+                            </p>
+                            <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
+                              {activity.type === 'assignment' 
+                                ? activity.taskDescription || activity.description
+                                : activity.itemDescription || activity.description
+                              }
+                            </p>
+                            {activity.projectName && (
+                              <p className="text-xs text-gray-500 mt-1 break-words">
+                                Project: {activity.projectName}
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
                       
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
-                        {activity.type === 'assignment' && activity.dailyRate !== undefined && (
-                          <span>
-                            Rate: <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
-                          </span>
-                        )}
-                        {activity.type === 'reimbursement' && activity.amount !== undefined && (
-                          <span>
-                            Amount: <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
-                          </span>
-                        )}
-                      </div>
+                      {activity.type !== 'photo' && (
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
+                          {activity.type === 'assignment' && activity.dailyRate !== undefined && (
+                            <span>
+                              Rate: <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
+                            </span>
+                          )}
+                          {activity.type === 'reimbursement' && activity.amount !== undefined && (
+                            <span>
+                              Amount: <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

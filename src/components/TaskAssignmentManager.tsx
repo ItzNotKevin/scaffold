@@ -325,12 +325,34 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
         }
 
         taskIdsToAssign = selectedTaskIds;
-        taskDescriptions = selectedTaskIds.map(taskId => {
+        const mappedTasks = await Promise.all(selectedTaskIds.map(async (taskId) => {
           if (taskId === 'custom') {
             if (!taskDescription.trim()) {
               throw new Error('Custom task description is required');
             }
-            return { taskId: undefined, description: taskDescription.trim() };
+            // Always save custom task as universal template
+            let savedTaskId: string | undefined = undefined;
+            try {
+              const newTaskDoc = await addDoc(collection(db, 'tasks'), {
+                projectId: null,
+                title: taskDescription.trim(),
+                description: '',
+                status: 'todo',
+                priority: 'Medium',
+                completed: false,
+                isTemplate: true,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              });
+              savedTaskId = newTaskDoc.id;
+              // Reload template tasks to include the new one
+              await loadTemplateTasks();
+              console.log('Saved custom task as universal template for future use:', newTaskDoc.id);
+            } catch (error) {
+              console.error('Error saving custom task:', error);
+              // Continue with assignment even if saving task fails
+            }
+            return { taskId: savedTaskId, description: taskDescription.trim() };
           } else if (taskId.startsWith('template-')) {
             // Handle template task
             const templateId = taskId.replace('template-', '');
@@ -349,7 +371,8 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
             }
             return { taskId, description: task.title || 'Untitled Task' };
           }
-        }).filter(task => task.description.trim() !== ''); // Filter out empty descriptions
+        }));
+        taskDescriptions = mappedTasks.filter(task => task.description.trim() !== ''); // Filter out empty descriptions
 
         if (taskDescriptions.length === 0) {
           // Fallback if all tasks filtered out
@@ -358,39 +381,62 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
       }
     } else {
       // Single task
-      let finalTaskDescription = taskDescription.trim();
-      let finalTaskId: string | undefined = undefined;
-      
-      if (selectedTaskId && selectedTaskId !== 'custom') {
-        if (selectedTaskId.startsWith('template-')) {
-          // Handle template task
-          const templateId = selectedTaskId.replace('template-', '');
-          const selectedTask = templateTasks.find(t => t.id === templateId);
-          if (selectedTask) {
-            finalTaskDescription = selectedTask.title || taskDescription.trim();
-            finalTaskId = undefined; // Template tasks don't have a project taskId
+        let finalTaskDescription = taskDescription.trim();
+        let finalTaskId: string | undefined = undefined;
+        
+        if (selectedTaskId && selectedTaskId !== 'custom') {
+          if (selectedTaskId.startsWith('template-')) {
+            // Handle template task
+            const templateId = selectedTaskId.replace('template-', '');
+            const selectedTask = templateTasks.find(t => t.id === templateId);
+            if (selectedTask) {
+              finalTaskDescription = selectedTask.title || taskDescription.trim();
+              finalTaskId = undefined; // Template tasks don't have a project taskId
+            } else {
+              console.warn(`Selected template task ${templateId} not found`);
+            }
           } else {
-            console.warn(`Selected template task ${templateId} not found`);
+            // Handle project task
+            const selectedTask = projectTasks.find(t => t.id === selectedTaskId);
+            if (selectedTask) {
+              finalTaskDescription = selectedTask.title || taskDescription.trim();
+              finalTaskId = selectedTaskId;
+            } else {
+              console.warn(`Selected task ${selectedTaskId} not found`);
+            }
           }
-        } else {
-          // Handle project task
-          const selectedTask = projectTasks.find(t => t.id === selectedTaskId);
-          if (selectedTask) {
-            finalTaskDescription = selectedTask.title || taskDescription.trim();
-            finalTaskId = selectedTaskId;
-          } else {
-            console.warn(`Selected task ${selectedTaskId} not found`);
+        } else if (selectedTaskId === 'custom') {
+          // Always save custom task as universal template
+          finalTaskDescription = taskDescription.trim();
+          try {
+            const newTaskDoc = await addDoc(collection(db, 'tasks'), {
+              projectId: null,
+              title: taskDescription.trim(),
+              description: '',
+              status: 'todo',
+              priority: 'Medium',
+              completed: false,
+              isTemplate: true,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+            finalTaskId = newTaskDoc.id;
+            // Reload template tasks to include the new one
+            await loadTemplateTasks();
+            console.log('Saved custom task as universal template for future use:', newTaskDoc.id);
+          } catch (error) {
+            console.error('Error saving custom task:', error);
+            // Continue with assignment even if saving task fails
           }
         }
+        
+        // If no task description, use default
+        if (!finalTaskDescription || finalTaskDescription.trim() === '') {
+          finalTaskDescription = 'General Work';
+        }
+        
+        taskDescriptions = [{ taskId: finalTaskId, description: finalTaskDescription }];
       }
-      
-      // If no task description, use default
-      if (!finalTaskDescription || finalTaskDescription.trim() === '') {
-        finalTaskDescription = 'General Work';
-      }
-      
-      taskDescriptions = [{ taskId: finalTaskId, description: finalTaskDescription }];
-    }
 
     setSaving(true);
     let assignmentCount = 0;

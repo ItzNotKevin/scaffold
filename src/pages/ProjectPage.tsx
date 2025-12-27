@@ -11,7 +11,9 @@ import { getProjectCostBreakdown, updateProjectActualCost } from '../lib/project
 import { compressImage } from '../lib/imageCompression';
 import DailyReportForm from '../components/DailyReportForm';
 import DailyReportList from '../components/DailyReportList';
-import type { DailyReport } from '../lib/types';
+import type { DailyReport, ProjectPhotoEntry } from '../lib/types';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
 
 const phases = ['Sales','Contract','Materials','Construction','Completion'] as const;
 type Phase = typeof phases[number];
@@ -125,6 +127,9 @@ const ProjectPage: React.FC = () => {
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
   const [compressPhotos, setCompressPhotos] = useState(true);
+  const [photoDescription, setPhotoDescription] = useState('');
+  const [photoDate, setPhotoDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedPhotoFiles, setSelectedPhotoFiles] = useState<File[]>([]);
   
   // Daily Reports state
   const [showDailyReportForm, setShowDailyReportForm] = useState(false);
@@ -1209,14 +1214,28 @@ ${reportData.isOverBudget
     }
   };
 
-  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files || files.length === 0 || !id || !currentUser) {
-      console.log('No files selected or missing project ID/user');
+    if (!files || files.length === 0) {
+      return;
+    }
+    
+    const fileArray = Array.from(files);
+    setSelectedPhotoFiles(fileArray);
+  };
+
+  const handlePhotoSubmit = async () => {
+    if (!selectedPhotoFiles || selectedPhotoFiles.length === 0 || !id || !currentUser) {
+      alert('Please select at least one photo');
       return;
     }
 
-    console.log('Starting photo upload for', files.length, 'files');
+    if (!photoDescription.trim()) {
+      alert('Please enter a description for the photo(s)');
+      return;
+    }
+
+    console.log('Starting photo upload for', selectedPhotoFiles.length, 'files');
     setUploadingPhoto(true);
     
     // Test Firebase Storage connection first (with timeout)
@@ -1242,14 +1261,13 @@ ${reportData.isOverBudget
     const uploadTimeout = setTimeout(() => {
       console.error('Overall upload timeout - stopping upload process');
       setUploadingPhoto(false);
-      setShowPhotoUpload(false);
       alert('Upload timed out. Please check your internet connection and try again.');
     }, 60000); // 60 second overall timeout
     
     try {
       let successCount = 0;
       let errorCount = 0;
-      const fileArray = Array.from(files);
+      const fileArray = Array.from(selectedPhotoFiles);
       
       // Validate files first
       console.log('Total files selected:', fileArray.length);
@@ -1311,7 +1329,6 @@ ${reportData.isOverBudget
       if (validFiles.length === 0) {
         console.log('No valid files to upload');
         setUploadingPhoto(false);
-        setShowPhotoUpload(false);
         setUploadProgress({current: 0, total: 0});
         return;
       }
@@ -1369,6 +1386,23 @@ ${reportData.isOverBudget
             clearInterval(progressInterval);
             const uploadTime = Date.now() - startTime;
             console.log('Upload successful for:', fileToUpload.name, `in ${Math.round(uploadTime / 1000)}s`, 'Snapshot:', snapshot);
+            
+            // Get download URL and save to Firestore
+            const photoUrl = await getDownloadURL(photoRef);
+            const photoEntryData: Omit<ProjectPhotoEntry, 'id'> = {
+              projectId: id!,
+              projectName: projectName,
+              photoUrl: photoUrl,
+              photoName: file.name,
+              description: photoDescription,
+              date: photoDate,
+              uploadedBy: currentUser.uid,
+              uploadedByName: currentUser.displayName || currentUser.email || 'Unknown User',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            };
+            
+            await addDoc(collection(db, 'projectPhotos'), photoEntryData);
             successCount++;
           } catch (error) {
             clearInterval(progressInterval);
@@ -1411,8 +1445,14 @@ ${reportData.isOverBudget
       clearTimeout(uploadTimeout);
       setUploadingPhoto(false);
       setShowPhotoUpload(false);
+      setSelectedPhotoFiles([]);
+      setPhotoDescription('');
+      setPhotoDate(new Date().toISOString().split('T')[0]);
       // Reset the file input
-      event.target.value = '';
+      const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
+      if (fileInput) {
+        fileInput.value = '';
+      }
     }
   };
 
@@ -1881,45 +1921,134 @@ ${reportData.isOverBudget
                 </div>
 
                 {showPhotoUpload && (
-                  <div className="bg-gray-50 rounded-xl p-4 border-2 border-dashed border-gray-300">
-                    <div className="text-center">
-                      {PHOTO_UPLOAD_ENABLED ? (
-                        <>
+                  <div className="bg-gray-50 rounded-xl p-4 sm:p-6 border-2 border-dashed border-gray-300">
+                    {PHOTO_UPLOAD_ENABLED ? (
+                      <div className="space-y-4">
+                        <div className="text-center">
                           <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
-                          <div className="mt-4">
-                            <div className="mb-3">
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={compressPhotos}
-                                  onChange={(e) => setCompressPhotos(e.target.checked)}
-                                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700">Compress images (faster upload, smaller files)</span>
-                              </label>
-                            </div>
-                            <label htmlFor="photo-upload" className="cursor-pointer">
-                              <span className="mt-2 block text-sm font-medium text-gray-900">
-                                {uploadingPhoto ? 'Uploading...' : 'Click to upload photos'}
-                              </span>
-                              <span className="mt-1 block text-xs text-gray-500">
-                                PNG, JPG, GIF up to 10MB each
-                              </span>
+                          <h3 className="mt-4 text-lg font-semibold text-gray-900">Upload Project Photo</h3>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <Input
+                              label="Description"
+                              type="text"
+                              value={photoDescription}
+                              onChange={(e) => setPhotoDescription(e.target.value)}
+                              placeholder="Enter a description for the photo(s)..."
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <Input
+                              label="Date"
+                              type="date"
+                              value={photoDate}
+                              onChange={(e) => setPhotoDate(e.target.value)}
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={compressPhotos}
+                                onChange={(e) => setCompressPhotos(e.target.checked)}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">Compress images (faster upload, smaller files)</span>
+                            </label>
+                          </div>
+
+                          <div>
+                            <label htmlFor="photo-upload" className="cursor-pointer block">
+                              <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-gray-400 transition-colors">
+                                <span className="block text-sm font-medium text-gray-900">
+                                  {selectedPhotoFiles.length > 0 
+                                    ? `${selectedPhotoFiles.length} photo(s) selected`
+                                    : 'Click to select photos'}
+                                </span>
+                                <span className="mt-1 block text-xs text-gray-500">
+                                  PNG, JPG, GIF up to 10MB each
+                                </span>
+                              </div>
                             </label>
                             <input
                               id="photo-upload"
                               type="file"
                               multiple
                               accept="image/*"
-                              onChange={handlePhotoUpload}
+                              onChange={handlePhotoFileSelect}
                               disabled={uploadingPhoto}
                               className="hidden"
                             />
                           </div>
-                        </>
-                      ) : (
+
+                          {selectedPhotoFiles.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {selectedPhotoFiles.map((file, index) => (
+                                <div key={index} className="text-xs bg-white px-2 py-1 rounded border border-gray-200">
+                                  {file.name}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex gap-3">
+                            <Button
+                              onClick={handlePhotoSubmit}
+                              disabled={uploadingPhoto || selectedPhotoFiles.length === 0 || !photoDescription.trim()}
+                              className="flex-1"
+                            >
+                              {uploadingPhoto ? 'Uploading...' : 'Upload Photo(s)'}
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setShowPhotoUpload(false);
+                                setSelectedPhotoFiles([]);
+                                setPhotoDescription('');
+                                setPhotoDate(new Date().toISOString().split('T')[0]);
+                              }}
+                              variant="outline"
+                              disabled={uploadingPhoto}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+
+                        {uploadingPhoto && (
+                          <div className="mt-4">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                            {uploadProgress.total > 0 ? (
+                              <>
+                                <p className="text-sm text-gray-600 text-center">
+                                  Uploading {uploadProgress.current} of {uploadProgress.total} files...
+                                </p>
+                                <p className="text-xs text-gray-500 text-center mt-1">
+                                  Large files may take several minutes to upload
+                                </p>
+                                <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                                  <div 
+                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                                  ></div>
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-sm text-gray-600 text-center">
+                                Preparing upload...
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
                         <>
                           <div className="w-12 h-12 mx-auto mb-3 bg-yellow-100 rounded-full flex items-center justify-center">
                             <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1941,32 +2070,6 @@ ${reportData.isOverBudget
                             </button>
                           </div>
                         </>
-                      )}
-                    </div>
-                      {uploadingPhoto && (
-                        <div className="mt-4">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                          {uploadProgress.total > 0 ? (
-                            <>
-                              <p className="text-sm text-gray-600">
-                                Uploading {uploadProgress.current} of {uploadProgress.total} files...
-                              </p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                Large files may take several minutes to upload
-                              </p>
-                              <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                                <div 
-                                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
-                                ></div>
-                              </div>
-                            </>
-                          ) : (
-                            <p className="text-sm text-gray-600">
-                              Preparing upload...
-                            </p>
-                          )}
-                        </div>
                       )}
                     </div>
                 )}

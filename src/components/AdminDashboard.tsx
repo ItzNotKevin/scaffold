@@ -56,24 +56,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         
         {/* Navigation Buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-          {permissions?.canManageUsers && (
-            <button
-              onClick={() => navigate('/task-templates')}
-              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
-            >
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-white text-sm">Task Templates</p>
-                  <p className="text-xs text-blue-100 truncate">Universal tasks</p>
-                </div>
+          {/* 1. Activity Logs */}
+          <button
+            onClick={() => navigate('/activity-logs')}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
               </div>
-            </button>
-          )}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white text-sm">Activity Logs</p>
+                <p className="text-xs text-blue-100 truncate">View all activity</p>
+              </div>
+            </div>
+          </button>
+
+          {/* 2. Staff Assignments */}
           <button
             onClick={() => navigate('/staff-assignments')}
             className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
@@ -91,6 +92,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </button>
 
+          {/* 3. Reimbursements */}
+          <button
+            onClick={() => navigate('/reimbursement')}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white text-sm">Reimbursement</p>
+                <p className="text-xs text-blue-100 truncate">Track expenses</p>
+              </div>
+            </div>
+          </button>
+
+          {/* 4. Payroll */}
+          {permissions?.canManageUsers && (
+            <button
+              onClick={() => navigate('/payroll')}
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
+            >
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-white text-sm">Payroll</p>
+                  <p className="text-xs text-blue-100 truncate">View payroll reports</p>
+                </div>
+              </div>
+            </button>
+          )}
+
+          {/* 5. Staff Management */}
           {permissions?.canManageUsers && (
             <button
               onClick={() => navigate('/staff-management')}
@@ -110,54 +150,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
           )}
 
-          <button
-            onClick={() => navigate('/reimbursement')}
-            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-white text-sm">Reimbursement</p>
-                <p className="text-xs text-blue-100 truncate">Track expenses</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => navigate('/activity-logs')}
-            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-white text-sm">Activity Logs</p>
-                <p className="text-xs text-blue-100 truncate">View all activity</p>
-              </div>
-            </div>
-          </button>
-
+          {/* 6. Task Templates */}
           {permissions?.canManageUsers && (
             <button
-              onClick={() => navigate('/payroll')}
+              onClick={() => navigate('/task-templates')}
               className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
             >
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-white text-sm">Payroll</p>
-                  <p className="text-xs text-blue-100 truncate">View payroll reports</p>
+                  <p className="font-semibold text-white text-sm">Task Templates</p>
+                  <p className="text-xs text-blue-100 truncate">Universal tasks</p>
                 </div>
               </div>
             </button>
