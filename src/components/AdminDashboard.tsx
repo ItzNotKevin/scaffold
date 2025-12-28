@@ -92,9 +92,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </button>
 
-          {/* 3. Reimbursements */}
+          {/* 3. Expenses */}
           <button
-            onClick={() => navigate('/reimbursement')}
+            onClick={() => navigate('/expenses')}
             className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
           >
             <div className="flex items-center space-x-3">
@@ -104,13 +104,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-white text-sm">Reimbursement</p>
+                <p className="font-semibold text-white text-sm">Expenses</p>
                 <p className="text-xs text-blue-100 truncate">Track expenses</p>
               </div>
             </div>
           </button>
 
-          {/* 4. Payroll */}
+          {/* 4. Photos */}
+          <button
+            onClick={() => navigate('/photos')}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white text-sm">Photos</p>
+                <p className="text-xs text-blue-100 truncate">Manage photos</p>
+              </div>
+            </div>
+          </button>
+
+          {/* 5. Payroll */}
           {permissions?.canManageUsers && (
             <button
               onClick={() => navigate('/payroll')}
@@ -130,7 +149,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
           )}
 
-          {/* 5. Staff Management */}
+          {/* 6. Staff Management */}
           {permissions?.canManageUsers && (
             <button
               onClick={() => navigate('/staff-management')}
@@ -150,7 +169,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
           )}
 
-          {/* 6. Task Templates */}
+          {/* 7. Categories */}
           {permissions?.canManageUsers && (
             <button
               onClick={() => navigate('/task-templates')}
@@ -159,12 +178,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-white text-sm">Task Templates</p>
-                  <p className="text-xs text-blue-100 truncate">Universal tasks</p>
+                  <p className="font-semibold text-white text-sm">Categories</p>
+                  <p className="text-xs text-blue-100 truncate">Manage categories</p>
                 </div>
               </div>
             </button>

@@ -1,6 +1,6 @@
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import type { PayPeriodConfig, TaskAssignment, Reimbursement } from './types';
+import type { PayPeriodConfig, TaskAssignment, Expense } from './types';
 
 /**
  * Calculate pay period dates based on config and current date
@@ -136,7 +136,7 @@ export const getReimbursementsForPeriod = async (
   staffId: string,
   startDate: string,
   endDate: string
-): Promise<Reimbursement[]> => {
+): Promise<Expense[]> => {
   try {
     // Query with staffId and status only, then filter by date in client
     const reimbursementsQuery = query(
@@ -152,7 +152,7 @@ export const getReimbursementsForPeriod = async (
       .map(doc => ({
         id: doc.id,
         ...doc.data()
-      } as Reimbursement))
+      } as Expense))
       .filter(r => r.date >= startDate && r.date <= endDate);
   } catch (error) {
     console.error('Error getting reimbursements:', error);
@@ -163,7 +163,7 @@ export const getReimbursementsForPeriod = async (
 /**
  * Calculate total reimbursements amount
  */
-export const calculateReimbursements = (reimbursements: Reimbursement[]): number => {
+export const calculateReimbursements = (reimbursements: Expense[]): number => {
   return reimbursements.reduce((total, reimbursement) => total + reimbursement.amount, 0);
 };
 
@@ -178,7 +178,7 @@ export const generatePayrollReport = async (
   staffName: string;
   dailyRate: number;
   assignments: TaskAssignment[];
-  reimbursements: Reimbursement[];
+  reimbursements: Expense[];
   daysWorked: number;
   totalWages: number;
   totalReimbursements: number;
@@ -234,7 +234,7 @@ export const exportToCSV = (reportData: Array<{
   totalReimbursements?: number;
   totalPayout?: number;
   assignments: TaskAssignment[];
-  reimbursements?: Reimbursement[];
+  reimbursements?: Expense[];
 }>): string => {
   const headers = ['Staff Name', 'Days Worked', 'Total Wages', 'Reimbursements', 'Total Payout', 'Assignments', 'Reimbursement Details'];
   const rows = reportData.map(data => [

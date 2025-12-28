@@ -5,9 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import CollapsibleSection from '../components/ui/CollapsibleSection';
 import { collection, getDocs, query, orderBy, where, updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import type { TaskAssignment, Reimbursement, StaffMember } from '../lib/types';
+import type { TaskAssignment, Expense, StaffMember } from '../lib/types';
 import { updateProjectActualCost } from '../lib/projectCosts';
 import Input from '../components/ui/Input';
 
@@ -25,7 +26,7 @@ interface ActivityLog {
   // Assignment-specific
   taskDescription?: string;
   dailyRate?: number;
-  // Reimbursement-specific
+  // Expense-specific
   itemDescription?: string;
   status?: 'pending' | 'approved' | 'rejected';
   // Photo-specific
@@ -124,13 +125,13 @@ const ActivityLogsPage: React.FC = () => {
         };
       });
       
-      // Load reimbursements
+      // Load expenses (from reimbursements collection - kept for backward compatibility)
       const reimbursementsQuery = query(
         collection(db, 'reimbursements'),
         orderBy('createdAt', 'desc')
       );
-      const reimbursementsSnapshot = await getDocs(reimbursementsQuery);
-      const reimbursementsData: ActivityLog[] = reimbursementsSnapshot.docs.map(doc => {
+      const expensesSnapshot = await getDocs(reimbursementsQuery);
+      const expensesData: ActivityLog[] = expensesSnapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -170,7 +171,7 @@ const ActivityLogsPage: React.FC = () => {
       });
       
       // Combine and sort by creation date
-      const allActivities = [...assignmentsData, ...reimbursementsData, ...photosData];
+      const allActivities = [...assignmentsData, ...expensesData, ...photosData];
       allActivities.sort((a, b) => {
         const aTime = a.createdAt?.toMillis?.() || a.createdAt || 0;
         const bTime = b.createdAt?.toMillis?.() || b.createdAt || 0;
@@ -359,6 +360,16 @@ const ActivityLogsPage: React.FC = () => {
     
     return filtered;
   }, [activities, typeFilter, staffFilter, projectFilter, statusFilter, monthFilter, searchQuery, sortField, sortDirection]);
+
+  // Mobile: Limit initial display to improve performance
+  const INITIAL_DISPLAY_COUNT = 15;
+  const [showAllActivities, setShowAllActivities] = useState(false);
+  const displayedActivities = useMemo(() => {
+    if (filteredAndSortedActivities.length <= INITIAL_DISPLAY_COUNT || showAllActivities) {
+      return filteredAndSortedActivities;
+    }
+    return filteredAndSortedActivities.slice(0, INITIAL_DISPLAY_COUNT);
+  }, [filteredAndSortedActivities, showAllActivities]);
 
   // Generate list of unique months from activities
   const availableMonths = useMemo(() => {
@@ -652,7 +663,7 @@ const ActivityLogsPage: React.FC = () => {
               >
                 <option value="all">All Types</option>
                 <option value="assignment">Assignments</option>
-                <option value="reimbursement">Reimbursements</option>
+                <option value="reimbursement">Expenses</option>
                 <option value="photo">Photos</option>
               </select>
             </div>
@@ -771,12 +782,13 @@ const ActivityLogsPage: React.FC = () => {
               <p className="text-gray-400 text-xs mt-1">Try adjusting your filters</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {filteredAndSortedActivities.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="p-3 sm:p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors"
-                >
+            <>
+              <div className="space-y-3">
+                {displayedActivities.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="p-3 sm:p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors"
+                  >
                   {editingId === activity.id && editFormData ? (
                     // Edit Form
                     <div className="space-y-4">
@@ -788,14 +800,15 @@ const ActivityLogsPage: React.FC = () => {
                             ? 'bg-green-100 text-green-800'
                             : 'bg-purple-100 text-purple-800'
                         }`}>
-                          {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Reimbursement' : '📸 Photo'}
+                          {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Expense' : '📸 Photo'}
                         </span>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             onClick={handleSaveEdit}
                             disabled={saving}
                             size="sm"
                             variant="outline"
+                            className="min-h-[44px] flex-1 sm:flex-none"
                           >
                             {saving ? 'Saving...' : 'Save'}
                           </Button>
@@ -804,6 +817,7 @@ const ActivityLogsPage: React.FC = () => {
                             disabled={saving}
                             size="sm"
                             variant="ghost"
+                            className="min-h-[44px] flex-1 sm:flex-none"
                           >
                             Cancel
                           </Button>
@@ -812,7 +826,7 @@ const ActivityLogsPage: React.FC = () => {
                             disabled={saving}
                             size="sm"
                             variant="outline"
-                            className="text-red-600 border-red-300 hover:bg-red-50"
+                            className="text-red-600 border-red-300 hover:bg-red-50 min-h-[44px] flex-1 sm:flex-none"
                           >
                             {saving ? 'Deleting...' : 'Delete'}
                           </Button>
@@ -836,7 +850,7 @@ const ActivityLogsPage: React.FC = () => {
                                     : editFormData.dailyRate
                                 });
                               }}
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px]"
                             >
                               {staff.map(s => (
                                 <option key={s.id} value={s.id}>{s.name}</option>
@@ -918,7 +932,7 @@ const ActivityLogsPage: React.FC = () => {
                               <select
                                 value={editFormData.status || 'pending'}
                                 onChange={(e) => setEditFormData({...editFormData, status: e.target.value as any})}
-                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px]"
                               >
                                 <option value="pending">Pending</option>
                                 <option value="approved">Approved</option>
@@ -950,7 +964,7 @@ const ActivityLogsPage: React.FC = () => {
                               ? 'bg-green-100 text-green-800'
                               : 'bg-purple-100 text-purple-800'
                           }`}>
-                            {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Reimbursement' : '📸 Photo'}
+                            {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Expense' : '📸 Photo'}
                           </span>
                           {activity.status && (
                             <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(activity.status)}`}>
@@ -965,7 +979,7 @@ const ActivityLogsPage: React.FC = () => {
                           onClick={() => handleStartEdit(activity)}
                           size="sm"
                           variant="outline"
-                          className="text-xs"
+                          className="text-xs min-h-[44px] touch-manipulation"
                         >
                           Edit
                         </Button>
@@ -1033,9 +1047,23 @@ const ActivityLogsPage: React.FC = () => {
                       )}
                     </div>
                   )}
+                  </div>
+                ))}
+              </div>
+              {filteredAndSortedActivities.length > INITIAL_DISPLAY_COUNT && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setShowAllActivities(!showAllActivities)}
+                    className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors touch-manipulation min-h-[48px] text-sm sm:text-base"
+                  >
+                    {showAllActivities 
+                      ? `Show Less (Showing ${filteredAndSortedActivities.length} of ${filteredAndSortedActivities.length})`
+                      : `Show More (Showing ${displayedActivities.length} of ${filteredAndSortedActivities.length})`
+                    }
+                  </button>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </Card>
       </div>

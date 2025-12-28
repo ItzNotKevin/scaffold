@@ -135,9 +135,24 @@ const StaffManager: React.FC = () => {
           </Button>
         </div>
 
-        {/* Form */}
+        {/* Form Modal */}
         {showForm && (
-          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {editingId ? 'Edit Staff Member' : 'Add Staff Member'}
+                </h2>
+                <button
+                  onClick={resetForm}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -210,15 +225,17 @@ const StaffManager: React.FC = () => {
                 rows={3}
               />
             </div>
-            <div className="flex gap-2">
-              <Button type="submit" disabled={saving}>
-                {saving ? 'Saving...' : (editingId ? 'Update' : 'Add')} Staff Member
-              </Button>
-              <Button type="button" variant="outline" onClick={resetForm}>
-                Cancel
-              </Button>
+                <div className="flex gap-2 pt-4 border-t border-gray-200">
+                  <Button type="submit" disabled={saving} className="flex-1">
+                    {saving ? 'Saving...' : (editingId ? 'Update' : 'Add')} Staff Member
+                  </Button>
+                  <Button type="button" variant="outline" onClick={resetForm} className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
+              </form>
             </div>
-          </form>
+          </div>
         )}
 
         {/* Staff List */}

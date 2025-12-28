@@ -11,7 +11,7 @@ import { getProjectCostBreakdown, updateProjectActualCost } from '../lib/project
 import { compressImage } from '../lib/imageCompression';
 import DailyReportForm from '../components/DailyReportForm';
 import DailyReportList from '../components/DailyReportList';
-import type { DailyReport, ProjectPhotoEntry } from '../lib/types';
+import type { DailyReport, ProjectPhotoEntry, Expense } from '../lib/types';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 
@@ -66,20 +66,13 @@ interface ProjectPhoto {
   name: string;
   uploadedBy: string;
   uploadedAt: any;
-  size: number;
+  size?: number;
+  photoUrl?: string; // From ProjectPhotoEntry
+  photoName?: string; // From ProjectPhotoEntry
+  description?: string; // From ProjectPhotoEntry
+  date?: string; // From ProjectPhotoEntry
 }
 
-interface Expense {
-  id: string;
-  projectId: string;
-  description: string;
-  amount: number;
-  category: 'materials' | 'labor' | 'equipment' | 'permits' | 'utilities' | 'other';
-  date: any;
-  userId: string;
-  userName?: string;
-  userEmail?: string;
-}
 
 const ProjectPage: React.FC = () => {
   const { id } = useParams();
@@ -123,20 +116,11 @@ const ProjectPage: React.FC = () => {
   const [reportData, setReportData] = useState<any>(null);
   const [photos, setPhotos] = useState<ProjectPhoto[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
-  const [compressPhotos, setCompressPhotos] = useState(true);
-  const [photoDescription, setPhotoDescription] = useState('');
-  const [photoDate, setPhotoDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedPhotoFiles, setSelectedPhotoFiles] = useState<File[]>([]);
   
   // Daily Reports state
   const [showDailyReportForm, setShowDailyReportForm] = useState(false);
   const [editingDailyReport, setEditingDailyReport] = useState<DailyReport | null>(null);
   
-  // Photo upload feature enabled - Firebase Storage bucket is now available
-  const PHOTO_UPLOAD_ENABLED = true;
   const [showFinancialForm, setShowFinancialForm] = useState(false);
   const [showFinancialReport, setShowFinancialReport] = useState(false);
   const [budget, setBudget] = useState<number>(0);
@@ -146,23 +130,16 @@ const ProjectPage: React.FC = () => {
   const [submittingFinancial, setSubmittingFinancial] = useState(false);
   const [costBreakdown, setCostBreakdown] = useState<{
     totalWages: number;
-    totalReimbursements: number;
+    totalReimbursements: number; // Kept for backward compatibility with cost breakdown
     totalActualCost: number;
     budget: number;
     remaining: number;
     percentUsed: number;
   } | null>(null);
   
-  // Expense management state
-  const [expenses, setExpenses] = useState<any[]>([]);
+  // Expense management state (now loads from reimbursements collection)
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
-  const [showExpenseForm, setShowExpenseForm] = useState(false);
-  const [newExpenseCategory, setNewExpenseCategory] = useState<'materials' | 'labor' | 'equipment' | 'permits' | 'utilities' | 'other'>('materials');
-  const [newExpenseDescription, setNewExpenseDescription] = useState('');
-  const [newExpenseAmount, setNewExpenseAmount] = useState<number>(0);
-  const [newExpenseDate, setNewExpenseDate] = useState<string>('');
-  const [submittingExpense, setSubmittingExpense] = useState(false);
-  const [expenseFilter, setExpenseFilter] = useState<'all' | 'materials' | 'labor' | 'equipment' | 'permits' | 'utilities' | 'other'>('all');
 
   useEffect(() => {
     const load = async () => {
@@ -192,37 +169,30 @@ const ProjectPage: React.FC = () => {
     load();
   }, [id]);
 
-  // Fetch expenses with real-time updates
+  // Fetch expenses with real-time updates (from reimbursements collection where staffId is null)
   useEffect(() => {
     if (!id) return;
 
-    const expensesRef = collection(db, 'expenses');
-    const q = query(expensesRef, where('projectId', '==', id));
+    const expensesRef = collection(db, 'reimbursements');
+    const q = query(
+      expensesRef, 
+      where('projectId', '==', id),
+      orderBy('date', 'desc')
+    );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       console.log('Expenses snapshot received:', snapshot.docs.length, 'documents');
-      const expensesData: Expense[] = snapshot.docs.map(doc => ({
+      const allEntries = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Expense));
       
+      // Filter to only expenses (no staffId)
+      const expensesData = allEntries.filter(entry => !entry.staffId || !entry.staffName);
+      
       console.log('Expenses data:', expensesData);
-      
-      // Sort by date in descending order (newest first)
-      expensesData.sort((a, b) => {
-        const dateA = a.date ? (a.date.toDate ? a.date.toDate() : new Date(a.date)) : new Date(0);
-        const dateB = b.date ? (b.date.toDate ? b.date.toDate() : new Date(b.date)) : new Date(0);
-        return dateB.getTime() - dateA.getTime();
-      });
-      
       setExpenses(expensesData);
       setExpensesLoading(false);
-      
-      // Note: actualCost is now calculated automatically from wages + reimbursements
-      // Don't recalculate from expenses here
-      const totalExpenses = expensesData.reduce((sum, expense) => sum + (expense.amount || 0), 0);
-      
-      console.log('Expenses loading completed, total:', totalExpenses);
     }, (error) => {
       console.error('Error fetching expenses:', error);
       setExpensesLoading(false);
@@ -902,49 +872,11 @@ ${reportData.isOverBudget
   };
 
   // Expense management functions
-  const handleAddExpense = async () => {
-    if (!id || !currentUser || !newExpenseDescription.trim() || newExpenseAmount <= 0) return;
-
-    setSubmittingExpense(true);
-    try {
-      await addDoc(collection(db, 'expenses'), {
-        projectId: id,
-        category: newExpenseCategory,
-        description: newExpenseDescription.trim(),
-        amount: newExpenseAmount,
-        date: newExpenseDate ? new Date(newExpenseDate) : new Date(),
-        userId: currentUser.uid,
-        userName: currentUser.displayName || currentUser.email || 'Unknown User',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      // Update project actual cost to include the new expense
-      await updateProjectActualCost(id);
-      
-      // Reload cost breakdown to reflect the updated costs
-      await loadCostBreakdown();
-
-      // Reset form
-      setNewExpenseCategory('materials');
-      setNewExpenseDescription('');
-      setNewExpenseAmount(0);
-      setNewExpenseDate('');
-      setShowExpenseForm(false);
-      
-      showProjectNotification('Expense added successfully', projectName);
-    } catch (error) {
-      console.error('Error adding expense:', error);
-    } finally {
-      setSubmittingExpense(false);
-    }
-  };
-
   const handleDeleteExpense = async (expenseId: string) => {
     if (!id || !currentUser) return;
 
     try {
-      await deleteDoc(doc(db, 'expenses', expenseId));
+      await deleteDoc(doc(db, 'reimbursements', expenseId));
       
       // Update project actual cost after deleting expense
       await updateProjectActualCost(id);
@@ -956,49 +888,6 @@ ${reportData.isOverBudget
     } catch (error) {
       console.error('Error deleting expense:', error);
     }
-  };
-
-  const getExpenseCategoryColor = (category: string) => {
-    const colors = {
-      materials: 'bg-blue-100 text-blue-800 border-blue-200',
-      labor: 'bg-green-100 text-green-800 border-green-200',
-      equipment: 'bg-orange-100 text-orange-800 border-orange-200',
-      permits: 'bg-purple-100 text-purple-800 border-purple-200',
-      utilities: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      other: 'bg-gray-100 text-gray-800 border-gray-200',
-    };
-    return colors[category as keyof typeof colors] || colors.other;
-  };
-
-  const getExpenseCategoryIcon = (category: string) => {
-    const icons = {
-      materials: '🔨',
-      labor: '👷',
-      equipment: '🚜',
-      permits: '📋',
-      utilities: '⚡',
-      other: '💰',
-    };
-    return icons[category as keyof typeof icons] || icons.other;
-  };
-
-  const getFilteredExpenses = () => {
-    if (expenseFilter === 'all') return expenses;
-    return expenses.filter(expense => expense.category === expenseFilter);
-  };
-
-  const getExpensesByCategory = () => {
-    const categories = ['materials', 'labor', 'equipment', 'permits', 'utilities', 'other'];
-    return categories.map(category => {
-      const categoryExpenses = expenses.filter(expense => expense.category === category);
-      const total = categoryExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
-      return {
-        category,
-        count: categoryExpenses.length,
-        total,
-        percentage: actualCost > 0 ? (total / actualCost) * 100 : 0
-      };
-    }).filter(item => item.count > 0);
   };
 
   // Submit a new comment
@@ -1176,34 +1065,31 @@ ${reportData.isOverBudget
     try {
       console.log('Loading photos for project:', id);
       setPhotosLoading(true);
-      const photosRef = ref(storage, `projects/${id}/photos`);
-      console.log('Photos ref:', photosRef.fullPath);
       
-      const result = await listAll(photosRef);
-      console.log('Found', result.items.length, 'photos');
+      // Load photos from Firestore projectPhotos collection
+      const photosQuery = query(
+        collection(db, 'projectPhotos'),
+        where('projectId', '==', id),
+        orderBy('createdAt', 'desc')
+      );
+      const photosSnapshot = await getDocs(photosQuery);
       
-      const photosData: ProjectPhoto[] = [];
-      for (const itemRef of result.items) {
-        try {
-          console.log('Loading photo:', itemRef.name);
-          const url = await getDownloadURL(itemRef);
-          const metadata = await getMetadata(itemRef);
-          photosData.push({
-            id: itemRef.name,
-            url,
-            name: metadata.name,
-            uploadedBy: metadata.customMetadata?.uploadedBy || 'Unknown',
-            uploadedAt: metadata.timeCreated,
-            size: metadata.size
-          });
-          console.log('Successfully loaded photo:', itemRef.name);
-        } catch (error) {
-          console.error('Error loading photo metadata for', itemRef.name, ':', error);
-        }
-      }
+      const photosData: ProjectPhoto[] = photosSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          url: data.photoUrl || '',
+          photoUrl: data.photoUrl || '',
+          name: data.photoName || data.description || 'Untitled Photo',
+          photoName: data.photoName || '',
+          description: data.description || '',
+          date: data.date || '',
+          uploadedBy: data.uploadedBy || 'Unknown',
+          uploadedAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
+          size: 0
+        };
+      });
       
-      // Sort by upload date (newest first)
-      photosData.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
       setPhotos(photosData);
       console.log('Photos loaded successfully:', photosData.length);
     } catch (error) {
@@ -1214,256 +1100,24 @@ ${reportData.isOverBudget
     }
   };
 
-  const handlePhotoFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) {
-      return;
-    }
-    
-    const fileArray = Array.from(files);
-    setSelectedPhotoFiles(fileArray);
-  };
-
-  const handlePhotoSubmit = async () => {
-    if (!selectedPhotoFiles || selectedPhotoFiles.length === 0 || !id || !currentUser) {
-      alert('Please select at least one photo');
-      return;
-    }
-
-    if (!photoDescription.trim()) {
-      alert('Please enter a description for the photo(s)');
-      return;
-    }
-
-    console.log('Starting photo upload for', selectedPhotoFiles.length, 'files');
-    setUploadingPhoto(true);
-    
-    // Test Firebase Storage connection first (with timeout)
-    console.log('Testing Firebase Storage connection...');
-    try {
-      const connectionOk = await Promise.race([
-        testStorageConnection(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection test timeout')), 15000)
-        )
-      ]);
-      
-      if (!connectionOk) {
-        console.warn('Firebase Storage connection test failed, but proceeding with upload...');
-      } else {
-        console.log('Firebase Storage connection test successful');
-      }
-    } catch (error) {
-      console.warn('Firebase Storage connection test failed, but proceeding with upload:', error);
-    }
-    
-    // Add overall timeout protection
-    const uploadTimeout = setTimeout(() => {
-      console.error('Overall upload timeout - stopping upload process');
-      setUploadingPhoto(false);
-      alert('Upload timed out. Please check your internet connection and try again.');
-    }, 60000); // 60 second overall timeout
-    
-    try {
-      let successCount = 0;
-      let errorCount = 0;
-      const fileArray = Array.from(selectedPhotoFiles);
-      
-      // Validate files first
-      console.log('Total files selected:', fileArray.length);
-      const validationErrors: string[] = [];
-      const validFiles = fileArray.filter(file => {
-        const fileSizeMB = file.size / (1024 * 1024);
-        const maxSizeMB = 10;
-        const maxSizeBytes = maxSizeMB * 1024 * 1024;
-        
-        console.log('Validating file:', {
-          name: file.name,
-          type: file.type,
-          sizeBytes: file.size,
-          sizeMB: fileSizeMB.toFixed(2),
-          maxSizeMB: maxSizeMB,
-          maxSizeBytes: maxSizeBytes,
-          isImage: file.type.startsWith('image/'),
-          isWithinSizeLimit: file.size <= maxSizeBytes
-        });
-        
-        if (!file.type.startsWith('image/')) {
-          console.error('Invalid file type:', file.type);
-          validationErrors.push(`${file.name} is not an image file (type: ${file.type})`);
-          return false;
-        }
-        
-        if (file.size > maxSizeBytes) {
-          console.error('File too large:', {
-            actualSize: file.size,
-            actualSizeMB: fileSizeMB.toFixed(2),
-            maxSize: maxSizeBytes,
-            maxSizeMB: maxSizeMB
-          });
-          validationErrors.push(`${file.name} is too large (${fileSizeMB.toFixed(2)}MB). Maximum size is ${maxSizeMB}MB.`);
-          return false;
-        }
-        
-        // Temporary: Allow larger files for debugging
-        if (file.size > 50 * 1024 * 1024) { // 50MB limit for debugging
-          console.warn('File is very large, but allowing for debugging:', fileSizeMB.toFixed(2), 'MB');
-        }
-        
-        console.log('File is valid:', file.name);
-        return true;
-      });
-      
-      console.log('Valid files after filtering:', validFiles.length);
-      
-      // Show validation errors if any
-      if (validationErrors.length > 0) {
-        const errorMessage = `Please fix the following issues:\n\n${validationErrors.join('\n')}\n\nNote: File sizes are shown in MB (1MB = 1,048,576 bytes)`;
-        alert(errorMessage);
-        errorCount += validationErrors.length;
-      }
-      
-      // Set initial progress with valid files only
-      setUploadProgress({current: 0, total: validFiles.length});
-      
-      if (validFiles.length === 0) {
-        console.log('No valid files to upload');
-        setUploadingPhoto(false);
-        setUploadProgress({current: 0, total: 0});
-        return;
-      }
-      
-      for (let i = 0; i < validFiles.length; i++) {
-        const file = validFiles[i];
-        console.log('Processing file:', file.name, 'Size:', file.size, 'Type:', file.type);
-        
-        // Compress image if option is enabled
-        let fileToUpload = file;
-        if (compressPhotos && file.type.startsWith('image/')) {
-          fileToUpload = await compressImage(file);
-        }
-        
-        // Update progress
-        setUploadProgress({current: i, total: validFiles.length});
-        
-        try {
-          // Create unique filename
-          const timestamp = Date.now();
-          const fileName = `${timestamp}_${fileToUpload.name}`;
-          const photoRef = ref(storage, `projects/${id}/photos/${fileName}`);
-          console.log('Uploading to:', photoRef.fullPath);
-          console.log('File details for upload:', {
-            name: fileToUpload.name,
-            size: fileToUpload.size,
-            type: fileToUpload.type,
-            lastModified: fileToUpload.lastModified
-          });
-          
-          // Add individual file timeout
-          const uploadPromise = uploadBytes(photoRef, fileToUpload, {
-            customMetadata: {
-              uploadedBy: currentUser.uid,
-              uploadedAt: new Date().toISOString()
-            }
-          });
-          
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`Upload timeout for ${fileToUpload.name}`)), 120000) // 2 minutes
-          );
-          
-          console.log('Starting upload for:', fileToUpload.name, `(${(fileToUpload.size / (1024 * 1024)).toFixed(2)}MB)`);
-          
-          // Add upload progress monitoring
-          const startTime = Date.now();
-          const progressInterval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            console.log(`Upload in progress for ${fileToUpload.name}: ${Math.round(elapsed / 1000)}s elapsed`);
-          }, 10000); // Log every 10 seconds
-          
-          try {
-            // Race between upload and timeout
-            const snapshot = await Promise.race([uploadPromise, timeoutPromise]);
-            clearInterval(progressInterval);
-            const uploadTime = Date.now() - startTime;
-            console.log('Upload successful for:', fileToUpload.name, `in ${Math.round(uploadTime / 1000)}s`, 'Snapshot:', snapshot);
-            
-            // Get download URL and save to Firestore
-            const photoUrl = await getDownloadURL(photoRef);
-            const photoEntryData: Omit<ProjectPhotoEntry, 'id'> = {
-              projectId: id!,
-              projectName: projectName,
-              photoUrl: photoUrl,
-              photoName: file.name,
-              description: photoDescription,
-              date: photoDate,
-              uploadedBy: currentUser.uid,
-              uploadedByName: currentUser.displayName || currentUser.email || 'Unknown User',
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            };
-            
-            await addDoc(collection(db, 'projectPhotos'), photoEntryData);
-            successCount++;
-          } catch (error) {
-            clearInterval(progressInterval);
-            throw error;
-          }
-        } catch (uploadError: any) {
-          console.error('Upload failed for', file.name, ':', uploadError);
-          console.error('Upload error details:', {
-            message: uploadError.message,
-            code: uploadError.code,
-            stack: uploadError.stack
-          });
-          if (uploadError.message.includes('timeout')) {
-            alert(`Upload timed out for ${file.name}. Please try again with a smaller file.`);
-          } else {
-            alert(`Upload failed for ${file.name}: ${uploadError.message}`);
-          }
-          errorCount++;
-        }
-        
-        // Update progress after each file
-        setUploadProgress({current: i + 1, total: validFiles.length});
-      }
-      
-      console.log('Upload complete. Success:', successCount, 'Errors:', errorCount);
-      
-      // Reload photos
-      await loadPhotos();
-      
-      if (successCount > 0) {
-        showProjectNotification(`${successCount} photo(s) uploaded successfully`, projectName);
-      }
-      if (errorCount > 0) {
-        alert(`${errorCount} file(s) failed to upload. Please check the console for details.`);
-      }
-    } catch (error: any) {
-      console.error('Error uploading photos:', error);
-      alert(`Failed to upload photos: ${error.message || 'Unknown error'}`);
-    } finally {
-      clearTimeout(uploadTimeout);
-      setUploadingPhoto(false);
-      setShowPhotoUpload(false);
-      setSelectedPhotoFiles([]);
-      setPhotoDescription('');
-      setPhotoDate(new Date().toISOString().split('T')[0]);
-      // Reset the file input
-      const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
-      if (fileInput) {
-        fileInput.value = '';
-      }
-    }
-  };
-
   const handleDeletePhoto = async (photoId: string) => {
     if (!id || !currentUser) return;
     
     if (!confirm('Are you sure you want to delete this photo?')) return;
     
     try {
-      const photoRef = ref(storage, `projects/${id}/photos/${photoId}`);
-      await deleteObject(photoRef);
+      // Find the photo entry to get the storage path
+      const photo = photos.find(p => p.id === photoId);
+      if (!photo) {
+        alert('Photo not found');
+        return;
+      }
+
+      // Delete from Firestore
+      await deleteDoc(doc(db, 'projectPhotos', photoId));
+      
+      // Note: We're not deleting from storage here as the photo structure changed
+      // The PhotoManager component handles storage deletion properly
       
       // Reload photos
       await loadPhotos();
@@ -1482,30 +1136,6 @@ ${reportData.isOverBudget
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Test Firebase Storage connection
-  const testStorageConnection = async () => {
-    try {
-      console.log('Testing Firebase Storage connection...');
-      const testRef = ref(storage, 'test/connection-test.txt');
-      const testBlob = new Blob(['test'], { type: 'text/plain' });
-      
-      // Add timeout to connection test
-      const uploadPromise = uploadBytes(testRef, testBlob);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection test timeout')), 10000)
-      );
-      
-      await Promise.race([uploadPromise, timeoutPromise]);
-      console.log('Firebase Storage connection test successful');
-      // Clean up test file
-      await deleteObject(testRef);
-      return true;
-    } catch (error) {
-      console.error('Firebase Storage connection test failed:', error);
-      return false;
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1519,7 +1149,8 @@ ${reportData.isOverBudget
 
   return (
     <Layout title={projectName} currentRole={undefined}>
-      <div className="space-y-4 pb-20">
+      <React.Fragment>
+        <div className="space-y-4 pb-20">
         {/* Header with project name, description, and phase */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-start justify-between mb-4">
@@ -1645,7 +1276,7 @@ ${reportData.isOverBudget
             <h3 className="text-lg font-semibold text-gray-900">Financial Tracking</h3>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
               <button
-                onClick={() => setShowExpenseForm(true)}
+                onClick={() => navigate(`/expenses?projectId=${id}`)}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2 min-h-[44px] touch-manipulation"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1775,21 +1406,8 @@ ${reportData.isOverBudget
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-lg font-semibold text-gray-900">Expenses ({expenses.length})</h4>
               {expenses.length > 0 && (
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-500">Filter by category:</span>
-                  <select
-                    value={expenseFilter}
-                    onChange={(e) => setExpenseFilter(e.target.value as any)}
-                    className="px-3 py-1 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="all">All Categories</option>
-                    <option value="materials">Materials</option>
-                    <option value="labor">Labor</option>
-                    <option value="equipment">Equipment</option>
-                    <option value="permits">Permits</option>
-                    <option value="utilities">Utilities</option>
-                    <option value="other">Other</option>
-                  </select>
+                <div className="text-sm text-gray-500">
+                  Showing {expenses.length} expense{expenses.length !== 1 ? 's' : ''}
                 </div>
               )}
             </div>
@@ -1807,7 +1425,7 @@ ${reportData.isOverBudget
                 </div>
                 <p className="text-gray-500 mb-4">No expenses recorded yet</p>
                 <button
-                  onClick={() => setShowExpenseForm(true)}
+                  onClick={() => navigate(`/expenses?projectId=${id}`)}
                   className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   Add First Expense
@@ -1815,22 +1433,17 @@ ${reportData.isOverBudget
               </div>
             ) : (
               <div className="space-y-3">
-                {getFilteredExpenses().map((expense) => (
+                {expenses.map((expense) => (
                   <div key={expense.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <div className="text-2xl">{getExpenseCategoryIcon(expense.category)}</div>
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-1">
-                            <h5 className="text-sm font-medium text-gray-900">{expense.description}</h5>
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getExpenseCategoryColor(expense.category)}`}>
-                              {expense.category.charAt(0).toUpperCase() + expense.category.slice(1)}
-                            </span>
+                            <h5 className="text-sm font-medium text-gray-900">{expense.subcategory || expense.itemDescription}</h5>
                           </div>
                           <div className="flex items-center space-x-4 text-xs text-gray-500">
                             <span>${expense.amount.toLocaleString()}</span>
-                            <span>{expense.date ? new Date(expense.date.toDate ? expense.date.toDate() : expense.date).toLocaleDateString() : 'No date'}</span>
-                            <span>by {expense.userName || 'Unknown User'}</span>
+                            <span>{String(expense.date || '')}</span>
                           </div>
                         </div>
                       </div>
@@ -1848,42 +1461,12 @@ ${reportData.isOverBudget
                 ))}
               </div>
             )}
-
-            {/* Expense Categories Breakdown */}
-            {expenses.length > 0 && (
-              <div className="mt-6">
-                <h5 className="text-sm font-semibold text-gray-900 mb-3">Expenses by Category</h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {getExpensesByCategory().map((category) => (
-                    <div key={category.category} className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-lg">{getExpenseCategoryIcon(category.category)}</span>
-                          <span className="text-sm font-medium text-gray-900 capitalize">{category.category}</span>
-                        </div>
-                        <span className="text-sm font-bold text-gray-900">${category.total.toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>{category.count} expense{category.count !== 1 ? 's' : ''}</span>
-                        <span>{category.percentage.toFixed(1)}% of total</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-                        <div
-                          className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-                          style={{ width: `${category.percentage}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <div className="flex flex-wrap gap-2 mb-4">
+          {/* Tabs */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <div className="flex flex-wrap gap-2 mb-4">
             {['Photos','Tasks'].map(t => (
               <button 
                 key={t} 
@@ -1893,217 +1476,67 @@ ${reportData.isOverBudget
                 {t}
               </button>
             ))}
-            {permissions?.canViewDailyReports && (
-              <button 
-                onClick={() => setActiveTab('Daily Reports')} 
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[44px] flex-1 sm:flex-none ${activeTab==='Daily Reports'?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-              >
-                Daily Reports
-              </button>
-            )}
-          </div>
+              {permissions?.canViewDailyReports && (
+                <button 
+                  onClick={() => setActiveTab('Daily Reports')} 
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[44px] flex-1 sm:flex-none ${activeTab==='Daily Reports'?'bg-blue-600 text-white':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                >
+                  Daily Reports
+                </button>
+              )}
+            </div>
 
-          {activeTab === 'Photos' && (
-            <div>
-              {/* Photo Upload Section */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Project Photos</h3>
-                  <button
-                    onClick={() => setShowPhotoUpload(!showPhotoUpload)}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 min-h-[44px] touch-manipulation"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    <span>Upload Photos</span>
-                  </button>
+            {activeTab === 'Photos' && (
+              <div>
+                {/* Photo Upload Section */}
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Project Photos</h3>
+                    <button
+                      onClick={() => navigate(`/photos?projectId=${id}`)}
+                      className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 min-h-[44px] touch-manipulation"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      <span>Upload Photos</span>
+                    </button>
+                  </div>
                 </div>
 
-                {showPhotoUpload && (
-                  <div className="bg-gray-50 rounded-xl p-4 sm:p-6 border-2 border-dashed border-gray-300">
-                    {PHOTO_UPLOAD_ENABLED ? (
-                      <div className="space-y-4">
-                        <div className="text-center">
-                          <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                          <h3 className="mt-4 text-lg font-semibold text-gray-900">Upload Project Photo</h3>
-                        </div>
-
-                        <div className="space-y-4">
-                          <div>
-                            <Input
-                              label="Description"
-                              type="text"
-                              value={photoDescription}
-                              onChange={(e) => setPhotoDescription(e.target.value)}
-                              placeholder="Enter a description for the photo(s)..."
-                              required
-                            />
-                          </div>
-
-                          <div>
-                            <Input
-                              label="Date"
-                              type="date"
-                              value={photoDate}
-                              onChange={(e) => setPhotoDate(e.target.value)}
-                              required
-                            />
-                          </div>
-
-                          <div>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={compressPhotos}
-                                onChange={(e) => setCompressPhotos(e.target.checked)}
-                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                              />
-                              <span className="text-sm text-gray-700">Compress images (faster upload, smaller files)</span>
-                            </label>
-                          </div>
-
-                          <div>
-                            <label htmlFor="photo-upload" className="cursor-pointer block">
-                              <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-gray-400 transition-colors">
-                                <span className="block text-sm font-medium text-gray-900">
-                                  {selectedPhotoFiles.length > 0 
-                                    ? `${selectedPhotoFiles.length} photo(s) selected`
-                                    : 'Click to select photos'}
-                                </span>
-                                <span className="mt-1 block text-xs text-gray-500">
-                                  PNG, JPG, GIF up to 10MB each
-                                </span>
-                              </div>
-                            </label>
-                            <input
-                              id="photo-upload"
-                              type="file"
-                              multiple
-                              accept="image/*"
-                              onChange={handlePhotoFileSelect}
-                              disabled={uploadingPhoto}
-                              className="hidden"
-                            />
-                          </div>
-
-                          {selectedPhotoFiles.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {selectedPhotoFiles.map((file, index) => (
-                                <div key={index} className="text-xs bg-white px-2 py-1 rounded border border-gray-200">
-                                  {file.name}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          <div className="flex gap-3">
-                            <Button
-                              onClick={handlePhotoSubmit}
-                              disabled={uploadingPhoto || selectedPhotoFiles.length === 0 || !photoDescription.trim()}
-                              className="flex-1"
-                            >
-                              {uploadingPhoto ? 'Uploading...' : 'Upload Photo(s)'}
-                            </Button>
-                            <Button
-                              onClick={() => {
-                                setShowPhotoUpload(false);
-                                setSelectedPhotoFiles([]);
-                                setPhotoDescription('');
-                                setPhotoDate(new Date().toISOString().split('T')[0]);
-                              }}
-                              variant="outline"
-                              disabled={uploadingPhoto}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-
-                        {uploadingPhoto && (
-                          <div className="mt-4">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                            {uploadProgress.total > 0 ? (
-                              <>
-                                <p className="text-sm text-gray-600 text-center">
-                                  Uploading {uploadProgress.current} of {uploadProgress.total} files...
-                                </p>
-                                <p className="text-xs text-gray-500 text-center mt-1">
-                                  Large files may take several minutes to upload
-                                </p>
-                                <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                                  <div 
-                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                    style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
-                                  ></div>
-                                </div>
-                              </>
-                            ) : (
-                              <p className="text-sm text-gray-600 text-center">
-                                Preparing upload...
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                        <>
-                          <div className="w-12 h-12 mx-auto mb-3 bg-yellow-100 rounded-full flex items-center justify-center">
-                            <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                            </svg>
-                          </div>
-                          <div className="mt-4">
-                            <p className="text-sm font-medium text-gray-900 mb-2">
-                              Photo upload temporarily disabled
-                            </p>
-                            <p className="text-xs text-gray-500 mb-4">
-                              We're working with Firebase support to resolve storage issues. This feature will be available soon!
-                            </p>
-                            <button
-                              onClick={() => setShowPhotoUpload(false)}
-                              className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors"
-                            >
-                              Close
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                )}
-              </div>
-
-              {/* Photos Grid */}
-              {photosLoading ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-500 text-sm">Loading photos...</p>
-                  <p className="text-gray-400 text-xs mt-2">This may take a moment for the first time</p>
-                </div>
-              ) : photos.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-4xl mb-3">📸</div>
-                  <p className="text-gray-500 text-sm">No photos uploaded yet</p>
-                  <p className="text-gray-400 text-xs">Upload photos to document your project progress</p>
-                  <button
-                    onClick={() => setShowPhotoUpload(true)}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Upload Your First Photo
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {/* Photos Grid */}
+                {photosLoading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-500 text-sm">Loading photos...</p>
+                    <p className="text-gray-400 text-xs mt-2">This may take a moment for the first time</p>
+                  </div>
+                ) : photos.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="text-4xl mb-3">📸</div>
+                    <p className="text-gray-500 text-sm">No photos uploaded yet</p>
+                    <p className="text-gray-400 text-xs">Upload photos to document your project progress</p>
+                    <button
+                      onClick={() => navigate(`/photos?projectId=${id}`)}
+                      className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Upload Your First Photo
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {photos.map((photo) => (
                     <div key={photo.id} className="relative group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
                       <div className="aspect-square">
                         <img
-                          src={photo.url}
-                          alt={photo.name}
+                          src={photo.url || photo.photoUrl || ''}
+                          alt={photo.name || photo.description || 'Project photo'}
                           className="w-full h-full object-cover"
                           loading="lazy"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZSBub3QgZm91bmQ8L3RleHQ+PC9zdmc+';
+                          }}
                         />
                       </div>
                       
@@ -2111,7 +1544,7 @@ ${reportData.isOverBudget
                       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center">
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-2">
                           <button
-                            onClick={() => window.open(photo.url, '_blank')}
+                            onClick={() => window.open(photo.url || photo.photoUrl || '', '_blank')}
                             className="p-2 bg-white bg-opacity-90 rounded-full hover:bg-opacity-100 transition-colors"
                             title="View full size"
                           >
@@ -2134,24 +1567,26 @@ ${reportData.isOverBudget
                       
                       {/* Photo info */}
                       <div className="p-3">
-                        <p className="text-sm font-medium text-gray-900 truncate" title={photo.name}>
-                          {photo.name}
+                        <p className="text-sm font-medium text-gray-900 truncate" title={photo.description || photo.name}>
+                          {photo.description || photo.name}
                         </p>
                         <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs text-gray-500">
-                            {formatFileSize(photo.size)}
-                          </span>
+                          {photo.size && photo.size > 0 && (
+                            <span className="text-xs text-gray-500">
+                              {formatFileSize(photo.size)}
+                            </span>
+                          )}
                           <span className="text-xs text-gray-400">
-                            {new Date(photo.uploadedAt).toLocaleDateString()}
+                            {photo.date ? photo.date : (new Date(photo.uploadedAt).toLocaleDateString())}
                           </span>
                         </div>
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
-            </div>
-          )}
+                  </div>
+                )}
+              </div>
+            )}
 
           {activeTab === 'Tasks' && (
             <div>
@@ -2663,14 +2098,13 @@ ${reportData.isOverBudget
               )}
             </div>
           )}
+          </div>
         </div>
-      </div>
 
-
-      {/* Task Completion Report Modal */}
-      {showReport && reportData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        {/* Task Completion Report Modal */}
+        {showReport && reportData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Task Completion Report</h2>
               <div className="flex items-center space-x-2">
@@ -2905,11 +2339,11 @@ ${reportData.isOverBudget
             </div>
           </div>
         </div>
-      )}
+        )}
 
-      {/* Financial Form Modal */}
-      {showFinancialForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        {/* Financial Form Modal */}
+        {showFinancialForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Update Budget & Timeline</h2>
@@ -2943,7 +2377,7 @@ ${reportData.isOverBudget
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <p className="text-sm text-blue-800">
-                      Actual costs are automatically calculated from your expenses. Add expenses using the "Add Expense" button.
+                      Actual costs are automatically calculated from your expenses and reimbursements. Add expenses using the "Add Expense" button.
                     </p>
                   </div>
                 </div>
@@ -2990,102 +2424,11 @@ ${reportData.isOverBudget
             </div>
           </div>
         </div>
-      )}
+        )}
 
-      {/* Add Expense Modal */}
-      {showExpenseForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Add Expense</h2>
-              <button
-                onClick={() => setShowExpenseForm(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                  <select
-                    value={newExpenseCategory}
-                    onChange={(e) => setNewExpenseCategory(e.target.value as any)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  >
-                    <option value="materials">🔨 Materials</option>
-                    <option value="labor">👷 Labor</option>
-                    <option value="equipment">🚜 Equipment</option>
-                    <option value="permits">📋 Permits</option>
-                    <option value="utilities">⚡ Utilities</option>
-                    <option value="other">💰 Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <input
-                    type="text"
-                    value={newExpenseDescription}
-                    onChange={(e) => setNewExpenseDescription(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                    placeholder="Enter expense description"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Amount ($)</label>
-                  <input
-                    type="number"
-                    value={newExpenseAmount}
-                    onChange={(e) => setNewExpenseAmount(Number(e.target.value))}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                    placeholder="Enter expense amount"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                  <input
-                    type="date"
-                    value={newExpenseDate}
-                    onChange={(e) => setNewExpenseDate(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowExpenseForm(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddExpense}
-                  disabled={submittingExpense || !newExpenseDescription.trim() || newExpenseAmount <= 0}
-                  className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                >
-                  {submittingExpense && (
-                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  )}
-                  <span>{submittingExpense ? 'Adding...' : 'Add Expense'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Financial Report Modal */}
-      {showFinancialReport && reportData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        {/* Financial Report Modal */}
+        {showFinancialReport && reportData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Financial Report</h2>
@@ -3230,7 +2573,8 @@ ${reportData.isOverBudget
             </div>
           </div>
         </div>
-      )}
+        )}
+      </React.Fragment>
     </Layout>
   );
 };

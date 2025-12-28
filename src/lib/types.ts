@@ -182,14 +182,34 @@ export interface PendingUser {
   status: 'pending' | 'approved' | 'rejected';
 }
 
-// Reimbursement for materials bought by staff
-export interface Reimbursement {
+// Expense category for organizing expenses/reimbursements
+export interface ExpenseCategory {
   id: string;
-  staffId: string;
-  staffName: string;
+  name: string; // e.g., "Materials", "Equipment"
+  isDefault: boolean; // true for pre-made categories (Materials, Equipment)
+  createdAt: any;
+  updatedAt: any;
+}
+
+// Expense subcategory - users select these, categories just organize them
+export interface ExpenseSubcategory {
+  id: string;
+  categoryId: string; // References ExpenseCategory.id
+  name: string; // e.g., "Lumber", "Concrete", "Excavator"
+  usageCount: number; // Track how many times this subcategory has been used
+  createdAt: any;
+  updatedAt: any;
+}
+
+// Expense entry (can be an expense or reimbursement with staff member)
+export interface Expense {
+  id: string;
+  staffId?: string; // Optional - expenses don't have staff, reimbursements do
+  staffName?: string; // Optional - expenses don't have staff, reimbursements do
   projectId?: string;
   projectName?: string;
   itemDescription: string;
+  subcategory?: string; // Subcategory name (e.g., "Lumber", "Concrete")
   amount: number;
   date: string; // YYYY-MM-DD format
   receiptUrl?: string; // URL to receipt photo in Firebase Storage

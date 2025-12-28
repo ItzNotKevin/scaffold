@@ -25,33 +25,29 @@ export async function updateProjectActualCost(projectId: string): Promise<void> 
       totalWages += Number(data.dailyRate) || 0;
     });
 
-    // Get all approved reimbursements for this project
+    // Get all reimbursements and expenses for this project (both are in reimbursements collection)
     const reimbursementsQuery = query(
       collection(db, 'reimbursements'),
-      where('projectId', '==', projectId),
-      where('status', '==', 'approved')
+      where('projectId', '==', projectId)
     );
     const reimbursementsSnapshot = await getDocs(reimbursementsQuery);
     
-    // Calculate total reimbursements
+    // Calculate total reimbursements (entries with staffId) and expenses (entries without staffId)
     let totalReimbursements = 0;
+    let totalExpenses = 0;
     reimbursementsSnapshot.forEach(doc => {
       const data = doc.data();
-      totalReimbursements += Number(data.amount) || 0;
-    });
-
-    // Get all expenses for this project
-    const expensesQuery = query(
-      collection(db, 'expenses'),
-      where('projectId', '==', projectId)
-    );
-    const expensesSnapshot = await getDocs(expensesQuery);
-    
-    // Calculate total expenses
-    let totalExpenses = 0;
-    expensesSnapshot.forEach(doc => {
-      const data = doc.data();
-      totalExpenses += Number(data.amount) || 0;
+      const amount = Number(data.amount) || 0;
+      // If it has staffId, it's a reimbursement (only count approved ones)
+      // If it doesn't have staffId, it's an expense
+      if (data.staffId || data.staffName) {
+        if (data.status === 'approved') {
+          totalReimbursements += amount;
+        }
+      } else {
+        // Expenses are always counted (no status filter)
+        totalExpenses += amount;
+      }
     });
 
     // Calculate total actual cost
@@ -131,31 +127,29 @@ export async function getProjectCostBreakdown(projectId: string): Promise<{
       totalWages += Number(data.dailyRate) || 0;
     });
 
-    // Get all approved reimbursements for this project
+    // Get all reimbursements and expenses for this project (both are in reimbursements collection)
     const reimbursementsQuery = query(
       collection(db, 'reimbursements'),
-      where('projectId', '==', projectId),
-      where('status', '==', 'approved')
+      where('projectId', '==', projectId)
     );
     const reimbursementsSnapshot = await getDocs(reimbursementsQuery);
     
+    // Calculate total reimbursements (entries with staffId) and expenses (entries without staffId)
     let totalReimbursements = 0;
+    let totalExpenses = 0;
     reimbursementsSnapshot.forEach(doc => {
       const data = doc.data();
-      totalReimbursements += Number(data.amount) || 0;
-    });
-
-    // Get all expenses for this project
-    const expensesQuery = query(
-      collection(db, 'expenses'),
-      where('projectId', '==', projectId)
-    );
-    const expensesSnapshot = await getDocs(expensesQuery);
-    
-    let totalExpenses = 0;
-    expensesSnapshot.forEach(doc => {
-      const data = doc.data();
-      totalExpenses += Number(data.amount) || 0;
+      const amount = Number(data.amount) || 0;
+      // If it has staffId, it's a reimbursement (only count approved ones)
+      // If it doesn't have staffId, it's an expense
+      if (data.staffId || data.staffName) {
+        if (data.status === 'approved') {
+          totalReimbursements += amount;
+        }
+      } else {
+        // Expenses are always counted (no status filter)
+        totalExpenses += amount;
+      }
     });
 
     const wagesRounded = Math.round((totalWages + Number.EPSILON) * 100) / 100;

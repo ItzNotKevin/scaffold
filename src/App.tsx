@@ -16,8 +16,9 @@ import DebugPage from './pages/DebugPage';
 import PayrollPage from './pages/PayrollPage.tsx';
 import StaffAssignmentsPage from './pages/StaffAssignmentsPage';
 import StaffManagementPage from './pages/StaffManagementPage';
-import ReimbursementPage from './pages/ReimbursementPage';
-import TaskTemplatesPage from './pages/TaskTemplatesPage';
+import ExpensePage from './pages/ExpensePage';
+import PhotoPage from './pages/PhotoPage';
+import CategoryManagementPage from './pages/CategoryManagementPage';
 import ActivityLogsPage from './pages/ActivityLogsPage';
 
 function App() {
@@ -80,10 +81,18 @@ function App() {
                   }
                 />
                 <Route
-                  path="/reimbursement"
+                  path="/expenses"
                   element={
                     <ProtectedRoute>
-                      <ReimbursementPage />
+                      <ExpensePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/photos"
+                  element={
+                    <ProtectedRoute>
+                      <PhotoPage />
                     </ProtectedRoute>
                   }
                 />
@@ -91,7 +100,15 @@ function App() {
                   path="/task-templates"
                   element={
                     <ProtectedRoute>
-                      <TaskTemplatesPage />
+                      <CategoryManagementPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/categories"
+                  element={
+                    <ProtectedRoute>
+                      <CategoryManagementPage />
                     </ProtectedRoute>
                   }
                 />

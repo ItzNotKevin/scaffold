@@ -3,16 +3,16 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/useAuth';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import ReimbursementManager from '../components/ReimbursementManager';
+import PhotoManager from '../components/PhotoManager';
 
-const ReimbursementPage: React.FC = () => {
+const PhotoPage: React.FC = () => {
   const { t } = useTranslation();
   const { currentUser, userProfile, permissions } = useAuth();
   const navigate = useNavigate();
 
   if (!currentUser || !userProfile) {
     return (
-      <Layout title="Reimbursement" currentRole="admin">
+      <Layout title="Photos" currentRole="admin">
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
@@ -24,12 +24,12 @@ const ReimbursementPage: React.FC = () => {
   }
 
   return (
-    <Layout title="Reimbursement" currentRole="admin">
+    <Layout title="Photos" currentRole="admin">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Reimbursement Management</h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-1">Track material reimbursements for staff members</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Photos</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">Manage project photos</p>
           </div>
           <button
             onClick={() => navigate('/')}
@@ -39,11 +39,11 @@ const ReimbursementPage: React.FC = () => {
           </button>
         </div>
 
-        <ReimbursementManager />
+        <PhotoManager />
       </div>
     </Layout>
   );
 };
 
-export default ReimbursementPage;
+export default PhotoPage;
 
