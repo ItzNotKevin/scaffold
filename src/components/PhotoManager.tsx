@@ -27,11 +27,12 @@ const PhotoManager: React.FC = () => {
   const [compressPhotos, setCompressPhotos] = useState(true);
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
   const [showAllPhotos, setShowAllPhotos] = useState(false);
+  const [showNotesField, setShowNotesField] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
     projectId: projectIdParam || '',
-    description: '',
+    notes: '',
     date: new Date().toISOString().split('T')[0],
     selectedFiles: [] as File[]
   });
@@ -88,7 +89,7 @@ const PhotoManager: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.projectId || !formData.description.trim() || !currentUser) {
+    if (!formData.projectId || !currentUser) {
       alert('Please fill in all required fields');
       return;
     }
@@ -118,7 +119,7 @@ const PhotoManager: React.FC = () => {
         const updateData: any = {
           projectId: formData.projectId,
           projectName: selectedProject.name,
-          description: formData.description,
+          description: formData.notes || '',
           date: formData.date,
           updatedAt: serverTimestamp()
         };
@@ -196,7 +197,7 @@ const PhotoManager: React.FC = () => {
               projectName: selectedProject.name,
               photoUrl: photoUrl,
               photoName: fileName, // Store the full filename with timestamp for deletion
-              description: formData.description,
+              description: formData.notes || '',
               date: formData.date,
               uploadedBy: currentUser.uid,
               uploadedByName: currentUser.displayName || currentUser.email || 'Unknown User',
@@ -235,10 +236,11 @@ const PhotoManager: React.FC = () => {
   const handleEdit = (photo: ProjectPhotoEntry) => {
     setFormData({
       projectId: photo.projectId,
-      description: photo.description,
+      notes: photo.description || '',
       date: photo.date,
       selectedFiles: []
     });
+    setShowNotesField(!!photo.description);
     setEditingId(photo.id);
     setShowForm(true);
   };
@@ -276,10 +278,11 @@ const PhotoManager: React.FC = () => {
   const resetForm = () => {
     setFormData({
       projectId: projectIdParam || '',
-      description: '',
+      notes: '',
       date: new Date().toISOString().split('T')[0],
       selectedFiles: []
     });
+    setShowNotesField(false);
     setEditingId(null);
     setShowForm(false);
     // Clear projectId from URL if it was set
@@ -362,18 +365,6 @@ const PhotoManager: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description *
-                  </label>
-                  <Input
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Enter photo description..."
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Date *
                   </label>
                   <Input
@@ -383,6 +374,51 @@ const PhotoManager: React.FC = () => {
                     required
                   />
                 </div>
+
+                {/* Optional Fields - Toggleable */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {!showNotesField && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowNotesField(true)}
+                      className="text-sm"
+                    >
+                      + Add Notes
+                    </Button>
+                  )}
+                </div>
+
+                {/* Notes Field */}
+                {showNotesField && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Notes
+                      </label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowNotesField(false);
+                          setFormData({ ...formData, notes: '' });
+                        }}
+                        className="text-xs"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="Additional notes..."
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation"
+                      rows={2}
+                    />
+                  </div>
+                )}
 
                 {!editingId && (
                   <>

@@ -37,6 +37,13 @@ const ExpenseManager: React.FC = () => {
   const [showReceiptField, setShowReceiptField] = useState(false);
   const [showNotesField, setShowNotesField] = useState(false);
   
+  // Add subcategory modal state
+  const [showAddSubcategoryModal, setShowAddSubcategoryModal] = useState(false);
+  const [newSubcategoryName, setNewSubcategoryName] = useState('');
+  const [newSubcategoryCategoryId, setNewSubcategoryCategoryId] = useState('');
+  const [creatingSubcategory, setCreatingSubcategory] = useState(false);
+  const [subcategoryError, setSubcategoryError] = useState('');
+  
   // Form state
   const [formData, setFormData] = useState({
     staffId: '',
@@ -102,8 +109,8 @@ const ExpenseManager: React.FC = () => {
       const reimbursementsData = reimbursementsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      } as Reimbursement));
-      setReimbursements(reimbursementsData);
+      } as Expense));
+      setExpenses(reimbursementsData);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -337,6 +344,78 @@ const ExpenseManager: React.FC = () => {
     }
   };
 
+  const resetSubcategoryModal = () => {
+    setNewSubcategoryName('');
+    setNewSubcategoryCategoryId('');
+    setSubcategoryError('');
+    setShowAddSubcategoryModal(false);
+  };
+
+  const handleCreateSubcategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubcategoryError('');
+
+    // Validation
+    if (!newSubcategoryName.trim()) {
+      setSubcategoryError('Subcategory name is required');
+      return;
+    }
+
+    if (!newSubcategoryCategoryId) {
+      setSubcategoryError('Please select a category');
+      return;
+    }
+
+    // Check for duplicate (case-insensitive)
+    const trimmedName = newSubcategoryName.trim();
+    const duplicate = subcategories.find(
+      sub => sub.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    
+    if (duplicate) {
+      setSubcategoryError('A subcategory with this name already exists');
+      return;
+    }
+
+    try {
+      setCreatingSubcategory(true);
+      
+      // Create the subcategory in Firestore
+      const subcategoryData = {
+        name: trimmedName,
+        categoryId: newSubcategoryCategoryId,
+        usageCount: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      await addDoc(collection(db, 'expenseSubcategories'), subcategoryData);
+      
+      // Reload subcategories
+      const subcategoriesQuery = query(
+        collection(db, 'expenseSubcategories'),
+        orderBy('name', 'asc')
+      );
+      const subcategoriesSnapshot = await getDocs(subcategoriesQuery);
+      const subcategoriesData = subcategoriesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as ExpenseSubcategory));
+      setSubcategories(subcategoriesData);
+
+      // Auto-select the newly created subcategory
+      setFormData({ ...formData, subcategory: trimmedName });
+      
+      // Close the modal
+      resetSubcategoryModal();
+    } catch (error) {
+      console.error('Error creating subcategory:', error);
+      setSubcategoryError('Failed to create subcategory. Please try again.');
+    } finally {
+      setCreatingSubcategory(false);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -431,7 +510,14 @@ const ExpenseManager: React.FC = () => {
                 </label>
                 <select
                   value={formData.subcategory}
-                  onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                  onChange={(e) => {
+                    if (e.target.value === '__add_new__') {
+                      setShowAddSubcategoryModal(true);
+                      setFormData({ ...formData, subcategory: '' });
+                    } else {
+                      setFormData({ ...formData, subcategory: e.target.value });
+                    }
+                  }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
                   required
                 >
@@ -454,6 +540,9 @@ const ExpenseManager: React.FC = () => {
                       </optgroup>
                     );
                   })}
+                  {categories.length > 0 && (
+                    <option value="__add_new__">+ Add new subcategory...</option>
+                  )}
                 </select>
               </div>
               <div>
@@ -694,6 +783,111 @@ const ExpenseManager: React.FC = () => {
                     Cancel
                   </Button>
                 </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Add Subcategory Modal */}
+        {showAddSubcategoryModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-[60]">
+            <div className="bg-white rounded-2xl max-w-md w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+                  Add New Subcategory
+                </h2>
+                <button
+                  onClick={resetSubcategoryModal}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <form onSubmit={handleCreateSubcategory} className="p-4 sm:p-6 space-y-4">
+                {categories.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-gray-600 mb-4">No categories available. Please create a category first.</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={resetSubcategoryModal}
+                      className="w-full sm:w-auto"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Subcategory Name *
+                      </label>
+                      <Input
+                        type="text"
+                        value={newSubcategoryName}
+                        onChange={(e) => {
+                          setNewSubcategoryName(e.target.value);
+                          setSubcategoryError('');
+                        }}
+                        placeholder="Enter subcategory name"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Category *
+                      </label>
+                      <select
+                        value={newSubcategoryCategoryId}
+                        onChange={(e) => {
+                          setNewSubcategoryCategoryId(e.target.value);
+                          setSubcategoryError('');
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+                        required
+                      >
+                        <option value="">Select Category</option>
+                        {categories.map(category => (
+                          <option key={category.id} value={category.id}>{category.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {subcategoryError && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <p className="text-sm text-red-600">{subcategoryError}</p>
+                      </div>
+                    )}
+                    <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-gray-200">
+                      <Button 
+                        type="submit" 
+                        disabled={creatingSubcategory || !newSubcategoryName.trim() || !newSubcategoryCategoryId} 
+                        className="w-full sm:w-auto"
+                      >
+                        {creatingSubcategory ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                            Creating...
+                          </>
+                        ) : (
+                          'Create Subcategory'
+                        )}
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={resetSubcategoryModal} 
+                        className="w-full sm:w-auto"
+                        disabled={creatingSubcategory}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </>
+                )}
               </form>
             </div>
           </div>

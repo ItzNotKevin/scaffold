@@ -19,11 +19,12 @@ const TaskTemplatesPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showNotesField, setShowNotesField] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
     title: '',
-    description: '',
+    notes: '',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     status: 'todo' as 'todo' | 'in-progress' | 'review' | 'completed'
   });
@@ -82,7 +83,7 @@ const TaskTemplatesPage: React.FC = () => {
       
       const dataToSave = {
         title: formData.title.trim(),
-        description: formData.description.trim() || '',
+        description: formData.notes.trim() || '',
         priority: formData.priority,
         status: formData.status,
         isTemplate: true,
@@ -112,10 +113,11 @@ const TaskTemplatesPage: React.FC = () => {
   const handleEdit = (template: Task) => {
     setFormData({
       title: template.title,
-      description: template.description || '',
+      notes: template.description || '',
       priority: template.priority || 'medium',
       status: template.status || 'todo'
     });
+    setShowNotesField(!!template.description);
     setEditingId(template.id);
     setShowForm(true);
   };
@@ -135,10 +137,11 @@ const TaskTemplatesPage: React.FC = () => {
   const resetForm = () => {
     setFormData({
       title: '',
-      description: '',
+      notes: '',
       priority: 'medium',
       status: 'todo'
     });
+    setShowNotesField(false);
     setEditingId(null);
     setShowForm(false);
   };
@@ -207,18 +210,52 @@ const TaskTemplatesPage: React.FC = () => {
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Optional task description..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
-                  rows={3}
-                />
+
+              {/* Optional Fields - Toggleable */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {!showNotesField && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowNotesField(true)}
+                    className="text-sm"
+                  >
+                    + Add Notes
+                  </Button>
+                )}
               </div>
+
+              {/* Notes Field */}
+              {showNotesField && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Notes
+                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowNotesField(false);
+                        setFormData({ ...formData, notes: '' });
+                      }}
+                      className="text-xs"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Additional notes..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
+                    rows={3}
+                  />
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">

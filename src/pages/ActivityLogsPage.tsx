@@ -63,6 +63,7 @@ const ActivityLogsPage: React.FC = () => {
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showNotesField, setShowNotesField] = useState(false);
   const [editFormData, setEditFormData] = useState<{
     staffId?: string;
     projectId: string;
@@ -73,7 +74,7 @@ const ActivityLogsPage: React.FC = () => {
     itemDescription?: string;
     amount?: number;
     status?: 'pending' | 'approved' | 'rejected';
-    description?: string; // For photos
+    description?: string; // For photos (will be replaced with notes)
   } | null>(null);
 
   useEffect(() => {
@@ -418,23 +419,26 @@ const ActivityLogsPage: React.FC = () => {
   const handleStartEdit = (activity: ActivityLog) => {
     setEditingId(activity.id);
     const selectedStaff = staff.find(s => s.id === activity.staffId);
+    const notes = activity.description || activity.taskDescription || '';
     setEditFormData({
       staffId: activity.staffId,
       projectId: activity.projectId || '',
       date: activity.date,
       taskDescription: activity.taskDescription,
       dailyRate: activity.dailyRate,
-      notes: undefined, // We don't have notes in ActivityLog, but we can add it
+      notes: notes,
       itemDescription: activity.itemDescription,
       amount: activity.amount,
       status: activity.status,
-      description: activity.description // For photos
+      description: activity.description // For photos (kept for backward compatibility, will use notes)
     });
+    setShowNotesField(!!notes);
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
     setEditFormData(null);
+    setShowNotesField(false);
   };
 
   const handleDelete = async () => {
@@ -454,17 +458,27 @@ const ActivityLogsPage: React.FC = () => {
         // Delete assignment
         await deleteDoc(doc(db, 'taskAssignments', editingId));
 
-        // Update project costs if project exists
+        // Update project costs if project exists (don't block deletion if project is deleted)
         if (activity.projectId) {
-          await updateProjectActualCost(activity.projectId);
+          try {
+            await updateProjectActualCost(activity.projectId);
+          } catch (costUpdateError) {
+            console.warn('Could not update project costs (project may not exist):', costUpdateError);
+            // Continue with deletion even if cost update fails
+          }
         }
       } else if (activity.type === 'reimbursement') {
         // Delete reimbursement
         await deleteDoc(doc(db, 'reimbursements', editingId));
 
-        // Update project costs if project exists
+        // Update project costs if project exists (don't block deletion if project is deleted)
         if (activity.projectId) {
-          await updateProjectActualCost(activity.projectId);
+          try {
+            await updateProjectActualCost(activity.projectId);
+          } catch (costUpdateError) {
+            console.warn('Could not update project costs (project may not exist):', costUpdateError);
+            // Continue with deletion even if cost update fails
+          }
         }
       } else if (activity.type === 'photo') {
         // Delete photo entry
@@ -495,7 +509,7 @@ const ActivityLogsPage: React.FC = () => {
 
       if (activity.type === 'assignment') {
         // Validate assignment fields
-        if (!editFormData.staffId || !editFormData.taskDescription?.trim()) {
+        if (!editFormData.staffId) {
           alert('Please fill in all required fields');
           return;
         }
@@ -509,7 +523,7 @@ const ActivityLogsPage: React.FC = () => {
           projectId: editFormData.projectId || null,
           projectName: selectedProject?.name || null,
           date: editFormData.date,
-          taskDescription: editFormData.taskDescription.trim(),
+          taskDescription: editFormData.notes?.trim() || '',
           dailyRate: typeof editFormData.dailyRate === 'number' ? editFormData.dailyRate : activity.dailyRate || 0,
           updatedAt: serverTimestamp()
         };
@@ -560,8 +574,8 @@ const ActivityLogsPage: React.FC = () => {
         }
       } else if (activity.type === 'photo') {
         // Validate photo fields
-        if (!editFormData.description?.trim() || !editFormData.projectId) {
-          alert('Please fill in all required fields (description and project)');
+        if (!editFormData.projectId) {
+          alert('Please fill in all required fields (project)');
           setSaving(false);
           return;
         }
@@ -572,7 +586,7 @@ const ActivityLogsPage: React.FC = () => {
           projectId: editFormData.projectId,
           projectName: selectedProject?.name || activity.projectName,
           date: editFormData.date,
-          description: editFormData.description.trim(),
+          description: editFormData.notes?.trim() || '',
           updatedAt: serverTimestamp()
         };
 
@@ -883,38 +897,60 @@ const ActivityLogsPage: React.FC = () => {
                           />
                         </div>
                         
-                        {activity.type === 'photo' ? (
+                        {/* Optional Fields - Toggleable */}
+                        <div className="sm:col-span-2 flex flex-wrap gap-2 mb-3">
+                          {!showNotesField && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowNotesField(true)}
+                              className="text-xs"
+                            >
+                              + Add Notes
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* Notes Field */}
+                        {showNotesField && (
                           <div className="sm:col-span-2">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
-                            <Input
-                              value={editFormData.description || ''}
-                              onChange={(e) => setEditFormData({...editFormData, description: e.target.value})}
-                              className="text-sm"
-                              placeholder="Enter photo description..."
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-xs font-medium text-gray-700">Notes</label>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setShowNotesField(false);
+                                  setEditFormData({...editFormData, notes: ''});
+                                }}
+                                className="text-xs"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                            <textarea
+                              value={editFormData.notes || ''}
+                              onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
+                              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 touch-manipulation"
+                              placeholder="Additional notes..."
+                              rows={2}
                             />
                           </div>
-                        ) : activity.type === 'assignment' ? (
-                          <>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Daily Rate ($)</label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={editFormData.dailyRate || ''}
-                                onChange={(e) => setEditFormData({...editFormData, dailyRate: parseFloat(e.target.value) || 0})}
-                                className="text-sm"
-                              />
-                            </div>
-                            <div className="sm:col-span-2">
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Task Description</label>
-                              <Input
-                                value={editFormData.taskDescription || ''}
-                                onChange={(e) => setEditFormData({...editFormData, taskDescription: e.target.value})}
-                                className="text-sm"
-                                placeholder="Enter task description..."
-                              />
-                            </div>
-                          </>
+                        )}
+
+                        {activity.type === 'photo' ? null : activity.type === 'assignment' ? (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Daily Rate ($)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={editFormData.dailyRate || ''}
+                              onChange={(e) => setEditFormData({...editFormData, dailyRate: parseFloat(e.target.value) || 0})}
+                              className="text-sm"
+                            />
+                          </div>
                         ) : (
                           <>
                             <div>
