@@ -36,6 +36,7 @@ const ExpenseManager: React.FC = () => {
   const [showStaffField, setShowStaffField] = useState(false);
   const [showReceiptField, setShowReceiptField] = useState(false);
   const [showNotesField, setShowNotesField] = useState(false);
+  const [showVendorField, setShowVendorField] = useState(false);
   
   // Add subcategory modal state
   const [showAddSubcategoryModal, setShowAddSubcategoryModal] = useState(false);
@@ -53,6 +54,7 @@ const ExpenseManager: React.FC = () => {
     date: new Date().toISOString().split('T')[0],
     receiptUrl: '',
     notes: '',
+    vendor: '',
     status: 'approved' as 'pending' | 'approved' | 'rejected'
   });
 
@@ -206,6 +208,7 @@ const ExpenseManager: React.FC = () => {
         date: formData.date,
         receiptUrl: formData.receiptUrl || null,
         notes: formData.notes || null,
+        vendor: formData.vendor || null,
         status: formData.status,
         createdBy: currentUser.uid,
         updatedAt: serverTimestamp()
@@ -278,12 +281,14 @@ const ExpenseManager: React.FC = () => {
       date: expense.date,
       receiptUrl: expense.receiptUrl || '',
       notes: expense.notes || '',
+      vendor: expense.vendor || '',
       status: expense.status
     });
     // Show optional fields if they have values
     setShowStaffField(!!expense.staffId);
     setShowReceiptField(!!expense.receiptUrl);
     setShowNotesField(!!expense.notes);
+    setShowVendorField(!!expense.vendor);
     setEditingId(expense.id);
     setShowForm(true);
   };
@@ -624,6 +629,17 @@ const ExpenseManager: React.FC = () => {
                   + Add Notes
                 </Button>
               )}
+              {!showVendorField && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowVendorField(true)}
+                  className="text-sm"
+                >
+                  + Add Vendor
+                </Button>
+              )}
             </div>
 
             {/* Staff Member Field */}
@@ -694,6 +710,7 @@ const ExpenseManager: React.FC = () => {
                   <input
                     type="file"
                     accept="image/*"
+                    capture="environment"
                     onChange={handleFileUpload}
                     disabled={uploadingReceipt}
                     className="block w-full text-sm text-gray-500
@@ -755,6 +772,36 @@ const ExpenseManager: React.FC = () => {
                   placeholder="Additional notes..."
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation"
                   rows={2}
+                />
+              </div>
+            )}
+
+            {/* Vendor Field */}
+            {showVendorField && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Vendor
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowVendorField(false);
+                      setFormData({ ...formData, vendor: '' });
+                    }}
+                    className="text-xs"
+                  >
+                    Remove
+                  </Button>
+                </div>
+                <Input
+                  type="text"
+                  value={formData.vendor}
+                  onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+                  placeholder="Enter vendor name"
+                  className="w-full"
                 />
               </div>
             )}
@@ -823,6 +870,26 @@ const ExpenseManager: React.FC = () => {
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Category *
+                      </label>
+                      <select
+                        value={newSubcategoryCategoryId}
+                        onChange={(e) => {
+                          setNewSubcategoryCategoryId(e.target.value);
+                          setSubcategoryError('');
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+                        required
+                        autoFocus
+                      >
+                        <option value="">Select Category</option>
+                        {categories.map(category => (
+                          <option key={category.id} value={category.id}>{category.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Subcategory Name *
                       </label>
                       <Input
@@ -834,27 +901,7 @@ const ExpenseManager: React.FC = () => {
                         }}
                         placeholder="Enter subcategory name"
                         required
-                        autoFocus
                       />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Category *
-                      </label>
-                      <select
-                        value={newSubcategoryCategoryId}
-                        onChange={(e) => {
-                          setNewSubcategoryCategoryId(e.target.value);
-                          setSubcategoryError('');
-                        }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
-                        required
-                      >
-                        <option value="">Select Category</option>
-                        {categories.map(category => (
-                          <option key={category.id} value={category.id}>{category.name}</option>
-                        ))}
-                      </select>
                     </div>
                     {subcategoryError && (
                       <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -937,6 +984,11 @@ const ExpenseManager: React.FC = () => {
                           <span className="font-medium">Project:</span> <span className="break-words">{expense.projectName}</span>
                         </div>
                       )}
+                      {expense.vendor && (
+                        <div>
+                          <span className="font-medium">Vendor:</span> <span className="break-words">{expense.vendor}</span>
+                        </div>
+                      )}
                     </div>
                     {expense.notes && (
                       <p className="text-xs sm:text-sm text-gray-600 mt-2 break-words">{expense.notes}</p>
@@ -998,3 +1050,4 @@ const ExpenseManager: React.FC = () => {
 };
 
 export default ExpenseManager;
+

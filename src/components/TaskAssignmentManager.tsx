@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { collection, getDocs, query, where, addDoc, serverTimestamp, doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, serverTimestamp, doc, getDoc, deleteDoc, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
-import type { TaskAssignment } from '../lib/types';
+import type { TaskAssignment, Task } from '../lib/types';
 import { updateProjectActualCost } from '../lib/projectCosts';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -37,8 +37,17 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
+  const [taskTemplates, setTaskTemplates] = useState<Task[]>([]);
   const [assignments, setAssignments] = useState<TaskAssignment[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  
+  // Add task modal state
+  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskNotes, setNewTaskNotes] = useState('');
+  const [showTaskNotesField, setShowTaskNotesField] = useState(false);
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [taskError, setTaskError] = useState('');
   
   // Form state
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -54,6 +63,7 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
 
   useEffect(() => {
     loadData();
+    loadTaskTemplates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -154,6 +164,39 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
     }
   };
 
+
+  const loadTaskTemplates = async () => {
+    try {
+      const templatesQuery = query(
+        collection(db, 'tasks'),
+        where('isTemplate', '==', true),
+        orderBy('title', 'asc')
+      );
+      const templatesSnapshot = await getDocs(templatesQuery);
+      const templatesData = templatesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Task));
+      setTaskTemplates(templatesData);
+    } catch (error: any) {
+      console.error('Error loading task templates:', error);
+      // Fallback: try loading all tasks and filter
+      try {
+        const allTasksQuery = query(collection(db, 'tasks'));
+        const allTasksSnapshot = await getDocs(allTasksQuery);
+        const allTasks = allTasksSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Task));
+        const templateTasks = allTasks.filter(
+          task => task.isTemplate === true || task.projectId === null || task.projectId === undefined
+        );
+        setTaskTemplates(templateTasks);
+      } catch (fallbackError) {
+        console.error('Error in fallback template loading:', fallbackError);
+      }
+    }
+  };
 
   const loadProjectTasks = async (projectId: string) => {
     if (!projectId || projectId.trim() === '') {
@@ -494,6 +537,9 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
 
   const selectedStaff = staff.find(s => s.id === selectedStaffId);
   const selectedProject = projects.find(p => p.id === selectedProjectId);
+  
+  // Combine project tasks and task templates for display
+  const allAvailableTasks = [...projectTasks, ...taskTemplates.map(t => ({ id: t.id, title: t.title, status: t.status || 'todo', isTemplate: true }))];
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -642,16 +688,54 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                       </>
                     )}
                     
+                    {/* Task Templates Section */}
+                    {taskTemplates.length > 0 && (
+                      <>
+                        {projectTasks.length > 0 && (
+                          <div className="border-t border-gray-200 mt-2 pt-2"></div>
+                        )}
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-2">
+                          Task Templates
+                        </div>
+                        {taskTemplates.map(task => (
+                          <label key={task.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer touch-manipulation min-h-[44px]">
+                            <input
+                              type="checkbox"
+                              checked={selectedTaskIds.includes(task.id)}
+                              onChange={() => toggleTaskSelection(task.id)}
+                              className="mr-3 w-5 h-5"
+                            />
+                            <div className="flex-1">
+                              <span className="font-medium">{task.title}</span>
+                            </div>
+                          </label>
+                        ))}
+                      </>
+                    )}
+                    
                     {/* Show message if no tasks */}
-                    {projectTasks.length === 0 && (
+                    {projectTasks.length === 0 && taskTemplates.length === 0 && (
                       <p className="text-sm text-gray-500 p-2">No tasks found. Create project tasks or use custom task.</p>
                     )}
                     
-                    {/* Custom Task Option */}
-                    {projectTasks.length > 0 && (
-                      <div className="border-t border-gray-200 mt-2"></div>
+                    {/* Add New Task Option */}
+                    {(projectTasks.length > 0 || taskTemplates.length > 0) && (
+                      <>
+                        <div className="border-t border-gray-200 mt-2 pt-2"></div>
+                        <label 
+                          className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer touch-manipulation min-h-[44px]"
+                          onClick={() => setShowAddTaskModal(true)}
+                        >
+                          <span className="font-medium text-blue-600">➕ Add new task...</span>
+                        </label>
+                      </>
                     )}
-                    <label className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer border-t border-gray-200 mt-2 pt-2 touch-manipulation min-h-[44px]">
+                    
+                    {/* Custom Task Option */}
+                    {(projectTasks.length > 0 || taskTemplates.length > 0) && (
+                      <div className="border-t border-gray-200 mt-2 pt-2"></div>
+                    )}
+                    <label className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer touch-manipulation min-h-[44px]">
                       <input
                         type="checkbox"
                         checked={selectedTaskIds.includes('custom')}
@@ -681,12 +765,17 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                   <select
                     value={selectedTaskId}
                     onChange={(e) => {
-                      setSelectedTaskId(e.target.value);
-                      if (e.target.value === 'custom') {
-                        setTaskDescription('');
+                      if (e.target.value === '__add_new__') {
+                        setShowAddTaskModal(true);
+                        setSelectedTaskId('');
                       } else {
-                        const task = projectTasks.find(t => t.id === e.target.value);
-                        setTaskDescription(task?.title || '');
+                        setSelectedTaskId(e.target.value);
+                        if (e.target.value === 'custom') {
+                          setTaskDescription('');
+                        } else {
+                          const task = allAvailableTasks.find(t => t.id === e.target.value);
+                          setTaskDescription(task?.title || '');
+                        }
                       }
                     }}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base mb-2 touch-manipulation min-h-[44px]"
@@ -701,6 +790,19 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
                           </option>
                         ))}
                       </optgroup>
+                    )}
+                    {/* Task Templates */}
+                    {taskTemplates.length > 0 && (
+                      <optgroup label="Task Templates">
+                        {taskTemplates.map(task => (
+                          <option key={task.id} value={task.id}>
+                            {task.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {(projectTasks.length > 0 || taskTemplates.length > 0) && (
+                      <option value="__add_new__">+ Add new task...</option>
                     )}
                     <option value="custom">{t('taskAssignment.customTask')}</option>
                   </select>
@@ -792,6 +894,123 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
           </div>
         )}
       </Card>
+
+      {/* Add Task Modal */}
+      {showAddTaskModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-[60]">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+                Add New Task
+              </h2>
+              <button
+                onClick={resetTaskModal}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleCreateTask} className="p-4 sm:p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Task Title *
+                </label>
+                <Input
+                  type="text"
+                  value={newTaskTitle}
+                  onChange={(e) => {
+                    setNewTaskTitle(e.target.value);
+                    setTaskError('');
+                  }}
+                  placeholder="e.g., Framing, Drywall Installation, Painting"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              {/* Optional Fields - Toggleable */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {!showTaskNotesField && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowTaskNotesField(true)}
+                    className="text-sm"
+                  >
+                    + Add Notes
+                  </Button>
+                )}
+              </div>
+
+              {/* Notes Field */}
+              {showTaskNotesField && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Notes
+                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowTaskNotesField(false);
+                        setNewTaskNotes('');
+                      }}
+                      className="text-xs"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <textarea
+                    value={newTaskNotes}
+                    onChange={(e) => setNewTaskNotes(e.target.value)}
+                    placeholder="Additional notes..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
+                    rows={3}
+                  />
+                </div>
+              )}
+
+              {taskError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-600">{taskError}</p>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-gray-200">
+                <Button 
+                  type="submit" 
+                  disabled={creatingTask || !newTaskTitle.trim()} 
+                  className="w-full sm:w-auto"
+                >
+                  {creatingTask ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Task'
+                  )}
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={resetTaskModal} 
+                  className="w-full sm:w-auto"
+                  disabled={creatingTask}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

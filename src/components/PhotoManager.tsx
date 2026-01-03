@@ -5,7 +5,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
-import type { ProjectPhotoEntry } from '../lib/types';
+import type { ProjectPhotoEntry, StaffMember } from '../lib/types';
 import { compressImage } from '../lib/imageCompression';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -20,6 +20,7 @@ const PhotoManager: React.FC = () => {
   
   const [photos, setPhotos] = useState<ProjectPhotoEntry[]>([]);
   const [projects, setProjects] = useState<Array<{id: string, name: string}>>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -28,18 +29,28 @@ const PhotoManager: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [showNotesField, setShowNotesField] = useState(false);
+  const [showStaffField, setShowStaffField] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
     projectId: projectIdParam || '',
     notes: '',
     date: new Date().toISOString().split('T')[0],
-    selectedFiles: [] as File[]
+    selectedFiles: [] as File[],
+    staffId: ''
   });
 
   const loadData = async () => {
     try {
       setLoading(true);
+      
+      // Load staff members
+      const staffSnapshot = await getDocs(collection(db, 'staffMembers'));
+      const staffData = staffSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as StaffMember));
+      setStaff(staffData);
       
       // Load projects
       const projectsSnapshot = await getDocs(collection(db, 'projects'));
@@ -116,11 +127,15 @@ const PhotoManager: React.FC = () => {
           return;
         }
 
+        const selectedStaff = formData.staffId ? staff.find(s => s.id === formData.staffId) : null;
+        
         const updateData: any = {
           projectId: formData.projectId,
           projectName: selectedProject.name,
           description: formData.notes || '',
           date: formData.date,
+          staffId: formData.staffId || null,
+          staffName: selectedStaff?.name || null,
           updatedAt: serverTimestamp()
         };
 
@@ -161,58 +176,106 @@ const PhotoManager: React.FC = () => {
           return;
         }
 
-        setUploadProgress({current: 0, total: validFiles.length});
+        console.log(`Starting upload: ${validFiles.length} valid files selected`);
+        console.log('File details:', validFiles.map(f => ({ name: f.name, size: f.size, type: f.type })));
+
+        // Group photos: upload up to 9 photos in a single entry
+        const maxPhotosPerEntry = 9;
+        const photoGroups: File[][] = [];
+        for (let i = 0; i < validFiles.length; i += maxPhotosPerEntry) {
+          photoGroups.push(validFiles.slice(i, i + maxPhotosPerEntry));
+        }
+        
+        console.log(`Created ${photoGroups.length} group(s) from ${validFiles.length} files`);
+
+        console.log(`Uploading ${validFiles.length} files in ${photoGroups.length} group(s)`);
+        console.log(`Files to upload:`, validFiles.map(f => f.name));
+
         let successCount = 0;
         let errorCount = 0;
 
-        for (let i = 0; i < validFiles.length; i++) {
-          const file = validFiles[i];
+        for (let groupIndex = 0; groupIndex < photoGroups.length; groupIndex++) {
+          const photoGroup = photoGroups[groupIndex];
+          const photoUrls: string[] = [];
+          const photoNames: string[] = [];
           
-          // Compress image if option is enabled
-          let fileToUpload = file;
-          if (compressPhotos && file.type.startsWith('image/')) {
-            fileToUpload = await compressImage(file);
-          }
-          
-          setUploadProgress({current: i, total: validFiles.length});
-          
+          setUploadProgress({current: groupIndex, total: photoGroups.length});
+
+          console.log(`Processing group ${groupIndex + 1}/${photoGroups.length} with ${photoGroup.length} photos`);
+          console.log(`Group files:`, photoGroup.map(f => f.name));
+
           try {
-            // Create unique filename with timestamp and index
-            const timestamp = Date.now();
-            const fileName = `${timestamp}_${i}_${fileToUpload.name}`;
-            const photoRef = ref(storage, `projects/${formData.projectId}/photos/${fileName}`);
-            
-            // Upload file
-            await uploadBytes(photoRef, fileToUpload, {
-              customMetadata: {
-                uploadedBy: currentUser.uid,
-                uploadedAt: new Date().toISOString()
+            // Upload all photos in this group
+            for (let i = 0; i < photoGroup.length; i++) {
+              const file = photoGroup[i];
+              
+              try {
+                // Compress image if option is enabled
+                let fileToUpload = file;
+                if (compressPhotos && file.type.startsWith('image/')) {
+                  fileToUpload = await compressImage(file);
+                }
+                
+                // Create unique filename with timestamp and index
+                const timestamp = Date.now();
+                const fileName = `${timestamp}_${groupIndex}_${i}_${fileToUpload.name}`;
+                const photoRef = ref(storage, `projects/${formData.projectId}/photos/${fileName}`);
+                
+                // Upload file
+                await uploadBytes(photoRef, fileToUpload, {
+                  customMetadata: {
+                    uploadedBy: currentUser.uid,
+                    uploadedAt: new Date().toISOString()
+                  }
+                });
+                
+                // Get download URL
+                const photoUrl = await getDownloadURL(photoRef);
+                photoUrls.push(photoUrl);
+                photoNames.push(fileName);
+                console.log(`Successfully uploaded photo ${i + 1}/${photoGroup.length}: ${file.name}`);
+              } catch (fileError: any) {
+                console.error(`Failed to upload photo ${i + 1}/${photoGroup.length} (${file.name}):`, fileError);
+                // Continue with other photos even if one fails
               }
-            });
+            }
             
-            // Get download URL and save to Firestore
-            const photoUrl = await getDownloadURL(photoRef);
-            const photoEntryData: Omit<ProjectPhotoEntry, 'id'> = {
-              projectId: formData.projectId,
-              projectName: selectedProject.name,
-              photoUrl: photoUrl,
-              photoName: fileName, // Store the full filename with timestamp for deletion
-              description: formData.notes || '',
-              date: formData.date,
-              uploadedBy: currentUser.uid,
-              uploadedByName: currentUser.displayName || currentUser.email || 'Unknown User',
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            };
-            
-            await addDoc(collection(db, 'projectPhotos'), photoEntryData);
-            successCount++;
+            // Only create entry if we have at least one photo URL
+            if (photoUrls.length > 0) {
+              // Get selected staff member if provided
+              const selectedStaff = formData.staffId ? staff.find(s => s.id === formData.staffId) : null;
+              
+              // Create a single entry for this group of photos
+              const photoEntryData: Omit<ProjectPhotoEntry, 'id'> = {
+                projectId: formData.projectId,
+                projectName: selectedProject.name,
+                photoUrl: photoUrls[0], // First photo for backward compatibility
+                photoUrls: photoUrls, // Array of all photo URLs
+                photoName: photoNames[0], // First filename for backward compatibility
+                photoNames: photoNames, // Array of all filenames
+                description: formData.notes || '',
+                date: formData.date,
+                uploadedBy: currentUser.uid,
+                uploadedByName: currentUser.displayName || currentUser.email || 'Unknown User',
+                staffId: formData.staffId || undefined,
+                staffName: selectedStaff?.name || undefined,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              };
+              
+              await addDoc(collection(db, 'projectPhotos'), photoEntryData);
+              console.log(`Created photo entry with ${photoUrls.length} photo(s)`);
+              successCount += photoUrls.length;
+            } else {
+              console.error('No photos were successfully uploaded in this group');
+              errorCount += photoGroup.length;
+            }
           } catch (uploadError: any) {
-            console.error('Upload failed for', file.name, ':', uploadError);
-            errorCount++;
+            console.error('Upload failed for photo group:', uploadError);
+            errorCount += photoGroup.length;
           }
           
-          setUploadProgress({current: i + 1, total: validFiles.length});
+          setUploadProgress({current: groupIndex + 1, total: photoGroups.length});
         }
 
         if (successCount > 0) {
@@ -238,9 +301,11 @@ const PhotoManager: React.FC = () => {
       projectId: photo.projectId,
       notes: photo.description || '',
       date: photo.date,
-      selectedFiles: []
+      selectedFiles: [],
+      staffId: photo.staffId || ''
     });
     setShowNotesField(!!photo.description);
+    setShowStaffField(!!photo.staffId);
     setEditingId(photo.id);
     setShowForm(true);
   };
@@ -280,9 +345,11 @@ const PhotoManager: React.FC = () => {
       projectId: projectIdParam || '',
       notes: '',
       date: new Date().toISOString().split('T')[0],
-      selectedFiles: []
+      selectedFiles: [],
+      staffId: ''
     });
     setShowNotesField(false);
+    setShowStaffField(false);
     setEditingId(null);
     setShowForm(false);
     // Clear projectId from URL if it was set
@@ -388,7 +455,51 @@ const PhotoManager: React.FC = () => {
                       + Add Notes
                     </Button>
                   )}
+                  {!showStaffField && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowStaffField(true)}
+                      className="text-sm"
+                    >
+                      + Add Staff
+                    </Button>
+                  )}
                 </div>
+
+                {/* Staff Member Field */}
+                {showStaffField && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Staff Member
+                      </label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowStaffField(false);
+                          setFormData({ ...formData, staffId: '' });
+                        }}
+                        className="text-xs"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <select
+                      value={formData.staffId}
+                      onChange={(e) => setFormData({ ...formData, staffId: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+                    >
+                      <option value="">Select Staff Member</option>
+                      {staff.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Notes Field */}
                 {showNotesField && (
@@ -454,6 +565,7 @@ const PhotoManager: React.FC = () => {
                           type="file"
                           multiple
                           accept="image/*"
+                          capture="environment"
                           onChange={handleFileSelect}
                           disabled={uploading}
                           className="hidden"
@@ -470,7 +582,7 @@ const PhotoManager: React.FC = () => {
                       )}
                       {uploading && (
                         <div className="mt-2 text-sm text-gray-600">
-                          Uploading {uploadProgress.current} of {uploadProgress.total}...
+                          Uploading group {uploadProgress.current + 1} of {uploadProgress.total} ({formData.selectedFiles.length} photo{formData.selectedFiles.length !== 1 ? 's' : ''} total)...
                         </div>
                       )}
                     </div>

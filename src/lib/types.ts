@@ -214,6 +214,7 @@ export interface Expense {
   date: string; // YYYY-MM-DD format
   receiptUrl?: string; // URL to receipt photo in Firebase Storage
   notes?: string;
+  vendor?: string; // Optional vendor name
   status: 'pending' | 'approved' | 'rejected';
   createdBy: string;
   createdAt: any;
@@ -225,12 +226,16 @@ export interface ProjectPhotoEntry {
   id: string;
   projectId: string;
   projectName: string;
-  photoUrl: string; // URL to photo in Firebase Storage
+  photoUrl: string; // URL to photo in Firebase Storage (for backward compatibility)
+  photoUrls?: string[]; // Array for multiple photos (max 9)
   photoName: string; // Original filename
+  photoNames?: string[]; // Array of filenames for multiple photos
   description: string;
   date: string; // YYYY-MM-DD format
   uploadedBy: string; // User ID
   uploadedByName: string; // User name
+  staffId?: string; // Optional staff member ID
+  staffName?: string; // Optional staff member name
   createdAt: any;
   updatedAt: any;
 }

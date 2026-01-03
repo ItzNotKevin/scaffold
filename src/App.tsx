@@ -20,6 +20,7 @@ import ExpensePage from './pages/ExpensePage';
 import PhotoPage from './pages/PhotoPage';
 import CategoryManagementPage from './pages/CategoryManagementPage';
 import ActivityLogsPage from './pages/ActivityLogsPage';
+import ProjectsPage from './pages/ProjectsPage';
 
 function App() {
   return (
@@ -117,6 +118,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ActivityLogsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/projects"
+                  element={
+                    <ProtectedRoute>
+                      <ProjectsPage />
                     </ProtectedRoute>
                   }
                 />

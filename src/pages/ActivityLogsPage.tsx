@@ -29,8 +29,10 @@ interface ActivityLog {
   // Expense-specific
   itemDescription?: string;
   status?: 'pending' | 'approved' | 'rejected';
+  receiptUrl?: string;
   // Photo-specific
   photoUrl?: string;
+  photoUrls?: string[]; // Array for multiple photos (max 9)
   uploadedByName?: string;
 }
 
@@ -50,7 +52,6 @@ const ActivityLogsPage: React.FC = () => {
   const [staffFilter, setStaffFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
-  const [monthFilter, setMonthFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Sorting
@@ -76,6 +77,12 @@ const ActivityLogsPage: React.FC = () => {
     status?: 'pending' | 'approved' | 'rejected';
     description?: string; // For photos (will be replaced with notes)
   } | null>(null);
+
+  // Track expanded months (initialize with current month)
+  const [expandedMonths] = useState<Set<string>>(() => {
+    const currentMonth = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    return new Set([currentMonth]);
+  });
 
   useEffect(() => {
     if (currentUser) {
@@ -146,6 +153,7 @@ const ActivityLogsPage: React.FC = () => {
           itemDescription: data.itemDescription || '',
           amount: data.amount || 0,
           status: data.status || 'pending',
+          receiptUrl: data.receiptUrl || undefined,
           createdAt: data.createdAt
         };
       });
@@ -158,6 +166,8 @@ const ActivityLogsPage: React.FC = () => {
       const photosSnapshot = await getDocs(photosQuery);
       const photosData: ActivityLog[] = photosSnapshot.docs.map(doc => {
         const data = doc.data();
+        // Support both single photoUrl (backward compatibility) and photoUrls array
+        const photoUrls = data.photoUrls || (data.photoUrl ? [data.photoUrl] : []);
         return {
           id: doc.id,
           type: 'photo',
@@ -165,7 +175,8 @@ const ActivityLogsPage: React.FC = () => {
           projectId: data.projectId || '',
           projectName: data.projectName || 'Unknown Project',
           description: data.description || '',
-          photoUrl: data.photoUrl || '',
+          photoUrl: data.photoUrl || photoUrls[0] || '', // For backward compatibility
+          photoUrls: photoUrls, // Array of photo URLs
           uploadedByName: data.uploadedByName || 'Unknown User',
           createdAt: data.createdAt
         };
@@ -235,20 +246,6 @@ const ActivityLogsPage: React.FC = () => {
       filtered = filtered.filter(activity => 
         activity.type === 'reimbursement' ? activity.status === statusFilter : true
       );
-    }
-    
-    // Apply month filter
-    if (monthFilter !== 'all') {
-      filtered = filtered.filter(activity => {
-        if (!activity.date) return false;
-        try {
-          const activityDate = new Date(activity.date);
-          const activityMonth = activityDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-          return activityMonth === monthFilter;
-        } catch {
-          return false;
-        }
-      });
     }
     
     // Apply search filter
@@ -360,39 +357,36 @@ const ActivityLogsPage: React.FC = () => {
     });
     
     return filtered;
-  }, [activities, typeFilter, staffFilter, projectFilter, statusFilter, monthFilter, searchQuery, sortField, sortDirection]);
+  }, [activities, typeFilter, staffFilter, projectFilter, statusFilter, searchQuery, sortField, sortDirection]);
 
-  // Mobile: Limit initial display to improve performance
-  const INITIAL_DISPLAY_COUNT = 15;
-  const [showAllActivities, setShowAllActivities] = useState(false);
-  const displayedActivities = useMemo(() => {
-    if (filteredAndSortedActivities.length <= INITIAL_DISPLAY_COUNT || showAllActivities) {
-      return filteredAndSortedActivities;
-    }
-    return filteredAndSortedActivities.slice(0, INITIAL_DISPLAY_COUNT);
-  }, [filteredAndSortedActivities, showAllActivities]);
-
-  // Generate list of unique months from activities
-  const availableMonths = useMemo(() => {
-    const monthSet = new Set<string>();
-    activities.forEach(activity => {
-      if (activity.date) {
-        try {
-          const date = new Date(activity.date);
-          const monthStr = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-          monthSet.add(monthStr);
-        } catch {
-          // Ignore invalid dates
+  // Group activities by month
+  const activitiesByMonth = useMemo(() => {
+    const grouped: Record<string, ActivityLog[]> = {};
+    
+    filteredAndSortedActivities.forEach(activity => {
+      if (!activity.date) return;
+      try {
+        const date = new Date(activity.date);
+        const monthStr = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        if (!grouped[monthStr]) {
+          grouped[monthStr] = [];
         }
+        grouped[monthStr].push(activity);
+      } catch {
+        // Ignore invalid dates
       }
     });
+    
     // Sort months in descending order (most recent first)
-    return Array.from(monthSet).sort((a, b) => {
+    const sortedMonths = Object.keys(grouped).sort((a, b) => {
       const dateA = new Date(a);
       const dateB = new Date(b);
       return dateB.getTime() - dateA.getTime();
     });
-  }, [activities]);
+    
+    // Return as array of [month, activities] tuples for easy iteration
+    return sortedMonths.map(month => [month, grouped[month]] as [string, ActivityLog[]]);
+  }, [filteredAndSortedActivities]);
 
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -740,21 +734,6 @@ const ActivityLogsPage: React.FC = () => {
             )}
           </div>
           
-          {/* Month Filter */}
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Month</label>
-            <select
-              value={monthFilter}
-              onChange={(e) => setMonthFilter(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
-            >
-              <option value="all">All Months</option>
-              {availableMonths.map(month => (
-                <option key={month} value={month}>{month}</option>
-              ))}
-            </select>
-          </div>
-          
           {/* Sort controls (when status filter is shown) */}
           {typeFilter === 'reimbursement' && (
             <div className="mt-4 pt-4 border-t border-gray-200">
@@ -796,16 +775,25 @@ const ActivityLogsPage: React.FC = () => {
               <p className="text-gray-400 text-xs mt-1">Try adjusting your filters</p>
             </div>
           ) : (
-            <>
-              <div className="space-y-3">
-                {displayedActivities.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="p-3 sm:p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors"
-                  >
+            <div className="space-y-4">
+              {activitiesByMonth.map(([month, monthActivities]) => (
+                <CollapsibleSection
+                  key={month}
+                  title={month}
+                  count={monthActivities.length}
+                  defaultExpanded={expandedMonths.has(month)}
+                  className="bg-white"
+                >
+                  <div className="space-y-2">
+                    {monthActivities.map((activity) => (
+                      <div
+                        key={activity.id}
+                        onClick={() => editingId !== activity.id && handleStartEdit(activity)}
+                        className="p-2 sm:p-3 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors cursor-pointer"
+                      >
                   {editingId === activity.id && editFormData ? (
                     // Edit Form
-                    <div className="space-y-4">
+                    <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between mb-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           activity.type === 'assignment'
@@ -990,10 +978,10 @@ const ActivityLogsPage: React.FC = () => {
                     </div>
                   ) : (
                     // Display View
-                    <div className="flex flex-col gap-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+                          <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
                             activity.type === 'assignment'
                               ? 'bg-blue-100 text-blue-800'
                               : activity.type === 'reimbursement'
@@ -1003,103 +991,121 @@ const ActivityLogsPage: React.FC = () => {
                             {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Expense' : '📸 Photo'}
                           </span>
                           {activity.status && (
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(activity.status)}`}>
+                            <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(activity.status)}`}>
                               {activity.status}
                             </span>
                           )}
-                          <span className="text-xs sm:text-sm text-gray-500">
+                          <span className="text-xs text-gray-500 whitespace-nowrap">
                             {formatDate(activity.date)}
                           </span>
                         </div>
-                        <Button
-                          onClick={() => handleStartEdit(activity)}
-                          size="sm"
-                          variant="outline"
-                          className="text-xs min-h-[44px] touch-manipulation"
-                        >
-                          Edit
-                        </Button>
                       </div>
                       
-                      <div className="mb-2">
+                      <div>
                         {activity.type === 'photo' ? (
                           <>
-                            {activity.photoUrl && (
-                              <div className="mb-2">
-                                <img
-                                  src={activity.photoUrl}
-                                  alt={activity.description}
-                                  className="w-full max-w-xs rounded-lg border border-gray-200"
-                                  onClick={() => window.open(activity.photoUrl, '_blank')}
-                                  style={{ cursor: 'pointer' }}
-                                />
+                            {(activity.photoUrls && activity.photoUrls.length > 0) || activity.photoUrl ? (
+                              <div className="mb-1.5">
+                                <div className="grid grid-cols-3 sm:flex sm:flex-nowrap gap-1.5">
+                                  {(activity.photoUrls || (activity.photoUrl ? [activity.photoUrl] : [])).slice(0, 9).map((url, index) => (
+                                    <img
+                                      key={index}
+                                      src={url}
+                                      alt={`Photo ${index + 1}${activity.description ? ` - ${activity.description}` : ''}`}
+                                      className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(url, '_blank');
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                                {(activity.photoUrls && activity.photoUrls.length > 9) && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    +{activity.photoUrls.length - 9} more photos
+                                  </p>
+                                )}
                               </div>
-                            )}
-                            <p className="font-medium text-gray-900 text-sm sm:text-base">
-                              {activity.uploadedByName || 'Unknown User'}
-                            </p>
-                            <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
-                              {activity.description}
-                            </p>
-                            {activity.projectName && (
-                              <p className="text-xs text-gray-500 mt-1 break-words">
-                                Project: {activity.projectName}
+                            ) : null}
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">
+                              <span className="font-medium text-gray-900">
+                                {activity.uploadedByName || 'Unknown User'}
+                              </span>
+                              {activity.projectName && (
+                                <>
+                                  <span className="text-gray-400">•</span>
+                                  <span className="text-gray-500">{activity.projectName}</span>
+                                </>
+                              )}
+                            </div>
+                            {activity.description && (
+                              <p className="text-xs text-gray-600 break-words mt-0.5">
+                                {activity.description}
                               </p>
                             )}
                           </>
                         ) : (
                           <>
-                            <p className="font-medium text-gray-900 text-sm sm:text-base">
-                              {activity.staffName}
-                            </p>
-                            <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
-                              {activity.type === 'assignment' 
-                                ? activity.taskDescription || activity.description
-                                : activity.itemDescription || activity.description
-                              }
-                            </p>
-                            {activity.projectName && (
-                              <p className="text-xs text-gray-500 mt-1 break-words">
-                                Project: {activity.projectName}
+                            {activity.type === 'reimbursement' && activity.receiptUrl && (
+                              <div className="mb-1.5">
+                                <img
+                                  src={activity.receiptUrl}
+                                  alt="Receipt"
+                                  className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    window.open(activity.receiptUrl, '_blank');
+                                  }}
+                                />
+                              </div>
+                            )}
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">
+                              <span className="font-medium text-gray-900">
+                                {activity.staffName}
+                              </span>
+                              {activity.projectName && (
+                                <>
+                                  <span className="text-gray-400">•</span>
+                                  <span className="text-gray-500">{activity.projectName}</span>
+                                </>
+                              )}
+                              {activity.type === 'assignment' && activity.dailyRate !== undefined && (
+                                <>
+                                  <span className="text-gray-400">•</span>
+                                  <span className="text-gray-600">
+                                    <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
+                                  </span>
+                                </>
+                              )}
+                              {activity.type === 'reimbursement' && activity.amount !== undefined && (
+                                <>
+                                  <span className="text-gray-400">•</span>
+                                  <span className="text-gray-600">
+                                    <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            {(activity.type === 'assignment' 
+                              ? activity.taskDescription || activity.description
+                              : activity.itemDescription || activity.description) && (
+                              <p className="text-xs text-gray-600 break-words mt-0.5">
+                                {activity.type === 'assignment' 
+                                  ? activity.taskDescription || activity.description
+                                  : activity.itemDescription || activity.description}
                               </p>
                             )}
                           </>
                         )}
                       </div>
-                      
-                      {activity.type !== 'photo' && (
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
-                          {activity.type === 'assignment' && activity.dailyRate !== undefined && (
-                            <span>
-                              Rate: <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
-                            </span>
-                          )}
-                          {activity.type === 'reimbursement' && activity.amount !== undefined && (
-                            <span>
-                              Amount: <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
-                            </span>
-                          )}
-                        </div>
-                      )}
                     </div>
-                  )}
+                      )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              {filteredAndSortedActivities.length > INITIAL_DISPLAY_COUNT && (
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={() => setShowAllActivities(!showAllActivities)}
-                    className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors touch-manipulation min-h-[48px] text-sm sm:text-base"
-                  >
-                    {showAllActivities 
-                      ? `Show Less (Showing ${filteredAndSortedActivities.length} of ${filteredAndSortedActivities.length})`
-                      : `Show More (Showing ${displayedActivities.length} of ${filteredAndSortedActivities.length})`
-                    }
-                  </button>
-                </div>
-              )}
-            </>
+                </CollapsibleSection>
+              ))}
+            </div>
           )}
         </Card>
       </div>
