@@ -17,7 +17,7 @@ export default defineConfig({
         name: 'Scaffold',
         short_name: 'Scaffold',
         description: 'Construction Project Management App',
-        version: '1.0.1',
+        version: '1.0.2',
         theme_color: '#3b82f6',
         background_color: '#ffffff',
         display: 'standalone',
