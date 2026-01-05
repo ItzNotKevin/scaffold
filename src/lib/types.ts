@@ -9,6 +9,7 @@ export interface Project {
   endDate?: Date;
   budget: number;
   actualCost: number;
+  actualRevenue?: number;
   progress: number;
   team: TeamMember[];
   phase: string;
@@ -216,6 +217,42 @@ export interface Expense {
   notes?: string;
   vendor?: string; // Optional vendor name
   status: 'pending' | 'approved' | 'rejected';
+  createdBy: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
+// Income category for organizing income entries
+export interface IncomeCategory {
+  id: string;
+  name: string; // e.g., "Payment", "Deposit"
+  isDefault: boolean;
+  createdAt: any;
+  updatedAt: any;
+}
+
+// Income subcategory - users select these, categories just organize them
+export interface IncomeSubcategory {
+  id: string;
+  categoryId: string; // References IncomeCategory.id
+  name: string; // e.g., "Progress Payment", "Final Payment", "Change Order"
+  usageCount: number; // Track how many times this subcategory has been used
+  createdAt: any;
+  updatedAt: any;
+}
+
+// Income entry
+export interface Income {
+  id: string;
+  projectId?: string;
+  projectName?: string;
+  category?: string; // Subcategory name (e.g., "Progress Payment", "Final Payment")
+  amount: number;
+  date: string; // YYYY-MM-DD format
+  invoiceUrl?: string; // URL to invoice/receipt photo in Firebase Storage
+  notes?: string;
+  client?: string; // Optional client/customer name
+  status: 'pending' | 'received' | 'cancelled';
   createdBy: string;
   createdAt: any;
   updatedAt: any;

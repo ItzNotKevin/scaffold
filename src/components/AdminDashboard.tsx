@@ -99,7 +99,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </button>
 
-          {/* 5. Photos */}
+          {/* 5. Income */}
+          <button
+            onClick={() => navigate('/income')}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white text-sm">Income</p>
+                <p className="text-xs text-blue-100 truncate">Track income</p>
+              </div>
+            </div>
+          </button>
+
+          {/* 6. Photos */}
           <button
             onClick={() => navigate('/photos')}
             className="bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl p-4 text-left transition-all duration-200 border border-white/20 hover:border-white/30 touch-manipulation min-h-[72px]"
@@ -118,7 +136,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </button>
 
-          {/* 6. Payroll */}
+          {/* 7. Payroll */}
           {permissions?.canManageUsers && (
             <button
               onClick={() => navigate('/payroll')}
@@ -138,7 +156,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
           )}
 
-          {/* 7. Staff Management */}
+          {/* 8. Staff Management */}
           {permissions?.canManageUsers && (
             <button
               onClick={() => navigate('/staff-management')}
@@ -158,7 +176,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
           )}
 
-          {/* 8. Categories */}
+          {/* 9. Categories */}
           {permissions?.canManageUsers && (
             <button
               onClick={() => navigate('/task-templates')}

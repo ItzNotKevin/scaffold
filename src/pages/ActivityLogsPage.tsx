@@ -8,13 +8,14 @@ import Button from '../components/ui/Button';
 import CollapsibleSection from '../components/ui/CollapsibleSection';
 import { collection, getDocs, query, orderBy, where, updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import type { TaskAssignment, Expense, StaffMember } from '../lib/types';
+import type { TaskAssignment, Expense, Income, StaffMember } from '../lib/types';
 import { updateProjectActualCost } from '../lib/projectCosts';
+import { updateProjectActualRevenue } from '../lib/projectRevenue';
 import Input from '../components/ui/Input';
 
 interface ActivityLog {
   id: string;
-  type: 'assignment' | 'reimbursement' | 'photo';
+  type: 'assignment' | 'reimbursement' | 'income' | 'photo';
   date: string;
   staffId?: string;
   staffName?: string;
@@ -28,8 +29,10 @@ interface ActivityLog {
   dailyRate?: number;
   // Expense-specific
   itemDescription?: string;
-  status?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'approved' | 'rejected' | 'received' | 'cancelled';
   receiptUrl?: string;
+  invoiceUrl?: string;
+  client?: string;
   // Photo-specific
   photoUrl?: string;
   photoUrls?: string[]; // Array for multiple photos (max 9)
@@ -48,10 +51,10 @@ const ActivityLogsPage: React.FC = () => {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   
   // Filters
-  const [typeFilter, setTypeFilter] = useState<'all' | 'assignment' | 'reimbursement' | 'photo'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'assignment' | 'reimbursement' | 'income' | 'photo'>('all');
   const [staffFilter, setStaffFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'received' | 'cancelled'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Sorting
@@ -74,7 +77,7 @@ const ActivityLogsPage: React.FC = () => {
     notes?: string;
     itemDescription?: string;
     amount?: number;
-    status?: 'pending' | 'approved' | 'rejected';
+    status?: 'pending' | 'approved' | 'rejected' | 'received' | 'cancelled';
     description?: string; // For photos (will be replaced with notes)
   } | null>(null);
 
@@ -158,6 +161,29 @@ const ActivityLogsPage: React.FC = () => {
         };
       });
       
+      // Load incomes
+      const incomesQuery = query(
+        collection(db, 'incomes'),
+        orderBy('createdAt', 'desc')
+      );
+      const incomesSnapshot = await getDocs(incomesQuery);
+      const incomesData: ActivityLog[] = incomesSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: 'income',
+          date: data.date || '',
+          projectId: data.projectId || undefined,
+          projectName: data.projectName || undefined,
+          description: data.category || '',
+          amount: data.amount || 0,
+          status: data.status || 'pending',
+          invoiceUrl: data.invoiceUrl || undefined,
+          client: data.client || undefined,
+          createdAt: data.createdAt
+        };
+      });
+      
       // Load project photos
       const photosQuery = query(
         collection(db, 'projectPhotos'),
@@ -183,7 +209,7 @@ const ActivityLogsPage: React.FC = () => {
       });
       
       // Combine and sort by creation date
-      const allActivities = [...assignmentsData, ...expensesData, ...photosData];
+      const allActivities = [...assignmentsData, ...expensesData, ...incomesData, ...photosData];
       allActivities.sort((a, b) => {
         const aTime = a.createdAt?.toMillis?.() || a.createdAt || 0;
         const bTime = b.createdAt?.toMillis?.() || b.createdAt || 0;
@@ -241,10 +267,10 @@ const ActivityLogsPage: React.FC = () => {
       filtered = filtered.filter(activity => activity.projectId === projectFilter);
     }
     
-    // Apply status filter (for reimbursements)
+    // Apply status filter (for reimbursements and income)
     if (statusFilter !== 'all') {
       filtered = filtered.filter(activity => 
-        activity.type === 'reimbursement' ? activity.status === statusFilter : true
+        (activity.type === 'reimbursement' || activity.type === 'income') ? activity.status === statusFilter : true
       );
     }
     
@@ -391,11 +417,13 @@ const ActivityLogsPage: React.FC = () => {
   const getStatusColor = (status?: string) => {
     switch (status) {
       case 'approved':
+      case 'received':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'rejected':
-        return 'bg-red-100 text-red-800 border-red-200';
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-800 border-gray-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -472,6 +500,19 @@ const ActivityLogsPage: React.FC = () => {
           } catch (costUpdateError) {
             console.warn('Could not update project costs (project may not exist):', costUpdateError);
             // Continue with deletion even if cost update fails
+          }
+        }
+      } else if (activity.type === 'income') {
+        // Delete income
+        await deleteDoc(doc(db, 'incomes', editingId));
+
+        // Update project revenue if project exists (don't block deletion if project is deleted)
+        if (activity.projectId) {
+          try {
+            await updateProjectActualRevenue(activity.projectId);
+          } catch (revenueUpdateError) {
+            console.warn('Could not update project revenue (project may not exist):', revenueUpdateError);
+            // Continue with deletion even if revenue update fails
           }
         }
       } else if (activity.type === 'photo') {
@@ -565,6 +606,36 @@ const ActivityLogsPage: React.FC = () => {
           if (editFormData.projectId) await updateProjectActualCost(editFormData.projectId);
         } else if (editFormData.projectId) {
           await updateProjectActualCost(editFormData.projectId);
+        }
+      } else if (activity.type === 'income') {
+        // Validate income fields
+        if (!editFormData.itemDescription) {
+          alert('Please fill in all required fields');
+          return;
+        }
+
+        const selectedProject = projects.find(p => p.id === editFormData.projectId);
+
+        const updateData: any = {
+          projectId: editFormData.projectId || null,
+          projectName: selectedProject?.name || null,
+          date: editFormData.date,
+          category: editFormData.itemDescription.trim(),
+          amount: editFormData.amount,
+          status: editFormData.status || 'pending',
+          updatedAt: serverTimestamp()
+        };
+
+        // Update income
+        await updateDoc(doc(db, 'incomes', editingId), updateData);
+
+        // Update project revenue if project changed
+        const oldProjectId = activity.projectId;
+        if (oldProjectId !== editFormData.projectId) {
+          if (oldProjectId) await updateProjectActualRevenue(oldProjectId);
+          if (editFormData.projectId) await updateProjectActualRevenue(editFormData.projectId);
+        } else if (editFormData.projectId) {
+          await updateProjectActualRevenue(editFormData.projectId);
         }
       } else if (activity.type === 'photo') {
         // Validate photo fields
@@ -672,6 +743,7 @@ const ActivityLogsPage: React.FC = () => {
                 <option value="all">All Types</option>
                 <option value="assignment">Assignments</option>
                 <option value="reimbursement">Expenses</option>
+                <option value="income">Income</option>
                 <option value="photo">Photos</option>
               </select>
             </div>
@@ -708,7 +780,7 @@ const ActivityLogsPage: React.FC = () => {
               </select>
             </div>
             
-            {typeFilter === 'reimbursement' || typeFilter === 'all' ? (
+            {typeFilter === 'reimbursement' || typeFilter === 'income' || typeFilter === 'all' ? (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                 <select
@@ -718,8 +790,18 @@ const ActivityLogsPage: React.FC = () => {
                 >
                   <option value="all">All Statuses</option>
                   <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
+                  {typeFilter === 'reimbursement' || typeFilter === 'all' ? (
+                    <>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </>
+                  ) : null}
+                  {typeFilter === 'income' || typeFilter === 'all' ? (
+                    <>
+                      <option value="received">Received</option>
+                      <option value="cancelled">Cancelled</option>
+                    </>
+                  ) : null}
                 </select>
               </div>
             ) : (
@@ -800,9 +882,11 @@ const ActivityLogsPage: React.FC = () => {
                             ? 'bg-blue-100 text-blue-800'
                             : activity.type === 'reimbursement'
                             ? 'bg-green-100 text-green-800'
+                            : activity.type === 'income'
+                            ? 'bg-emerald-100 text-emerald-800'
                             : 'bg-purple-100 text-purple-800'
                         }`}>
-                          {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Expense' : '📸 Photo'}
+                          {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Expense' : activity.type === 'income' ? '💵 Income' : '📸 Photo'}
                         </span>
                         <div className="flex flex-wrap gap-2">
                           <Button
@@ -958,9 +1042,19 @@ const ActivityLogsPage: React.FC = () => {
                                 onChange={(e) => setEditFormData({...editFormData, status: e.target.value as any})}
                                 className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px]"
                               >
-                                <option value="pending">Pending</option>
-                                <option value="approved">Approved</option>
-                                <option value="rejected">Rejected</option>
+                                {activity.type === 'income' ? (
+                                  <>
+                                    <option value="pending">Pending</option>
+                                    <option value="received">Received</option>
+                                    <option value="cancelled">Cancelled</option>
+                                  </>
+                                ) : (
+                                  <>
+                                    <option value="pending">Pending</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="rejected">Rejected</option>
+                                  </>
+                                )}
                               </select>
                             </div>
                             <div className="sm:col-span-2">
@@ -1055,6 +1149,19 @@ const ActivityLogsPage: React.FC = () => {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     window.open(activity.receiptUrl, '_blank');
+                                  }}
+                                />
+                              </div>
+                            )}
+                            {activity.type === 'income' && activity.invoiceUrl && (
+                              <div className="mb-1.5">
+                                <img
+                                  src={activity.invoiceUrl}
+                                  alt="Invoice"
+                                  className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    window.open(activity.invoiceUrl, '_blank');
                                   }}
                                 />
                               </div>

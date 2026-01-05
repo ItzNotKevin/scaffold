@@ -1,35 +1,50 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot, getDocs, deleteDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from 'firebase/storage';
-import { db, storage } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
 import { sendPhaseUpdateEmails } from '../lib/emailNotifications';
 import { usePushNotifications } from '../lib/usePushNotifications';
 import { getProjectCostBreakdown, updateProjectActualCost } from '../lib/projectCosts';
-import { compressImage } from '../lib/imageCompression';
-import type { ProjectPhotoEntry, Expense } from '../lib/types';
+import { getProjectRevenueBreakdown, updateProjectActualRevenue } from '../lib/projectRevenue';
+import type { Expense, StaffMember, Income } from '../lib/types';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
+import CollapsibleSection from '../components/ui/CollapsibleSection';
 
 const phases = ['Sales','Contract','Materials','Construction','Completion'] as const;
 type Phase = typeof phases[number];
 
-
-
-interface ProjectPhoto {
+interface ActivityLog {
   id: string;
-  url: string;
-  name: string;
-  uploadedBy: string;
-  uploadedAt: any;
-  size?: number;
-  photoUrl?: string; // From ProjectPhotoEntry
-  photoName?: string; // From ProjectPhotoEntry
-  description?: string; // From ProjectPhotoEntry
-  date?: string; // From ProjectPhotoEntry
+  type: 'assignment' | 'reimbursement' | 'income' | 'photo';
+  date: string;
+  staffId?: string;
+  staffName?: string;
+  projectId?: string;
+  projectName?: string;
+  description: string;
+  amount?: number;
+  createdAt: any;
+  // Assignment-specific
+  taskDescription?: string;
+  dailyRate?: number;
+  // Expense-specific
+  itemDescription?: string;
+  status?: 'pending' | 'approved' | 'rejected' | 'received' | 'cancelled';
+  receiptUrl?: string;
+  invoiceUrl?: string;
+  client?: string;
+  // Photo-specific
+  photoUrl?: string;
+  photoUrls?: string[];
+  uploadedByName?: string;
 }
+
+type SortField = 'date' | 'amount' | 'staffName';
+type SortDirection = 'asc' | 'desc';
 
 
 const ProjectPage: React.FC = () => {
@@ -49,16 +64,56 @@ const ProjectPage: React.FC = () => {
   const [editPhase, setEditPhase] = useState<Phase>('Sales');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [photos, setPhotos] = useState<ProjectPhoto[]>([]);
-  const [photosLoading, setPhotosLoading] = useState(true);
+  
+  // Activity Log state
+  const [activities, setActivities] = useState<ActivityLog[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  
+  // Filter and sort state
+  const [typeFilter, setTypeFilter] = useState<'all' | 'assignment' | 'reimbursement' | 'income' | 'photo'>('all');
+  const [staffFilter, setStaffFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'received' | 'cancelled'>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [activitySaving, setActivitySaving] = useState(false);
+  const [showNotesField, setShowNotesField] = useState(false);
+  const [editFormData, setEditFormData] = useState<{
+    staffId?: string;
+    projectId: string;
+    date: string;
+    taskDescription?: string;
+    dailyRate?: number;
+    notes?: string;
+    itemDescription?: string;
+    amount?: number;
+    status?: 'pending' | 'approved' | 'rejected' | 'received' | 'cancelled';
+    description?: string;
+  } | null>(null);
+  
+  // Track expanded months
+  const [expandedMonths] = useState<Set<string>>(() => {
+    const currentMonth = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    return new Set([currentMonth]);
+  });
   
   const [showFinancialForm, setShowFinancialForm] = useState(false);
   const [showFinancialReport, setShowFinancialReport] = useState(false);
   const [budget, setBudget] = useState<number>(0);
   const [actualCost, setActualCost] = useState<number>(0);
+  const [actualRevenue, setActualRevenue] = useState<number>(0);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [submittingFinancial, setSubmittingFinancial] = useState(false);
+  const [revenueBreakdown, setRevenueBreakdown] = useState<{
+    totalRevenue: number;
+    pendingRevenue: number;
+    cancelledRevenue: number;
+  } | null>(null);
   const [costBreakdown, setCostBreakdown] = useState<{
     totalWages: number;
     totalReimbursements: number; // Kept for backward compatibility with cost breakdown
@@ -89,11 +144,14 @@ const ProjectPage: React.FC = () => {
         // Load financial data
         setBudget(data.budget || 0);
         setActualCost(data.actualCost || 0);
+        setActualRevenue(data.actualRevenue || 0);
         setStartDate(data.startDate ? (data.startDate.toDate ? data.startDate.toDate().toISOString().split('T')[0] : new Date(data.startDate).toISOString().split('T')[0]) : '');
         setEndDate(data.endDate ? (data.endDate.toDate ? data.endDate.toDate().toISOString().split('T')[0] : new Date(data.endDate).toISOString().split('T')[0]) : '');
         
         // Load cost breakdown (wages + reimbursements)
         await loadCostBreakdown();
+        // Load revenue breakdown
+        await loadRevenueBreakdown();
       }
       setLoading(false);
     };
@@ -133,22 +191,371 @@ const ProjectPage: React.FC = () => {
   }, [id]);
 
 
-  // Load photos when component mounts
+  // Load activity data when component mounts or project changes
   useEffect(() => {
-    loadPhotos();
-  }, [id]);
-
-  // Add timeout for photo loading
-  useEffect(() => {
-    if (photosLoading) {
-      const timeout = setTimeout(() => {
-        console.warn('Photo loading timeout - setting loading to false');
-        setPhotosLoading(false);
-      }, 10000); // 10 second timeout
-
-      return () => clearTimeout(timeout);
+    if (id && projectName) {
+      loadActivityData();
     }
-  }, [photosLoading]);
+  }, [id, projectName]);
+
+  // Helper functions for formatting
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  };
+
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'approved':
+      case 'received':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'rejected':
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  // Filter and sort activities
+  const filteredAndSortedActivities = useMemo(() => {
+    let filtered = [...activities];
+    
+    // Apply type filter
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(activity => activity.type === typeFilter);
+    }
+    
+    // Apply staff filter (photos don't have staff, so exclude them when filtering by staff)
+    if (staffFilter !== 'all') {
+      filtered = filtered.filter(activity => 
+        activity.type !== 'photo' && activity.staffId === staffFilter
+      );
+    }
+    
+    // Apply status filter (for reimbursements and income)
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(activity => 
+        (activity.type === 'reimbursement' || activity.type === 'income') ? activity.status === statusFilter : true
+      );
+    }
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(activity => {
+        // Search in description
+        const description = activity.description?.toLowerCase() || '';
+        if (description.includes(query)) return true;
+        
+        // Search in task description (for assignments)
+        const taskDescription = activity.taskDescription?.toLowerCase() || '';
+        if (taskDescription.includes(query)) return true;
+        
+        // Search in item description (for reimbursements)
+        const itemDescription = activity.itemDescription?.toLowerCase() || '';
+        if (itemDescription.includes(query)) return true;
+        
+        // Search in staff name
+        const staffName = activity.staffName?.toLowerCase() || '';
+        if (staffName.includes(query)) return true;
+        
+        // Search in uploaded by name (for photos)
+        const uploadedByName = activity.uploadedByName?.toLowerCase() || '';
+        if (uploadedByName.includes(query)) return true;
+        
+        // Search in amount (convert to string)
+        if (activity.amount !== undefined) {
+          const amountStr = activity.amount.toString();
+          if (amountStr.includes(query)) return true;
+          const formattedAmount = formatCurrency(activity.amount).toLowerCase();
+          if (formattedAmount.includes(query)) return true;
+        }
+        
+        // Search in daily rate (for assignments)
+        if (activity.dailyRate !== undefined) {
+          const dailyRateStr = activity.dailyRate.toString();
+          if (dailyRateStr.includes(query)) return true;
+          const formattedRate = formatCurrency(activity.dailyRate).toLowerCase();
+          if (formattedRate.includes(query)) return true;
+        }
+        
+        // Search in date
+        if (activity.date) {
+          try {
+            const dateStr = formatDate(activity.date).toLowerCase();
+            if (dateStr.includes(query)) return true;
+            const isoDate = activity.date.toLowerCase();
+            if (isoDate.includes(query)) return true;
+          } catch {
+            if (activity.date.toLowerCase().includes(query)) return true;
+          }
+        }
+        
+        return false;
+      });
+    }
+    
+    // Sort
+    filtered.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+      
+      switch (sortField) {
+        case 'date':
+          aValue = a.date || '';
+          bValue = b.date || '';
+          break;
+        case 'amount':
+          aValue = a.amount || 0;
+          bValue = b.amount || 0;
+          break;
+        case 'staffName':
+          aValue = a.staffName || '';
+          bValue = b.staffName || '';
+          break;
+        default:
+          return 0;
+      }
+      
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+      }
+    });
+    
+    return filtered;
+  }, [activities, typeFilter, staffFilter, statusFilter, searchQuery, sortField, sortDirection]);
+
+  // Group activities by month
+  const activitiesByMonth = useMemo(() => {
+    const grouped: Record<string, ActivityLog[]> = {};
+    
+    filteredAndSortedActivities.forEach(activity => {
+      if (!activity.date) return;
+      try {
+        const date = new Date(activity.date);
+        const monthStr = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        if (!grouped[monthStr]) {
+          grouped[monthStr] = [];
+        }
+        grouped[monthStr].push(activity);
+      } catch {
+        // Ignore invalid dates
+      }
+    });
+    
+    // Sort months in descending order (most recent first)
+    const sortedMonths = Object.keys(grouped).sort((a, b) => {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      return dateB.getTime() - dateA.getTime();
+    });
+    
+    // Return as array of [month, activities] tuples for easy iteration
+    return sortedMonths.map(month => [month, grouped[month]] as [string, ActivityLog[]]);
+  }, [filteredAndSortedActivities]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const SortButton: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
+    <button
+      onClick={() => handleSort(field)}
+      className="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900 touch-manipulation min-h-[44px] px-2 py-1"
+    >
+      <span>{label}</span>
+      {sortField === field && (
+        <span className="text-blue-600">
+          {sortDirection === 'asc' ? '↑' : '↓'}
+        </span>
+      )}
+    </button>
+  );
+
+  const handleActivityStartEdit = (activity: ActivityLog) => {
+    setEditingId(activity.id);
+    const notes = activity.description || activity.taskDescription || '';
+    setEditFormData({
+      staffId: activity.staffId,
+      projectId: activity.projectId || id || '',
+      date: activity.date,
+      taskDescription: activity.taskDescription,
+      dailyRate: activity.dailyRate,
+      notes: notes,
+      itemDescription: activity.itemDescription,
+      amount: activity.amount,
+      status: activity.status,
+      description: activity.description
+    });
+    setShowNotesField(!!notes);
+  };
+
+  const handleActivityCancelEdit = () => {
+    setEditingId(null);
+    setEditFormData(null);
+    setShowNotesField(false);
+  };
+
+  const handleActivityDelete = async () => {
+    if (!editingId || !currentUser || !id) return;
+
+    const activity = activities.find(a => a.id === editingId);
+    if (!activity) return;
+
+    if (!confirm(`Are you sure you want to delete this ${activity.type}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setActivitySaving(true);
+
+      if (activity.type === 'assignment') {
+        await deleteDoc(doc(db, 'taskAssignments', editingId));
+        await updateProjectActualCost(id);
+      } else if (activity.type === 'reimbursement') {
+        await deleteDoc(doc(db, 'reimbursements', editingId));
+        await updateProjectActualCost(id);
+      } else if (activity.type === 'income') {
+        await deleteDoc(doc(db, 'incomes', editingId));
+        await updateProjectActualRevenue(id);
+      } else if (activity.type === 'photo') {
+        await deleteDoc(doc(db, 'projectPhotos', editingId));
+      }
+
+      await loadActivityData();
+      await loadCostBreakdown();
+      await loadRevenueBreakdown();
+      handleActivityCancelEdit();
+    } catch (error) {
+      console.error('Error deleting activity:', error);
+      alert('Failed to delete entry. Please try again.');
+    } finally {
+      setActivitySaving(false);
+    }
+  };
+
+  const handleActivitySaveEdit = async () => {
+    if (!editingId || !editFormData || !currentUser || !id) return;
+
+    const activity = activities.find(a => a.id === editingId);
+    if (!activity) return;
+
+    try {
+      setActivitySaving(true);
+
+      if (activity.type === 'assignment') {
+        if (!editFormData.staffId) {
+          alert('Please fill in all required fields');
+          setActivitySaving(false);
+          return;
+        }
+
+        const selectedStaff = staff.find(s => s.id === editFormData.staffId);
+
+        const updateData: any = {
+          staffId: editFormData.staffId,
+          staffName: selectedStaff?.name || activity.staffName,
+          projectId: id,
+          projectName: projectName,
+          date: editFormData.date,
+          taskDescription: editFormData.notes?.trim() || '',
+          dailyRate: typeof editFormData.dailyRate === 'number' ? editFormData.dailyRate : activity.dailyRate || 0,
+          updatedAt: serverTimestamp()
+        };
+
+        await updateDoc(doc(db, 'taskAssignments', editingId), updateData);
+        await updateProjectActualCost(id);
+      } else if (activity.type === 'reimbursement') {
+        if (!editFormData.itemDescription?.trim() || !editFormData.amount || editFormData.amount <= 0) {
+          alert('Please fill in all required fields');
+          setActivitySaving(false);
+          return;
+        }
+
+        const selectedStaff = editFormData.staffId ? staff.find(s => s.id === editFormData.staffId) : null;
+
+        const updateData: any = {
+          staffId: editFormData.staffId || null,
+          staffName: selectedStaff?.name || null,
+          projectId: id,
+          projectName: projectName,
+          date: editFormData.date,
+          itemDescription: editFormData.itemDescription.trim(),
+          amount: editFormData.amount,
+          status: editFormData.status || 'pending',
+          updatedAt: serverTimestamp()
+        };
+
+        await updateDoc(doc(db, 'reimbursements', editingId), updateData);
+        await updateProjectActualCost(id);
+      } else if (activity.type === 'income') {
+        if (!editFormData.itemDescription?.trim()) {
+          alert('Please fill in all required fields');
+          setActivitySaving(false);
+          return;
+        }
+
+        const updateData: any = {
+          projectId: id,
+          projectName: projectName,
+          date: editFormData.date,
+          category: editFormData.itemDescription.trim(),
+          amount: editFormData.amount || 0,
+          status: editFormData.status || 'pending',
+          updatedAt: serverTimestamp()
+        };
+
+        await updateDoc(doc(db, 'incomes', editingId), updateData);
+        await updateProjectActualRevenue(id);
+      } else if (activity.type === 'photo') {
+        const updateData: any = {
+          projectId: id,
+          projectName: projectName,
+          date: editFormData.date,
+          description: editFormData.notes?.trim() || '',
+          updatedAt: serverTimestamp()
+        };
+
+        await updateDoc(doc(db, 'projectPhotos', editingId), updateData);
+      }
+
+      await loadActivityData();
+      await loadCostBreakdown();
+      await loadRevenueBreakdown();
+      handleActivityCancelEdit();
+    } catch (error) {
+      console.error('Error updating activity:', error);
+      alert('Failed to update entry. Please try again.');
+    } finally {
+      setActivitySaving(false);
+    }
+  };
 
   // Load cost breakdown for project
   const loadCostBreakdown = async () => {
@@ -161,6 +568,19 @@ const ProjectPage: React.FC = () => {
       console.log('Cost breakdown loaded:', breakdown);
     } catch (error) {
       console.error('Error loading cost breakdown:', error);
+    }
+  };
+
+  const loadRevenueBreakdown = async () => {
+    if (!id) return;
+    try {
+      const breakdown = await getProjectRevenueBreakdown(id);
+      setRevenueBreakdown(breakdown);
+      // Update actualRevenue to match the breakdown
+      setActualRevenue(breakdown.totalRevenue);
+      console.log('Revenue breakdown loaded:', breakdown);
+    } catch (error) {
+      console.error('Error loading revenue breakdown:', error);
     }
   };
 
@@ -212,12 +632,17 @@ const ProjectPage: React.FC = () => {
     const variance = budget - actualCost;
     const variancePercentage = budget > 0 ? ((variance / budget) * 100) : 0;
     const isOverBudget = actualCost > budget;
+    const netProfit = actualRevenue - actualCost;
+    const profitMargin = actualRevenue > 0 ? ((netProfit / actualRevenue) * 100) : 0;
 
     const report = {
       projectName,
       generatedAt: new Date().toISOString(),
       budget,
       actualCost,
+      actualRevenue,
+      netProfit,
+      profitMargin: Math.round(profitMargin * 100) / 100,
       variance,
       variancePercentage: Math.round(variancePercentage * 100) / 100,
       isOverBudget,
@@ -242,6 +667,9 @@ const ProjectPage: React.FC = () => {
       ['Financial Summary', ''],
       ['Budget', `$${reportData.budget.toLocaleString()}`],
       ['Actual Cost', `$${reportData.actualCost.toLocaleString()}`],
+      ['Actual Revenue', `$${(reportData.actualRevenue || 0).toLocaleString()}`],
+      ['Net Profit', `$${(reportData.netProfit || 0).toLocaleString()}`],
+      ['Profit Margin', `${(reportData.profitMargin || 0).toFixed(1)}%`],
       ['Variance', `$${reportData.variance.toLocaleString()}`],
       ['Variance Percentage', `${reportData.variancePercentage}%`],
       ['Remaining Budget', `$${reportData.remainingBudget.toLocaleString()}`],
@@ -414,86 +842,139 @@ ${reportData.isOverBudget
     }
   };
 
-  // Photo management functions
-  const loadPhotos = async () => {
+  // Activity Log functions
+  const loadActivityData = async () => {
     if (!id) {
-      console.log('No project ID available for loading photos');
-      setPhotosLoading(false);
+      setActivitiesLoading(false);
       return;
     }
     
     try {
-      console.log('Loading photos for project:', id);
-      setPhotosLoading(true);
+      setActivitiesLoading(true);
       
-      // Load photos from Firestore projectPhotos collection
+      // Load staff members
+      const staffSnapshot = await getDocs(collection(db, 'staffMembers'));
+      const staffData = staffSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as StaffMember));
+      setStaff(staffData);
+      
+      // Load task assignments for this project
+      const assignmentsQuery = query(
+        collection(db, 'taskAssignments'),
+        where('projectId', '==', id),
+        orderBy('createdAt', 'desc')
+      );
+      const assignmentsSnapshot = await getDocs(assignmentsQuery);
+      const assignmentsData: ActivityLog[] = assignmentsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: 'assignment',
+          date: data.date || '',
+          staffId: data.staffId || '',
+          staffName: data.staffName || 'Unknown Staff',
+          projectId: data.projectId || '',
+          projectName: data.projectName || projectName || 'Unknown Project',
+          description: data.taskDescription || '',
+          taskDescription: data.taskDescription || '',
+          dailyRate: data.dailyRate || 0,
+          createdAt: data.createdAt
+        };
+      });
+      
+      // Load expenses/reimbursements for this project
+      const reimbursementsQuery = query(
+        collection(db, 'reimbursements'),
+        where('projectId', '==', id),
+        orderBy('createdAt', 'desc')
+      );
+      const expensesSnapshot = await getDocs(reimbursementsQuery);
+      const expensesData: ActivityLog[] = expensesSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: 'reimbursement',
+          date: data.date || '',
+          staffId: data.staffId || undefined,
+          staffName: data.staffName || undefined,
+          projectId: data.projectId || '',
+          projectName: data.projectName || projectName || 'Unknown Project',
+          description: data.itemDescription || '',
+          itemDescription: data.itemDescription || '',
+          amount: data.amount || 0,
+          status: data.status || 'pending',
+          receiptUrl: data.receiptUrl || undefined,
+          createdAt: data.createdAt
+        };
+      });
+      
+      // Load income entries for this project
+      const incomesQuery = query(
+        collection(db, 'incomes'),
+        where('projectId', '==', id),
+        orderBy('createdAt', 'desc')
+      );
+      const incomesSnapshot = await getDocs(incomesQuery);
+      const incomesData: ActivityLog[] = incomesSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: 'income',
+          date: data.date || '',
+          projectId: data.projectId || '',
+          projectName: data.projectName || projectName || 'Unknown Project',
+          description: data.category || '',
+          amount: data.amount || 0,
+          status: data.status || 'pending',
+          invoiceUrl: data.invoiceUrl || undefined,
+          client: data.client || undefined,
+          createdAt: data.createdAt
+        };
+      });
+      
+      // Load photo entries for this project
       const photosQuery = query(
         collection(db, 'projectPhotos'),
         where('projectId', '==', id),
         orderBy('createdAt', 'desc')
       );
       const photosSnapshot = await getDocs(photosQuery);
-      
-      const photosData: ProjectPhoto[] = photosSnapshot.docs.map(doc => {
+      const photosData: ActivityLog[] = photosSnapshot.docs.map(doc => {
         const data = doc.data();
+        const photoUrls = data.photoUrls || (data.photoUrl ? [data.photoUrl] : []);
         return {
           id: doc.id,
-          url: data.photoUrl || '',
-          photoUrl: data.photoUrl || '',
-          name: data.photoName || data.description || 'Untitled Photo',
-          photoName: data.photoName || '',
-          description: data.description || '',
+          type: 'photo',
           date: data.date || '',
-          uploadedBy: data.uploadedBy || 'Unknown',
-          uploadedAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
-          size: 0
+          projectId: data.projectId || '',
+          projectName: data.projectName || projectName || 'Unknown Project',
+          description: data.description || '',
+          photoUrl: data.photoUrl || photoUrls[0] || '',
+          photoUrls: photoUrls,
+          uploadedByName: data.uploadedByName || 'Unknown User',
+          createdAt: data.createdAt
         };
       });
       
-      setPhotos(photosData);
-      console.log('Photos loaded successfully:', photosData.length);
+      // Combine all activities
+      const allActivities = [...assignmentsData, ...expensesData, ...incomesData, ...photosData];
+      
+      // Sort by creation date
+      allActivities.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || a.createdAt || 0;
+        const bTime = b.createdAt?.toMillis?.() || b.createdAt || 0;
+        return bTime - aTime;
+      });
+      
+      setActivities(allActivities);
     } catch (error) {
-      console.error('Error loading photos:', error);
-      setPhotos([]);
+      console.error('Error loading activity data:', error);
+      setActivities([]);
     } finally {
-      setPhotosLoading(false);
+      setActivitiesLoading(false);
     }
-  };
-
-  const handleDeletePhoto = async (photoId: string) => {
-    if (!id || !currentUser) return;
-    
-    if (!confirm('Are you sure you want to delete this photo?')) return;
-    
-    try {
-      // Find the photo entry to get the storage path
-      const photo = photos.find(p => p.id === photoId);
-      if (!photo) {
-        alert('Photo not found');
-        return;
-      }
-
-      // Delete from Firestore
-      await deleteDoc(doc(db, 'projectPhotos', photoId));
-      
-      // Note: We're not deleting from storage here as the photo structure changed
-      // The PhotoManager component handles storage deletion properly
-      
-      // Reload photos
-      await loadPhotos();
-      showProjectNotification('Photo deleted successfully', projectName);
-    } catch (error) {
-      console.error('Error deleting photo:', error);
-      alert('Failed to delete photo. Please try again.');
-    }
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   if (loading) {
@@ -681,6 +1162,15 @@ ${reportData.isOverBudget
                 </div>
               )}
             </div>
+            <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+              <div className="text-2xl font-bold text-green-600">${actualRevenue.toLocaleString()}</div>
+              <div className="text-sm text-green-800">Actual Revenue</div>
+              {revenueBreakdown && revenueBreakdown.pendingRevenue > 0 && (
+                <div className="text-xs text-green-700 mt-1">
+                  ⏳ Pending: ${revenueBreakdown.pendingRevenue.toLocaleString()}
+                </div>
+              )}
+            </div>
             <div className={`rounded-xl p-4 border ${(budget - actualCost) >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
               <div className={`text-2xl font-bold ${(budget - actualCost) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 ${Math.abs(budget - actualCost).toLocaleString()}
@@ -824,109 +1314,484 @@ ${reportData.isOverBudget
           </div>
         </div>
 
-          {/* Photos Section */}
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <div>
-              <div>
-                {/* Photo Upload Section */}
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Project Photos</h3>
-                    <button
-                      onClick={() => navigate(`/photos?projectId=${id}`)}
-                      className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 min-h-[44px] touch-manipulation"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                      </svg>
-                      <span>Upload Photos</span>
-                    </button>
-                  </div>
+          {/* Activity Log Section */}
+          <div className="space-y-4 sm:space-y-6">
+            {/* Search */}
+            <Card className="p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Search</h2>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
                 </div>
+                <Input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by description, name, amount, date..."
+                  className="pl-10"
+                />
+              </div>
+            </Card>
 
-                {/* Photos Grid */}
-                {photosLoading ? (
-                  <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-500 text-sm">Loading photos...</p>
-                    <p className="text-gray-400 text-xs mt-2">This may take a moment for the first time</p>
-                  </div>
-                ) : photos.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="text-4xl mb-3">📸</div>
-                    <p className="text-gray-500 text-sm">No photos uploaded yet</p>
-                    <p className="text-gray-400 text-xs">Upload photos to document your project progress</p>
-                    <button
-                      onClick={() => navigate(`/photos?projectId=${id}`)}
-                      className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            {/* Filters */}
+            <Card className="p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Filters</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                  <select
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value as any)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="assignment">Assignments</option>
+                    <option value="reimbursement">Expenses</option>
+                    <option value="income">Income</option>
+                    <option value="photo">Photos</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Staff Member</label>
+                  <select
+                    value={staffFilter}
+                    onChange={(e) => setStaffFilter(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+                  >
+                    <option value="all">All Staff</option>
+                    {staff.map(member => (
+                      <option key={member.id} value={member.id}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                {typeFilter === 'reimbursement' || typeFilter === 'income' || typeFilter === 'all' ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as any)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
                     >
-                      Upload Your First Photo
-                    </button>
+                      <option value="all">All Statuses</option>
+                      <option value="pending">Pending</option>
+                      {typeFilter === 'reimbursement' || typeFilter === 'all' ? (
+                        <>
+                          <option value="approved">Approved</option>
+                          <option value="rejected">Rejected</option>
+                        </>
+                      ) : null}
+                      {typeFilter === 'income' || typeFilter === 'all' ? (
+                        <>
+                          <option value="received">Received</option>
+                          <option value="cancelled">Cancelled</option>
+                        </>
+                      ) : null}
+                    </select>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {photos.map((photo) => (
-                    <div key={photo.id} className="relative group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
-                      <div className="aspect-square">
-                        <img
-                          src={photo.url || photo.photoUrl || ''}
-                          alt={photo.name || photo.description || 'Project photo'}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZSBub3QgZm91bmQ8L3RleHQ+PC9zdmc+';
-                          }}
-                        />
-                      </div>
-                      
-                      {/* Overlay with actions */}
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center">
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-2">
-                          <button
-                            onClick={() => window.open(photo.url || photo.photoUrl || '', '_blank')}
-                            className="p-2 bg-white bg-opacity-90 rounded-full hover:bg-opacity-100 transition-colors"
-                            title="View full size"
-                          >
-                            <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDeletePhoto(photo.id)}
-                            className="p-2 bg-red-500 bg-opacity-90 rounded-full hover:bg-opacity-100 transition-colors"
-                            title="Delete photo"
-                          >
-                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {/* Photo info */}
-                      <div className="p-3">
-                        <p className="text-sm font-medium text-gray-900 truncate" title={photo.description || photo.name}>
-                          {photo.description || photo.name}
-                        </p>
-                        <div className="flex items-center justify-between mt-1">
-                          {photo.size && photo.size > 0 && (
-                            <span className="text-xs text-gray-500">
-                              {formatFileSize(photo.size)}
-                            </span>
-                          )}
-                          <span className="text-xs text-gray-400">
-                            {photo.date ? photo.date : (new Date(photo.uploadedAt).toLocaleDateString())}
-                          </span>
-                        </div>
-                      </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                    <div className="flex items-center space-x-4 pt-3">
+                      <SortButton field="date" label="Date" />
+                      <SortButton field="amount" label="Amount" />
+                      <SortButton field="staffName" label="Staff" />
                     </div>
-                  ))}
                   </div>
                 )}
               </div>
-            </div>
+              
+              {/* Sort controls (when status filter is shown) */}
+              {(typeFilter === 'reimbursement' || typeFilter === 'income' || typeFilter === 'all') && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <SortButton field="date" label="Date" />
+                    <SortButton field="amount" label="Amount" />
+                    <SortButton field="staffName" label="Staff" />
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Activity List */}
+            <Card className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">
+                  Activities ({filteredAndSortedActivities.length})
+                </h2>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
+                  <SortButton field="date" label="Date" />
+                  {(typeFilter === 'all' || typeFilter === 'reimbursement' || typeFilter === 'income') && (
+                    <SortButton field="amount" label="Amount" />
+                  )}
+                  <SortButton field="staffName" label="Staff" />
+                </div>
+              </div>
+
+              {activitiesLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-500 text-sm mt-2">Loading activities...</p>
+                </div>
+              ) : filteredAndSortedActivities.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-2">📋</div>
+                  <p className="text-gray-500 text-sm">No activities found</p>
+                  <p className="text-gray-400 text-xs mt-1">Try adjusting your filters</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {activitiesByMonth.map(([month, monthActivities]) => (
+                    <CollapsibleSection
+                      key={month}
+                      title={month}
+                      count={monthActivities.length}
+                      defaultExpanded={expandedMonths.has(month)}
+                      className="bg-white"
+                    >
+                      <div className="space-y-2">
+                        {monthActivities.map((activity) => (
+                          <div
+                            key={activity.id}
+                            onClick={() => editingId !== activity.id && handleActivityStartEdit(activity)}
+                            className="p-2 sm:p-3 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors cursor-pointer"
+                          >
+                            {editingId === activity.id && editFormData ? (
+                              // Edit Form
+                              <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-between mb-3">
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    activity.type === 'assignment'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : activity.type === 'reimbursement'
+                                      ? 'bg-green-100 text-green-800'
+                                      : activity.type === 'income'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-purple-100 text-purple-800'
+                                  }`}>
+                                    {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Expense' : activity.type === 'income' ? '💵 Income' : '📸 Photo'}
+                                  </span>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button
+                                      onClick={handleActivitySaveEdit}
+                                      disabled={activitySaving}
+                                      size="sm"
+                                      variant="outline"
+                                      className="min-h-[44px] flex-1 sm:flex-none"
+                                    >
+                                      {activitySaving ? 'Saving...' : 'Save'}
+                                    </Button>
+                                    <Button
+                                      onClick={handleActivityCancelEdit}
+                                      disabled={activitySaving}
+                                      size="sm"
+                                      variant="ghost"
+                                      className="min-h-[44px] flex-1 sm:flex-none"
+                                    >
+                                      Cancel
+                                    </Button>
+                                    <Button
+                                      onClick={handleActivityDelete}
+                                      disabled={activitySaving}
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-red-600 border-red-300 hover:bg-red-50 min-h-[44px] flex-1 sm:flex-none"
+                                    >
+                                      {activitySaving ? 'Deleting...' : 'Delete'}
+                                    </Button>
+                                  </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {activity.type !== 'photo' && (
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Staff</label>
+                                      <select
+                                        value={editFormData.staffId || ''}
+                                        onChange={(e) => {
+                                          const selectedStaff = staff.find(s => s.id === e.target.value);
+                                          setEditFormData({
+                                            ...editFormData, 
+                                            staffId: e.target.value,
+                                            dailyRate: activity.type === 'assignment' && selectedStaff 
+                                              ? selectedStaff.dailyRate 
+                                              : editFormData.dailyRate
+                                          });
+                                        }}
+                                        className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px]"
+                                      >
+                                        <option value="">Select Staff</option>
+                                        {staff.map(s => (
+                                          <option key={s.id} value={s.id}>{s.name}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
+                                  
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                                    <Input
+                                      type="date"
+                                      value={editFormData.date}
+                                      onChange={(e) => setEditFormData({...editFormData, date: e.target.value})}
+                                      className="text-sm"
+                                    />
+                                  </div>
+                                  
+                                  {/* Optional Fields - Toggleable */}
+                                  <div className="sm:col-span-2 flex flex-wrap gap-2 mb-3">
+                                    {!showNotesField && (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowNotesField(true)}
+                                        className="text-xs"
+                                      >
+                                        + Add Notes
+                                      </Button>
+                                    )}
+                                  </div>
+
+                                  {/* Notes Field */}
+                                  {showNotesField && (
+                                    <div className="sm:col-span-2">
+                                      <div className="flex items-center justify-between mb-1">
+                                        <label className="block text-xs font-medium text-gray-700">Notes</label>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            setShowNotesField(false);
+                                            setEditFormData({...editFormData, notes: ''});
+                                          }}
+                                          className="text-xs"
+                                        >
+                                          Remove
+                                        </Button>
+                                      </div>
+                                      <textarea
+                                        value={editFormData.notes || ''}
+                                        onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
+                                        className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 touch-manipulation"
+                                        placeholder="Additional notes..."
+                                        rows={2}
+                                      />
+                                    </div>
+                                  )}
+
+                                  {activity.type === 'photo' ? null : activity.type === 'assignment' ? (
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">Daily Rate ($)</label>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={editFormData.dailyRate || ''}
+                                        onChange={(e) => setEditFormData({...editFormData, dailyRate: parseFloat(e.target.value) || 0})}
+                                        className="text-sm"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Amount ($)</label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={editFormData.amount || ''}
+                                          onChange={(e) => setEditFormData({...editFormData, amount: parseFloat(e.target.value) || 0})}
+                                          className="text-sm"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                                        <select
+                                          value={editFormData.status || 'pending'}
+                                          onChange={(e) => setEditFormData({...editFormData, status: e.target.value as any})}
+                                          className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px]"
+                                        >
+                                          {activity.type === 'income' ? (
+                                            <>
+                                              <option value="pending">Pending</option>
+                                              <option value="received">Received</option>
+                                              <option value="cancelled">Cancelled</option>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <option value="pending">Pending</option>
+                                              <option value="approved">Approved</option>
+                                              <option value="rejected">Rejected</option>
+                                            </>
+                                          )}
+                                        </select>
+                                      </div>
+                                      <div className="sm:col-span-2">
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Item Description</label>
+                                        <Input
+                                          value={editFormData.itemDescription || ''}
+                                          onChange={(e) => setEditFormData({...editFormData, itemDescription: e.target.value})}
+                                          className="text-sm"
+                                          placeholder="Enter item description..."
+                                        />
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              // Display View
+                              <div className="flex flex-col gap-1.5">
+                                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                  <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+                                    <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                      activity.type === 'assignment'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : activity.type === 'reimbursement'
+                                        ? 'bg-green-100 text-green-800'
+                                        : activity.type === 'income'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : 'bg-purple-100 text-purple-800'
+                                    }`}>
+                                      {activity.type === 'assignment' ? '📋 Assignment' : activity.type === 'reimbursement' ? '💰 Expense' : activity.type === 'income' ? '💵 Income' : '📸 Photo'}
+                                    </span>
+                                    {activity.status && (
+                                      <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(activity.status)}`}>
+                                        {activity.status}
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                                      {formatDate(activity.date)}
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                <div>
+                                  {activity.type === 'photo' ? (
+                                    <>
+                                      {(activity.photoUrls && activity.photoUrls.length > 0) || activity.photoUrl ? (
+                                        <div className="mb-1.5">
+                                          <div className="grid grid-cols-3 sm:flex sm:flex-nowrap gap-1.5">
+                                            {(activity.photoUrls || (activity.photoUrl ? [activity.photoUrl] : [])).slice(0, 9).map((url, index) => (
+                                              <img
+                                                key={index}
+                                                src={url}
+                                                alt={`Photo ${index + 1}${activity.description ? ` - ${activity.description}` : ''}`}
+                                                className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  window.open(url, '_blank');
+                                                }}
+                                              />
+                                            ))}
+                                          </div>
+                                          {(activity.photoUrls && activity.photoUrls.length > 9) && (
+                                            <p className="text-xs text-gray-500 mt-1">
+                                              +{activity.photoUrls.length - 9} more photos
+                                            </p>
+                                          )}
+                                        </div>
+                                      ) : null}
+                                      <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">
+                                        <span className="font-medium text-gray-900">
+                                          {activity.uploadedByName || 'Unknown User'}
+                                        </span>
+                                      </div>
+                                      {activity.description && (
+                                        <p className="text-xs text-gray-600 break-words mt-0.5">
+                                          {activity.description}
+                                        </p>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {activity.type === 'reimbursement' && activity.receiptUrl && (
+                                        <div className="mb-1.5">
+                                          <img
+                                            src={activity.receiptUrl}
+                                            alt="Receipt"
+                                            className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              window.open(activity.receiptUrl, '_blank');
+                                            }}
+                                          />
+                                        </div>
+                                      )}
+                                      {activity.type === 'income' && activity.invoiceUrl && (
+                                        <div className="mb-1.5">
+                                          <img
+                                            src={activity.invoiceUrl}
+                                            alt="Invoice"
+                                            className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              window.open(activity.invoiceUrl, '_blank');
+                                            }}
+                                          />
+                                        </div>
+                                      )}
+                                      <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">
+                                        {activity.staffName && (
+                                          <>
+                                            <span className="font-medium text-gray-900">
+                                              {activity.staffName}
+                                            </span>
+                                          </>
+                                        )}
+                                        {activity.type === 'assignment' && activity.dailyRate !== undefined && (
+                                          <>
+                                            <span className="text-gray-400">•</span>
+                                            <span className="text-gray-600">
+                                              <span className="font-medium">{formatCurrency(activity.dailyRate)}/day</span>
+                                            </span>
+                                          </>
+                                        )}
+                                        {activity.type === 'reimbursement' && activity.amount !== undefined && (
+                                          <>
+                                            <span className="text-gray-400">•</span>
+                                            <span className="text-gray-600">
+                                              <span className="font-medium text-green-600">{formatCurrency(activity.amount)}</span>
+                                            </span>
+                                          </>
+                                        )}
+                                        {activity.type === 'income' && activity.amount !== undefined && (
+                                          <>
+                                            <span className="text-gray-400">•</span>
+                                            <span className="text-gray-600">
+                                              <span className="font-medium text-emerald-600">{formatCurrency(activity.amount)}</span>
+                                            </span>
+                                          </>
+                                        )}
+                                      </div>
+                                      {(activity.type === 'assignment' 
+                                        ? activity.taskDescription || activity.description
+                                        : activity.itemDescription || activity.description) && (
+                                        <p className="text-xs text-gray-600 break-words mt-0.5">
+                                          {activity.type === 'assignment' 
+                                            ? activity.taskDescription || activity.description
+                                            : activity.itemDescription || activity.description}
+                                        </p>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleSection>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
         </div>
 
@@ -1061,7 +1926,7 @@ ${reportData.isOverBudget
               </div>
 
               {/* Financial Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                 <div className="bg-blue-50 rounded-xl p-4">
                   <div className="text-2xl font-bold text-blue-600">${reportData.budget.toLocaleString()}</div>
                   <div className="text-sm text-blue-800">Total Budget</div>
@@ -1070,12 +1935,16 @@ ${reportData.isOverBudget
                   <div className="text-2xl font-bold text-orange-600">${reportData.actualCost.toLocaleString()}</div>
                   <div className="text-sm text-orange-800">Actual Cost</div>
                 </div>
-                <div className={`rounded-xl p-4 ${reportData.isOverBudget ? 'bg-red-50' : 'bg-green-50'}`}>
-                  <div className={`text-2xl font-bold ${reportData.isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
-                    ${Math.abs(reportData.variance).toLocaleString()}
+                <div className="bg-emerald-50 rounded-xl p-4">
+                  <div className="text-2xl font-bold text-emerald-600">${(reportData.actualRevenue || 0).toLocaleString()}</div>
+                  <div className="text-sm text-emerald-800">Actual Revenue</div>
+                </div>
+                <div className={`rounded-xl p-4 ${(reportData.netProfit || 0) < 0 ? 'bg-red-50' : 'bg-green-50'}`}>
+                  <div className={`text-2xl font-bold ${(reportData.netProfit || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    ${Math.abs(reportData.netProfit || 0).toLocaleString()}
                   </div>
-                  <div className={`text-sm ${reportData.isOverBudget ? 'text-red-800' : 'text-green-800'}`}>
-                    {reportData.isOverBudget ? 'Over Budget' : 'Remaining'}
+                  <div className={`text-sm ${(reportData.netProfit || 0) < 0 ? 'text-red-800' : 'text-green-800'}`}>
+                    Net Profit
                   </div>
                 </div>
                 <div className="bg-purple-50 rounded-xl p-4">
@@ -1109,7 +1978,7 @@ ${reportData.isOverBudget
               {/* Financial Analysis */}
               <div className="bg-gray-50 rounded-xl p-6 mb-6">
                 <h4 className="text-lg font-semibold text-gray-900 mb-4">Financial Analysis</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <h5 className="text-sm font-medium text-gray-700 mb-3">Budget Performance</h5>
                     <div className="space-y-2">
@@ -1129,6 +1998,29 @@ ${reportData.isOverBudget
                         <span className="text-sm text-gray-600">Status:</span>
                         <span className={`text-sm font-medium ${reportData.isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
                           {reportData.isOverBudget ? 'Over Budget' : 'Within Budget'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-700 mb-3">Revenue & Profit</h5>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Revenue:</span>
+                        <span className="text-sm font-medium text-emerald-600">
+                          ${(reportData.actualRevenue || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Net Profit:</span>
+                        <span className={`text-sm font-medium ${(reportData.netProfit || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          ${(reportData.netProfit || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Profit Margin:</span>
+                        <span className={`text-sm font-medium ${(reportData.profitMargin || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {(reportData.profitMargin || 0).toFixed(1)}%
                         </span>
                       </div>
                     </div>

@@ -17,6 +17,7 @@ import PayrollPage from './pages/PayrollPage.tsx';
 import StaffAssignmentsPage from './pages/StaffAssignmentsPage';
 import StaffManagementPage from './pages/StaffManagementPage';
 import ExpensePage from './pages/ExpensePage';
+import IncomePage from './pages/IncomePage';
 import PhotoPage from './pages/PhotoPage';
 import CategoryManagementPage from './pages/CategoryManagementPage';
 import ActivityLogsPage from './pages/ActivityLogsPage';
@@ -86,6 +87,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ExpensePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/income"
+                  element={
+                    <ProtectedRoute>
+                      <IncomePage />
                     </ProtectedRoute>
                   }
                 />

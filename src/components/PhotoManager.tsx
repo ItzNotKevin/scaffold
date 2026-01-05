@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -11,6 +11,9 @@ import Button from './ui/Button';
 import Input from './ui/Input';
 import Card from './ui/Card';
 import CollapsibleSection from './ui/CollapsibleSection';
+
+type SortField = 'date' | 'projectName' | 'staffName';
+type SortDirection = 'asc' | 'desc';
 
 const PhotoManager: React.FC = () => {
   const { t } = useTranslation();
@@ -25,11 +28,29 @@ const PhotoManager: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [compressPhotos, setCompressPhotos] = useState(true);
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [showNotesField, setShowNotesField] = useState(false);
   const [showStaffField, setShowStaffField] = useState(false);
+  const [editShowNotesField, setEditShowNotesField] = useState(false);
+  const [editShowStaffField, setEditShowStaffField] = useState(false);
+  
+  // Edit form data (for inline editing)
+  const [editFormData, setEditFormData] = useState<{
+    projectId: string;
+    date: string;
+    notes?: string;
+    staffId?: string;
+  } | null>(null);
+  
+  // Filter and sort state
+  const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [staffFilter, setStaffFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -105,7 +126,7 @@ const PhotoManager: React.FC = () => {
       return;
     }
 
-    if (formData.selectedFiles.length === 0 && !editingId) {
+    if (formData.selectedFiles.length === 0) {
       alert('Please select at least one photo');
       return;
     }
@@ -119,32 +140,8 @@ const PhotoManager: React.FC = () => {
     try {
       setUploading(true);
       
-      if (editingId) {
-        // Update existing photo entry
-        const photoToUpdate = photos.find(p => p.id === editingId);
-        if (!photoToUpdate) {
-          alert('Photo not found');
-          return;
-        }
-
-        const selectedStaff = formData.staffId ? staff.find(s => s.id === formData.staffId) : null;
-        
-        const updateData: any = {
-          projectId: formData.projectId,
-          projectName: selectedProject.name,
-          description: formData.notes || '',
-          date: formData.date,
-          staffId: formData.staffId || null,
-          staffName: selectedStaff?.name || null,
-          updatedAt: serverTimestamp()
-        };
-
-        await updateDoc(doc(db, 'projectPhotos', editingId), updateData);
-        await loadData();
-        resetForm();
-      } else {
-        // Upload new photos
-        const fileArray = Array.from(formData.selectedFiles);
+      // Upload new photos
+      const fileArray = Array.from(formData.selectedFiles);
         
         // Validate files
         const validationErrors: string[] = [];
@@ -286,7 +283,6 @@ const PhotoManager: React.FC = () => {
         if (errorCount > 0) {
           alert(`${errorCount} file(s) failed to upload. ${successCount} file(s) uploaded successfully.`);
         }
-      }
     } catch (error) {
       console.error('Error saving photo:', error);
       alert('Failed to save photo. Please try again.');
@@ -296,18 +292,62 @@ const PhotoManager: React.FC = () => {
     }
   };
 
-  const handleEdit = (photo: ProjectPhotoEntry) => {
-    setFormData({
+  const handleStartEdit = (photo: ProjectPhotoEntry) => {
+    setEditingId(photo.id);
+    setEditFormData({
       projectId: photo.projectId,
-      notes: photo.description || '',
       date: photo.date,
-      selectedFiles: [],
+      notes: photo.description || '',
       staffId: photo.staffId || ''
     });
-    setShowNotesField(!!photo.description);
-    setShowStaffField(!!photo.staffId);
-    setEditingId(photo.id);
-    setShowForm(true);
+    setEditShowNotesField(!!photo.description);
+    setEditShowStaffField(!!photo.staffId);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditFormData(null);
+    setEditShowNotesField(false);
+    setEditShowStaffField(false);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editFormData || !currentUser) return;
+
+    const photo = photos.find(p => p.id === editingId);
+    if (!photo) return;
+
+    try {
+      setSaving(true);
+
+      if (!editFormData.projectId) {
+        alert('Please fill in all required fields (project)');
+        setSaving(false);
+        return;
+      }
+
+      const selectedProject = projects.find(p => p.id === editFormData.projectId);
+      const selectedStaff = editFormData.staffId ? staff.find(s => s.id === editFormData.staffId) : null;
+
+      const updateData: any = {
+        projectId: editFormData.projectId,
+        projectName: selectedProject?.name || photo.projectName,
+        description: editFormData.notes?.trim() || '',
+        date: editFormData.date,
+        staffId: editFormData.staffId || null,
+        staffName: selectedStaff?.name || null,
+        updatedAt: serverTimestamp()
+      };
+
+      await updateDoc(doc(db, 'projectPhotos', editingId), updateData);
+      await loadData();
+      handleCancelEdit();
+    } catch (error) {
+      console.error('Error updating photo:', error);
+      alert('Failed to update photo. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (photoId: string) => {
@@ -351,6 +391,9 @@ const PhotoManager: React.FC = () => {
     setShowNotesField(false);
     setShowStaffField(false);
     setEditingId(null);
+    setEditFormData(null);
+    setEditShowNotesField(false);
+    setEditShowStaffField(false);
     setShowForm(false);
     // Clear projectId from URL if it was set
     if (projectIdParam) {
@@ -377,6 +420,159 @@ const PhotoManager: React.FC = () => {
     }
   };
 
+  // Filter and sort photos
+  const filteredAndSortedPhotos = useMemo(() => {
+    let filtered = [...photos];
+    
+    // Apply project filter
+    if (projectFilter !== 'all') {
+      filtered = filtered.filter(photo => photo.projectId === projectFilter);
+    }
+    
+    // Apply staff filter
+    if (staffFilter !== 'all') {
+      filtered = filtered.filter(photo => photo.staffId === staffFilter);
+    }
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(photo => {
+        // Search in description
+        const description = photo.description?.toLowerCase() || '';
+        if (description.includes(query)) return true;
+        
+        // Search in project name
+        const projectName = photo.projectName?.toLowerCase() || '';
+        if (projectName.includes(query)) return true;
+        
+        // Search in staff name
+        const staffName = photo.staffName?.toLowerCase() || '';
+        if (staffName.includes(query)) return true;
+        
+        // Search in uploaded by name
+        const uploadedByName = photo.uploadedByName?.toLowerCase() || '';
+        if (uploadedByName.includes(query)) return true;
+        
+        // Search in date (try multiple formats)
+        if (photo.date) {
+          try {
+            const date = new Date(photo.date);
+            // Check formatted date string
+            const dateStr = formatDate(photo.date).toLowerCase();
+            if (dateStr.includes(query)) return true;
+            
+            // Check ISO date string
+            const isoDate = photo.date.toLowerCase();
+            if (isoDate.includes(query)) return true;
+            
+            // Check month/year format
+            const monthYear = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toLowerCase();
+            if (monthYear.includes(query)) return true;
+            
+            // Check full date string
+            const fullDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase();
+            if (fullDate.includes(query)) return true;
+          } catch {
+            // If date parsing fails, just check the raw date string
+            if (photo.date.toLowerCase().includes(query)) return true;
+          }
+        }
+        
+        return false;
+      });
+    }
+    
+    // Sort
+    filtered.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+      
+      switch (sortField) {
+        case 'date':
+          aValue = a.date || '';
+          bValue = b.date || '';
+          break;
+        case 'projectName':
+          aValue = a.projectName || '';
+          bValue = b.projectName || '';
+          break;
+        case 'staffName':
+          aValue = a.staffName || '';
+          bValue = b.staffName || '';
+          break;
+        default:
+          return 0;
+      }
+      
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+      }
+    });
+    
+    return filtered;
+  }, [photos, projectFilter, staffFilter, searchQuery, sortField, sortDirection]);
+
+  // Group photos by month
+  const photosByMonth = useMemo(() => {
+    const grouped: Record<string, ProjectPhotoEntry[]> = {};
+    
+    filteredAndSortedPhotos.forEach(photo => {
+      if (!photo.date) return;
+      try {
+        const date = new Date(photo.date);
+        const monthStr = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        if (!grouped[monthStr]) {
+          grouped[monthStr] = [];
+        }
+        grouped[monthStr].push(photo);
+      } catch {
+        // Ignore invalid dates
+      }
+    });
+    
+    // Sort months in descending order (most recent first)
+    const sortedMonths = Object.keys(grouped).sort((a, b) => {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      return dateB.getTime() - dateA.getTime();
+    });
+    
+    // Return as array of [month, photos] tuples for easy iteration
+    return sortedMonths.map(month => [month, grouped[month]] as [string, ProjectPhotoEntry[]]);
+  }, [filteredAndSortedPhotos]);
+
+  // Track expanded months (initialize with current month)
+  const [expandedMonths] = useState<Set<string>>(() => {
+    const currentMonth = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    return new Set([currentMonth]);
+  });
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const SortButton: React.FC<{ field: SortField; label: string }> = ({ field, label }) => (
+    <button
+      onClick={() => handleSort(field)}
+      className="flex items-center space-x-1 text-sm font-medium text-gray-700 hover:text-gray-900 touch-manipulation min-h-[44px] px-2 py-1"
+    >
+      <span>{label}</span>
+      {sortField === field && (
+        <span className="text-blue-600">
+          {sortDirection === 'asc' ? '↑' : '↓'}
+        </span>
+      )}
+    </button>
+  );
+
   const selectedProject = projects.find(p => p.id === formData.projectId);
 
   return (
@@ -401,7 +597,7 @@ const PhotoManager: React.FC = () => {
             <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">
-                  {editingId ? 'Edit Photo' : 'Upload Photos'}
+                  Upload Photos
                 </h2>
                 <button
                   onClick={resetForm}
@@ -531,67 +727,63 @@ const PhotoManager: React.FC = () => {
                   </div>
                 )}
 
-                {!editingId && (
-                  <>
-                    <div>
-                      <label className="flex items-center gap-2 cursor-pointer mb-2">
-                        <input
-                          type="checkbox"
-                          checked={compressPhotos}
-                          onChange={(e) => setCompressPhotos(e.target.checked)}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-700">Compress images (faster upload, smaller files)</span>
-                      </label>
-                    </div>
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer mb-2">
+                    <input
+                      type="checkbox"
+                      checked={compressPhotos}
+                      onChange={(e) => setCompressPhotos(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">Compress images (faster upload, smaller files)</span>
+                  </label>
+                </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Photos *
-                      </label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-gray-400 transition-colors">
-                        <label htmlFor="photo-file-upload" className="cursor-pointer block">
-                          <span className="block text-sm font-medium text-gray-900">
-                            {formData.selectedFiles.length > 0 
-                              ? `${formData.selectedFiles.length} photo(s) selected`
-                              : 'Click to select photos'}
-                          </span>
-                          <span className="mt-1 block text-xs text-gray-500">
-                            PNG, JPG, GIF up to 10MB each
-                          </span>
-                        </label>
-                        <input
-                          id="photo-file-upload"
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleFileSelect}
-                          disabled={uploading}
-                          className="hidden"
-                        />
-                      </div>
-                      {formData.selectedFiles.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {formData.selectedFiles.map((file, index) => (
-                            <div key={index} className="text-xs bg-gray-50 px-2 py-1 rounded border border-gray-200">
-                              {file.name}
-                            </div>
-                          ))}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Photos *
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-gray-400 transition-colors">
+                    <label htmlFor="photo-file-upload" className="cursor-pointer block">
+                      <span className="block text-sm font-medium text-gray-900">
+                        {formData.selectedFiles.length > 0 
+                          ? `${formData.selectedFiles.length} photo(s) selected`
+                          : 'Click to select photos'}
+                      </span>
+                      <span className="mt-1 block text-xs text-gray-500">
+                        PNG, JPG, GIF up to 10MB each
+                      </span>
+                    </label>
+                    <input
+                      id="photo-file-upload"
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFileSelect}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                  </div>
+                  {formData.selectedFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {formData.selectedFiles.map((file, index) => (
+                        <div key={index} className="text-xs bg-gray-50 px-2 py-1 rounded border border-gray-200">
+                          {file.name}
                         </div>
-                      )}
-                      {uploading && (
-                        <div className="mt-2 text-sm text-gray-600">
-                          Uploading group {uploadProgress.current + 1} of {uploadProgress.total} ({formData.selectedFiles.length} photo{formData.selectedFiles.length !== 1 ? 's' : ''} total)...
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  </>
-                )}
+                  )}
+                  {uploading && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      Uploading group {uploadProgress.current + 1} of {uploadProgress.total} ({formData.selectedFiles.length} photo{formData.selectedFiles.length !== 1 ? 's' : ''} total)...
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-gray-200">
                   <Button type="submit" disabled={uploading} className="w-full sm:w-auto">
-                    {uploading ? 'Uploading...' : (editingId ? 'Update' : 'Upload')} Photo{!editingId && formData.selectedFiles.length > 1 ? 's' : ''}
+                    {uploading ? 'Uploading...' : 'Upload'} Photo{formData.selectedFiles.length > 1 ? 's' : ''}
                   </Button>
                   <Button type="button" variant="outline" onClick={resetForm} className="w-full sm:w-auto">
                     Cancel
@@ -601,86 +793,333 @@ const PhotoManager: React.FC = () => {
             </div>
           </div>
         )}
+      </Card>
+
+        {/* Search */}
+        <Card className="p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Search</h2>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <Input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by description, project, staff, date..."
+              className="pl-10"
+            />
+          </div>
+        </Card>
+
+        {/* Filters */}
+        <Card className="p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Filters</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Project</label>
+              <select
+                value={projectFilter}
+                onChange={(e) => setProjectFilter(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+              >
+                <option value="all">All Projects</option>
+                {projects.map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Staff Member</label>
+              <select
+                value={staffFilter}
+                onChange={(e) => setStaffFilter(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+              >
+                <option value="all">All Staff</option>
+                {staff.map(member => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+              <div className="flex items-center space-x-4 pt-3">
+                <SortButton field="date" label="Date" />
+                <SortButton field="projectName" label="Project" />
+                <SortButton field="staffName" label="Staff" />
+              </div>
+            </div>
+          </div>
+        </Card>
 
         {/* Photos List */}
-        {loading ? (
+        <Card className="p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">
+              Photos ({filteredAndSortedPhotos.length})
+            </h2>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
+              <SortButton field="date" label="Date" />
+              <SortButton field="projectName" label="Project" />
+              <SortButton field="staffName" label="Staff" />
+            </div>
+          </div>
+
+          {loading ? (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="text-gray-500 text-sm mt-2">Loading photos...</p>
           </div>
-        ) : photos.length === 0 ? (
+        ) : filteredAndSortedPhotos.length === 0 ? (
           <div className="text-center py-8">
             <div className="text-4xl mb-2">📸</div>
             <p className="text-gray-500 text-sm">No photos found</p>
-            <p className="text-gray-400 text-xs mt-1">Upload photos to get started</p>
+            <p className="text-gray-400 text-xs mt-1">Try adjusting your filters</p>
           </div>
         ) : (
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-              {((photos.length > 12 && !showAllPhotos) ? photos.slice(0, 12) : photos).map((photo) => (
-              <div key={photo.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 transition-colors">
-                <div className="aspect-video bg-gray-100 relative">
-                  <img
-                    src={photo.photoUrl}
-                    alt={photo.description}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZSBub3QgZm91bmQ8L3RleHQ+PC9zdmc+';
-                    }}
-                  />
-                </div>
-                <div className="p-3 sm:p-4">
-                  <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-2 break-words">
-                    {photo.description}
-                  </h4>
-                  <div className="space-y-1 text-xs sm:text-sm text-gray-600 mb-3">
-                    <div>
-                      <span className="font-medium">Project:</span> <span className="break-words">{photo.projectName}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">Date:</span> {formatDate(photo.date)}
-                    </div>
-                    <div>
-                      <span className="font-medium">Uploaded by:</span> {photo.uploadedByName}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(photo)}
-                      className="flex-1 min-h-[44px] sm:min-h-[36px]"
+          <div className="space-y-4">
+            {photosByMonth.map(([month, monthPhotos]) => (
+              <CollapsibleSection
+                key={month}
+                title={month}
+                count={monthPhotos.length}
+                defaultExpanded={expandedMonths.has(month)}
+                className="bg-white"
+              >
+                <div className="space-y-2">
+                  {monthPhotos.map((photo) => (
+                    <div
+                      key={photo.id}
+                      onClick={() => editingId !== photo.id && handleStartEdit(photo)}
+                      className="p-2 sm:p-3 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors cursor-pointer"
                     >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDelete(photo.id)}
-                      className="text-red-600 hover:text-red-700 flex-1 min-h-[44px] sm:min-h-[36px]"
-                    >
-                      Delete
-                    </Button>
-                  </div>
+                      {editingId === photo.id && editFormData ? (
+                        // Edit Form
+                        <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                              📸 Photo
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                onClick={handleSaveEdit}
+                                disabled={saving}
+                                size="sm"
+                                variant="outline"
+                                className="min-h-[44px] flex-1 sm:flex-none"
+                              >
+                                {saving ? 'Saving...' : 'Save'}
+                              </Button>
+                              <Button
+                                onClick={handleCancelEdit}
+                                disabled={saving}
+                                size="sm"
+                                variant="ghost"
+                                className="min-h-[44px] flex-1 sm:flex-none"
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                onClick={() => handleDelete(photo.id)}
+                                disabled={saving}
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 border-red-300 hover:bg-red-50 min-h-[44px] flex-1 sm:flex-none"
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Project</label>
+                              <select
+                                value={editFormData.projectId}
+                                onChange={(e) => setEditFormData({...editFormData, projectId: e.target.value})}
+                                className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px]"
+                              >
+                                <option value="">Select Project</option>
+                                {projects.map(p => (
+                                  <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                              <Input
+                                type="date"
+                                value={editFormData.date}
+                                onChange={(e) => setEditFormData({...editFormData, date: e.target.value})}
+                                className="text-sm"
+                              />
+                            </div>
+
+                            {!editShowStaffField && (
+                              <div className="sm:col-span-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditShowStaffField(true)}
+                                  className="text-xs"
+                                >
+                                  + Add Staff
+                                </Button>
+                              </div>
+                            )}
+
+                            {editShowStaffField && (
+                              <div className="sm:col-span-2">
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="block text-xs font-medium text-gray-700">Staff Member</label>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditShowStaffField(false);
+                                      setEditFormData({...editFormData, staffId: undefined});
+                                    }}
+                                    className="text-xs"
+                                  >
+                                    Remove
+                                  </Button>
+                                </div>
+                                <select
+                                  value={editFormData.staffId || ''}
+                                  onChange={(e) => setEditFormData({...editFormData, staffId: e.target.value})}
+                                  className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 touch-manipulation min-h-[44px]"
+                                >
+                                  <option value="">Select Staff Member</option>
+                                  {staff.map(s => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+
+                            {!editShowNotesField && (
+                              <div className="sm:col-span-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditShowNotesField(true)}
+                                  className="text-xs"
+                                >
+                                  + Add Notes
+                                </Button>
+                              </div>
+                            )}
+
+                            {editShowNotesField && (
+                              <div className="sm:col-span-2">
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="block text-xs font-medium text-gray-700">Notes</label>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditShowNotesField(false);
+                                      setEditFormData({...editFormData, notes: ''});
+                                    }}
+                                    className="text-xs"
+                                  >
+                                    Remove
+                                  </Button>
+                                </div>
+                                <textarea
+                                  value={editFormData.notes || ''}
+                                  onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
+                                  className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 touch-manipulation"
+                                  placeholder="Additional notes..."
+                                  rows={2}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        // Display View
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+                              <span className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                📸 Photo
+                              </span>
+                              <span className="text-xs text-gray-500 whitespace-nowrap">
+                                {formatDate(photo.date)}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            {(photo.photoUrls && photo.photoUrls.length > 0) || photo.photoUrl ? (
+                              <div className="mb-1.5">
+                                <div className="grid grid-cols-3 sm:flex sm:flex-nowrap gap-1.5">
+                                  {(photo.photoUrls || (photo.photoUrl ? [photo.photoUrl] : [])).slice(0, 9).map((url, index) => (
+                                    <img
+                                      key={index}
+                                      src={url}
+                                      alt={`Photo ${index + 1}${photo.description ? ` - ${photo.description}` : ''}`}
+                                      className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(url, '_blank');
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                                {(photo.photoUrls && photo.photoUrls.length > 9) && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    +{photo.photoUrls.length - 9} more photos
+                                  </p>
+                                )}
+                              </div>
+                            ) : null}
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">
+                              <span className="font-medium text-gray-900">
+                                {photo.uploadedByName || 'Unknown User'}
+                              </span>
+                              {photo.projectName && (
+                                <>
+                                  <span className="text-gray-400">•</span>
+                                  <span className="text-gray-500">{photo.projectName}</span>
+                                </>
+                              )}
+                              {photo.staffName && (
+                                <>
+                                  <span className="text-gray-400">•</span>
+                                  <span className="text-gray-500">{photo.staffName}</span>
+                                </>
+                              )}
+                            </div>
+                            {photo.description && (
+                              <p className="text-xs text-gray-600 break-words mt-0.5">
+                                {photo.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              </div>
+              </CollapsibleSection>
             ))}
-            </div>
-            {photos.length > 12 && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => setShowAllPhotos(!showAllPhotos)}
-                  className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors touch-manipulation min-h-[48px] text-sm sm:text-base"
-                >
-                  {showAllPhotos 
-                    ? `Show Less (Showing ${photos.length} of ${photos.length})`
-                    : `Show More (Showing ${Math.min(12, photos.length)} of ${photos.length})`
-                  }
-                </button>
-              </div>
-            )}
-          </>
+          </div>
         )}
       </Card>
     </div>
