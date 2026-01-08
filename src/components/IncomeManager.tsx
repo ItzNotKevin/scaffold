@@ -137,8 +137,11 @@ const IncomeManager: React.FC = () => {
   }, [categories, subcategories]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUser) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !currentUser) return;
+
+    // Use the last selected file (most recent photo taken)
+    const file = files[files.length - 1];
 
     try {
       setUploadingInvoice(true);
@@ -166,6 +169,10 @@ const IncomeManager: React.FC = () => {
       alert('Failed to upload invoice. Please try again.');
     } finally {
       setUploadingInvoice(false);
+      // Reset input value so onChange can fire again for new camera captures
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
 
@@ -641,7 +648,7 @@ const IncomeManager: React.FC = () => {
                   <input
                     type="file"
                     accept="image/*"
-                    capture="environment"
+                    multiple
                     onChange={handleFileUpload}
                     disabled={uploadingInvoice}
                     className="block w-full text-sm text-gray-500
@@ -976,4 +983,5 @@ const IncomeManager: React.FC = () => {
 };
 
 export default IncomeManager;
+
 

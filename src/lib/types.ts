@@ -231,6 +231,14 @@ export interface IncomeCategory {
   updatedAt: any;
 }
 
+// Vendor for expenses
+export interface Vendor {
+  id: string;
+  name: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
 // Income subcategory - users select these, categories just organize them
 export interface IncomeSubcategory {
   id: string;

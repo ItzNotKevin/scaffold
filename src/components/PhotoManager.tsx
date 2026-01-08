@@ -114,8 +114,17 @@ const PhotoManager: React.FC = () => {
       return;
     }
     
-    const fileArray = Array.from(files);
-    setFormData({ ...formData, selectedFiles: fileArray });
+    // Append new files to existing ones instead of replacing
+    const newFiles = Array.from(files);
+    setFormData(prev => ({ 
+      ...prev, 
+      selectedFiles: [...prev.selectedFiles, ...newFiles] 
+    }));
+    
+    // Reset input value so onChange can fire again for new camera captures
+    if (event.target) {
+      event.target.value = '';
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -759,7 +768,6 @@ const PhotoManager: React.FC = () => {
                       type="file"
                       multiple
                       accept="image/*"
-                      capture="environment"
                       onChange={handleFileSelect}
                       disabled={uploading}
                       className="hidden"

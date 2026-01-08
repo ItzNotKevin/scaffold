@@ -47,3 +47,4 @@ const IncomePage: React.FC = () => {
 
 export default IncomePage;
 
+

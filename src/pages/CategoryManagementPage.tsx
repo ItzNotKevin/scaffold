@@ -8,7 +8,7 @@ import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import type { ExpenseCategory, ExpenseSubcategory, Task } from '../lib/types';
+import type { ExpenseCategory, ExpenseSubcategory, Task, Vendor } from '../lib/types';
 
 const CategoryManagementPage: React.FC = () => {
   const { t } = useTranslation();
@@ -20,7 +20,7 @@ const CategoryManagementPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   
   // Tab state
-  const [activeTab, setActiveTab] = useState<'categories' | 'tasks'>('categories');
+  const [activeTab, setActiveTab] = useState<'categories' | 'tasks' | 'vendors'>('categories');
   
   // Category form state
   const [showCategoryForm, setShowCategoryForm] = useState(false);
@@ -45,12 +45,21 @@ const CategoryManagementPage: React.FC = () => {
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     status: 'todo' as 'todo' | 'in-progress' | 'review' | 'completed'
   });
+  
+  // Vendor form state
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [vendorsLoading, setVendorsLoading] = useState(true);
+  const [showVendorForm, setShowVendorForm] = useState(false);
+  const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
+  const [vendorName, setVendorName] = useState('');
 
   useEffect(() => {
     if (currentUser && permissions?.canManageUsers) {
       loadData();
       if (activeTab === 'tasks') {
         loadTasks();
+      } else if (activeTab === 'vendors') {
+        loadVendors();
       }
     } else if (currentUser && !permissions?.canManageUsers) {
       navigate('/');
@@ -139,6 +148,27 @@ const CategoryManagementPage: React.FC = () => {
       }
     } finally {
       setTasksLoading(false);
+    }
+  };
+
+  const loadVendors = async () => {
+    try {
+      setVendorsLoading(true);
+      const vendorsQuery = query(
+        collection(db, 'vendors'),
+        orderBy('name', 'asc')
+      );
+      const vendorsSnapshot = await getDocs(vendorsQuery);
+      const vendorsData = vendorsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Vendor));
+      setVendors(vendorsData);
+    } catch (error) {
+      console.error('Error loading vendors:', error);
+      setVendors([]);
+    } finally {
+      setVendorsLoading(false);
     }
   };
 
@@ -380,6 +410,59 @@ const CategoryManagementPage: React.FC = () => {
     }
   };
 
+  const handleAddVendor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vendorName.trim()) return;
+
+    try {
+      setSaving(true);
+      
+      const vendorData = {
+        name: vendorName.trim(),
+        createdAt: editingVendorId ? undefined : serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      if (editingVendorId) {
+        await updateDoc(doc(db, 'vendors', editingVendorId), vendorData);
+      } else {
+        await addDoc(collection(db, 'vendors'), vendorData);
+      }
+      
+      await loadVendors();
+      resetVendorForm();
+    } catch (error) {
+      console.error('Error saving vendor:', error);
+      alert('Failed to save vendor. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditVendor = (vendor: Vendor) => {
+    setVendorName(vendor.name);
+    setEditingVendorId(vendor.id);
+    setShowVendorForm(true);
+  };
+
+  const handleDeleteVendor = async (vendorId: string) => {
+    if (!confirm('Are you sure you want to delete this vendor?')) return;
+    
+    try {
+      await deleteDoc(doc(db, 'vendors', vendorId));
+      await loadVendors();
+    } catch (error) {
+      console.error('Error deleting vendor:', error);
+      alert('Failed to delete vendor. Please try again.');
+    }
+  };
+
+  const resetVendorForm = () => {
+    setVendorName('');
+    setEditingVendorId(null);
+    setShowVendorForm(false);
+  };
+
   if (!currentUser || !userProfile) {
     return (
       <Layout title="Categories" currentRole="admin">
@@ -420,6 +503,11 @@ const CategoryManagementPage: React.FC = () => {
                 Add Task
               </Button>
             )}
+            {activeTab === 'vendors' && (
+              <Button onClick={() => setShowVendorForm(true)} className="w-full sm:w-auto">
+                Add Vendor
+              </Button>
+            )}
           </div>
         </div>
 
@@ -448,6 +536,19 @@ const CategoryManagementPage: React.FC = () => {
               }`}
             >
               Tasks
+            </button>
+            <button 
+              onClick={() => {
+                setActiveTab('vendors');
+                loadVendors();
+              }} 
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors touch-manipulation min-h-[44px] flex-1 sm:flex-none ${
+                activeTab === 'vendors'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Vendors
             </button>
           </div>
 
@@ -818,6 +919,98 @@ const CategoryManagementPage: React.FC = () => {
                               variant="outline"
                               size="sm"
                               onClick={() => handleDeleteTask(task.id)}
+                              className="text-red-600 hover:text-red-700 flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </>
+          )}
+
+          {activeTab === 'vendors' && (
+            <>
+              {/* Vendor Form Modal */}
+              {showVendorForm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                  <div className="bg-white rounded-2xl max-w-md w-full">
+                    <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                      <h2 className="text-xl font-semibold text-gray-900">
+                        {editingVendorId ? 'Edit Vendor' : 'Create Vendor'}
+                      </h2>
+                      <button
+                        onClick={resetVendorForm}
+                        className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <form onSubmit={handleAddVendor} className="p-6 space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Vendor Name *
+                        </label>
+                        <Input
+                          value={vendorName}
+                          onChange={(e) => setVendorName(e.target.value)}
+                          placeholder="e.g., Home Depot, ABC Supply, Local Hardware"
+                          required
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-4 border-t border-gray-200">
+                        <Button type="submit" disabled={saving} className="flex-1">
+                          {saving ? 'Saving...' : (editingVendorId ? 'Update' : 'Create')} Vendor
+                        </Button>
+                        <Button type="button" variant="outline" onClick={resetVendorForm} className="flex-1">
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Vendors List */}
+              <Card className="p-4 sm:p-6">
+                {vendorsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="text-gray-500 text-sm mt-2">Loading vendors...</p>
+                  </div>
+                ) : vendors.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-4xl mb-2">🏪</div>
+                    <p className="text-gray-500 text-sm">No vendors found</p>
+                    <p className="text-gray-400 text-xs mt-1">Create vendors to quickly select them when adding expenses</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {vendors.map((vendor) => (
+                      <div key={vendor.id} className="p-3 sm:p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-gray-900 text-sm sm:text-base break-words">{vendor.name}</h4>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditVendor(vendor)}
+                              className="flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteVendor(vendor.id)}
                               className="text-red-600 hover:text-red-700 flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
                             >
                               Delete

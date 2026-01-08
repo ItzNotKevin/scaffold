@@ -1508,6 +1508,60 @@ ${reportData.isOverBudget
                                   </div>
                                 </div>
                                 
+                                {/* Photo/Receipt/Invoice Preview in Edit Mode */}
+                                {activity.type === 'photo' && ((activity.photoUrls && activity.photoUrls.length > 0) || activity.photoUrl) && (
+                                  <div className="mb-3">
+                                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Photos</label>
+                                    <div className="grid grid-cols-3 sm:flex sm:flex-nowrap gap-1.5">
+                                      {(activity.photoUrls || (activity.photoUrl ? [activity.photoUrl] : [])).slice(0, 9).map((url, index) => (
+                                        <img
+                                          key={index}
+                                          src={url}
+                                          alt={`Photo ${index + 1}${activity.description ? ` - ${activity.description}` : ''}`}
+                                          className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            window.open(url, '_blank');
+                                          }}
+                                        />
+                                      ))}
+                                    </div>
+                                    {(activity.photoUrls && activity.photoUrls.length > 9) && (
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        +{activity.photoUrls.length - 9} more photos
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                                {activity.type === 'reimbursement' && activity.receiptUrl && (
+                                  <div className="mb-3">
+                                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Receipt</label>
+                                    <img
+                                      src={activity.receiptUrl}
+                                      alt="Receipt"
+                                      className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(activity.receiptUrl, '_blank');
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                                {activity.type === 'income' && activity.invoiceUrl && (
+                                  <div className="mb-3">
+                                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Invoice</label>
+                                    <img
+                                      src={activity.invoiceUrl}
+                                      alt="Invoice"
+                                      className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(activity.invoiceUrl, '_blank');
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                                
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   {activity.type !== 'photo' && (
                                     <div>

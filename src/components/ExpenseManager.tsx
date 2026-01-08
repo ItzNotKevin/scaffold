@@ -5,7 +5,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
-import type { Expense, StaffMember, ExpenseCategory, ExpenseSubcategory } from '../lib/types';
+import type { Expense, StaffMember, ExpenseCategory, ExpenseSubcategory, Vendor } from '../lib/types';
 import { updateProjectActualCost } from '../lib/projectCosts';
 import { compressImage } from '../lib/imageCompression';
 import Button from './ui/Button';
@@ -24,6 +24,7 @@ const ExpenseManager: React.FC = () => {
   const [projects, setProjects] = useState<Array<{id: string, name: string}>>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [subcategories, setSubcategories] = useState<ExpenseSubcategory[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -44,6 +45,12 @@ const ExpenseManager: React.FC = () => {
   const [newSubcategoryCategoryId, setNewSubcategoryCategoryId] = useState('');
   const [creatingSubcategory, setCreatingSubcategory] = useState(false);
   const [subcategoryError, setSubcategoryError] = useState('');
+  
+  // Add vendor modal state
+  const [showAddVendorModal, setShowAddVendorModal] = useState(false);
+  const [newVendorName, setNewVendorName] = useState('');
+  const [creatingVendor, setCreatingVendor] = useState(false);
+  const [vendorError, setVendorError] = useState('');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -102,6 +109,18 @@ const ExpenseManager: React.FC = () => {
       } as ExpenseSubcategory));
       setSubcategories(subcategoriesData);
 
+      // Load vendors
+      const vendorsQuery = query(
+        collection(db, 'vendors'),
+        orderBy('name', 'asc')
+      );
+      const vendorsSnapshot = await getDocs(vendorsQuery);
+      const vendorsData = vendorsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Vendor));
+      setVendors(vendorsData);
+
       // Load reimbursements (including expenses)
       const reimbursementsQuery = query(
         collection(db, 'reimbursements'),
@@ -148,8 +167,11 @@ const ExpenseManager: React.FC = () => {
   }, [categories, subcategories]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUser) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !currentUser) return;
+
+    // Use the last selected file (most recent photo taken)
+    const file = files[files.length - 1];
 
     try {
       setUploadingReceipt(true);
@@ -177,10 +199,14 @@ const ExpenseManager: React.FC = () => {
       alert('Failed to upload receipt. Please try again.');
     } finally {
       setUploadingReceipt(false);
+      // Reset input value so onChange can fire again for new camera captures
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, addAnother: boolean = false) => {
     e.preventDefault();
     const amountValue = parseFloat(formData.amount as string) || 0;
     if (!formData.subcategory || amountValue <= 0 || !currentUser) return;
@@ -263,7 +289,12 @@ const ExpenseManager: React.FC = () => {
       }
       
       await loadData();
-      resetForm();
+      
+      if (addAnother) {
+        resetFormForAddAnother();
+      } else {
+        resetForm();
+      }
     } catch (error) {
       console.error('Error saving expense:', error);
       alert('Failed to save entry. Please try again.');
@@ -336,17 +367,36 @@ const ExpenseManager: React.FC = () => {
       date: new Date().toISOString().split('T')[0],
       receiptUrl: '',
       notes: '',
+      vendor: '',
       status: 'approved'
     });
     setShowStaffField(false);
     setShowReceiptField(false);
     setShowNotesField(false);
+    setShowVendorField(false);
     setEditingId(null);
     setShowForm(false);
     // Clear projectId from URL if it was set
     if (projectIdParam) {
       setSearchParams({});
     }
+  };
+
+  const resetFormForAddAnother = () => {
+    // Preserve all fields except amount, receiptUrl, and notes
+    setFormData(prev => ({
+      ...prev,
+      amount: '',
+      receiptUrl: '',
+      notes: ''
+    }));
+    // Hide receipt and notes fields since they're cleared
+    setShowReceiptField(false);
+    setShowNotesField(false);
+    // Keep form open and keep other optional field visibility (staff, vendor)
+    setEditingId(null);
+    // Ensure form stays open
+    setShowForm(true);
   };
 
   const resetSubcategoryModal = () => {
@@ -419,6 +469,70 @@ const ExpenseManager: React.FC = () => {
     } finally {
       setCreatingSubcategory(false);
     }
+  };
+
+  const handleCreateVendor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVendorError('');
+
+    // Validation
+    if (!newVendorName.trim()) {
+      setVendorError('Vendor name is required');
+      return;
+    }
+
+    // Check for duplicate (case-insensitive)
+    const trimmedName = newVendorName.trim();
+    const duplicate = vendors.find(
+      vendor => vendor.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    
+    if (duplicate) {
+      setVendorError('A vendor with this name already exists');
+      return;
+    }
+
+    try {
+      setCreatingVendor(true);
+      
+      // Create the vendor in Firestore
+      const vendorData = {
+        name: trimmedName,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      await addDoc(collection(db, 'vendors'), vendorData);
+      
+      // Reload vendors to get the new one
+      const vendorsQuery = query(
+        collection(db, 'vendors'),
+        orderBy('name', 'asc')
+      );
+      const vendorsSnapshot = await getDocs(vendorsQuery);
+      const vendorsData = vendorsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Vendor));
+      setVendors(vendorsData);
+      
+      // Set the newly created vendor in the form
+      setFormData({ ...formData, vendor: trimmedName });
+      
+      // Close modal and reset
+      resetVendorModal();
+    } catch (error) {
+      console.error('Error creating vendor:', error);
+      setVendorError('Failed to create vendor. Please try again.');
+    } finally {
+      setCreatingVendor(false);
+    }
+  };
+
+  const resetVendorModal = () => {
+    setNewVendorName('');
+    setVendorError('');
+    setShowAddVendorModal(false);
   };
 
   const formatCurrency = (amount: number) => {
@@ -506,7 +620,7 @@ const ExpenseManager: React.FC = () => {
                   </svg>
                 </button>
               </div>
-              <form onSubmit={handleSubmit} className="p-6 space-y-3 sm:space-y-4">
+              <form onSubmit={(e) => handleSubmit(e, false)} className="p-6 space-y-3 sm:space-y-4">
             {/* Basic Fields - Always Visible */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
@@ -575,23 +689,21 @@ const ExpenseManager: React.FC = () => {
                   required
                 />
               </div>
-              {projectIdParam && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Project
-                  </label>
-                  <select
-                    value={formData.projectId}
-                    onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
-                  >
-                    <option value="">No Project</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Project
+                </label>
+                <select
+                  value={formData.projectId}
+                  onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+                >
+                  <option value="">No Project</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Optional Fields - Toggleable */}
@@ -710,7 +822,7 @@ const ExpenseManager: React.FC = () => {
                   <input
                     type="file"
                     accept="image/*"
-                    capture="environment"
+                    multiple
                     onChange={handleFileUpload}
                     disabled={uploadingReceipt}
                     className="block w-full text-sm text-gray-500
@@ -796,13 +908,24 @@ const ExpenseManager: React.FC = () => {
                     Remove
                   </Button>
                 </div>
-                <Input
-                  type="text"
+                <select
                   value={formData.vendor}
-                  onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                  placeholder="Enter vendor name"
-                  className="w-full"
-                />
+                  onChange={(e) => {
+                    if (e.target.value === '__add_new__') {
+                      setShowAddVendorModal(true);
+                      setFormData({ ...formData, vendor: '' });
+                    } else {
+                      setFormData({ ...formData, vendor: e.target.value });
+                    }
+                  }}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-base touch-manipulation min-h-[44px]"
+                >
+                  <option value="">Select Vendor</option>
+                  {vendors.map(vendor => (
+                    <option key={vendor.id} value={vendor.name}>{vendor.name}</option>
+                  ))}
+                  <option value="__add_new__">+ Add New Vendor</option>
+                </select>
               </div>
             )}
 
@@ -826,6 +949,20 @@ const ExpenseManager: React.FC = () => {
                   <Button type="submit" disabled={saving || uploadingReceipt} className="w-full sm:w-auto">
                     {saving ? 'Saving...' : (editingId ? 'Update' : 'Add')} Entry
                   </Button>
+                  {!editingId && (
+                    <Button 
+                      type="button" 
+                      disabled={saving || uploadingReceipt} 
+                      variant="outline"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSubmit(e as React.FormEvent<HTMLFormElement>, true);
+                      }}
+                      className="w-full sm:w-auto"
+                    >
+                      {saving ? 'Saving...' : 'Submit and Add Another'}
+                    </Button>
+                  )}
                   <Button type="button" variant="outline" onClick={resetForm} className="w-full sm:w-auto">
                     Cancel
                   </Button>
@@ -935,6 +1072,76 @@ const ExpenseManager: React.FC = () => {
                     </div>
                   </>
                 )}
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Add Vendor Modal */}
+        {showAddVendorModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-[60]">
+            <div className="bg-white rounded-2xl max-w-md w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+                  Add New Vendor
+                </h2>
+                <button
+                  onClick={resetVendorModal}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <form onSubmit={handleCreateVendor} className="p-4 sm:p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Vendor Name *
+                  </label>
+                  <Input
+                    type="text"
+                    value={newVendorName}
+                    onChange={(e) => {
+                      setNewVendorName(e.target.value);
+                      setVendorError('');
+                    }}
+                    placeholder="Enter vendor name"
+                    required
+                    autoFocus
+                  />
+                </div>
+                {vendorError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-sm text-red-600">{vendorError}</p>
+                  </div>
+                )}
+                <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-gray-200">
+                  <Button 
+                    type="submit" 
+                    disabled={creatingVendor || !newVendorName.trim()} 
+                    className="w-full sm:w-auto"
+                  >
+                    {creatingVendor ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                        Creating...
+                      </>
+                    ) : (
+                      'Create Vendor'
+                    )}
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={resetVendorModal} 
+                    className="w-full sm:w-auto"
+                    disabled={creatingVendor}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </form>
             </div>
           </div>
