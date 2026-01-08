@@ -4,17 +4,40 @@ A modern, mobile-first Progressive Web App (PWA) for construction project manage
 
 ## 🚀 Features
 
+### Core Functionality
 - **🔐 Firebase Authentication** - Email/password and Google sign-in
-- **📱 PWA Support** - Installable on iOS and Android devices
+- **📱 PWA Support** - Installable on iOS and Android devices with auto-updates
 - **🏢 Multi-tenant Architecture** - Company-based project organization
-- **📋 Project Management** - Create and manage construction projects
-- **👷 Staff Check-in/out** - Track team member attendance
-- **📊 Project Phases** - Sales, Contract, Materials, Construction, Completion
-- **📱 Mobile-First Design** - Optimized for mobile devices
+- **📋 Project Management** - Create and manage construction projects with budgets and tracking
+- **📱 Mobile-First Design** - Optimized for mobile devices with touch-friendly UI
 - **⚡ Real-time Updates** - Live data synchronization with Firestore
-- **🔒 Protected Routes** - Secure access to private pages
-- **📧 Email Notifications** - Project updates via SendGrid
-- **🔔 Push Notifications** - FCM ready (disabled by default)
+- **🔒 Protected Routes** - Secure access to private pages with role-based permissions
+
+### Financial Management
+- **💰 Expense Tracking** - Track project expenses with categories, subcategories, and vendors
+- **💵 Income Management** - Record project income with categories and invoice tracking
+- **📊 Budget Tracking** - Real-time project budget vs actual cost calculations
+- **📈 Revenue Tracking** - Track project revenue, profit margins, and net profit
+- **🧾 Receipt & Invoice Upload** - Photo uploads with compression and cloud storage
+
+### Staff & Task Management
+- **👷 Staff Management** - Add staff members with daily rates and payroll tracking
+- **📋 Task Assignments** - Assign tasks to staff with daily rate calculations
+- **✅ Task Templates** - Create reusable task templates for project standardization
+- **💼 Payroll Calculation** - Automatic calculation of wages and reimbursements
+
+### Activity & Documentation
+- **📸 Photo Management** - Upload and organize project photos with activity log view
+- **📝 Activity Logs** - Comprehensive activity tracking with filters and sorting
+- **📅 Project Activity** - View all project activities (assignments, expenses, income, photos) in one place
+- **🔍 Advanced Filtering** - Filter by type, staff, project, status, and date
+- **📊 Monthly Grouping** - Activities organized by month for easy navigation
+
+### Organization & Settings
+- **📁 Category Management** - Organize expenses and income with categories and subcategories
+- **🏪 Vendor Management** - Manage vendor list with quick selection in expense forms
+- **⚙️ User Management** - Admin controls for user roles and permissions
+- **🔔 Push Notifications** - FCM ready for real-time updates (configurable)
 
 ## 🛠️ Tech Stack
 
@@ -91,29 +114,61 @@ A modern, mobile-first Progressive Web App (PWA) for construction project manage
 
 ```
 src/
-├── components/          # Reusable UI components
-│   ├── Layout.tsx      # Main app layout
-│   ├── ProtectedRoute.tsx # Route protection
-│   └── TopBar.tsx      # Navigation header
-├── lib/                # Utilities and configurations
-│   ├── firebase.ts     # Firebase configuration
-│   ├── firestore.ts    # Firestore helpers
-│   ├── useAuth.tsx     # Authentication context
-│   ├── usePWAInstall.tsx # PWA install hook
-│   └── types.ts        # TypeScript type definitions
-├── pages/              # Page components
-│   ├── AuthPage.tsx    # Login/signup page
-│   ├── Home.tsx        # Dashboard (company/projects)
-│   └── ProjectPage.tsx # Individual project view
-└── App.tsx             # Main app component with routing
+├── components/              # Reusable UI components
+│   ├── Layout.tsx          # Main app layout
+│   ├── ProtectedRoute.tsx  # Route protection
+│   ├── TopBar.tsx          # Navigation header
+│   ├── AdminDashboard.tsx  # Admin dashboard
+│   ├── ExpenseManager.tsx  # Expense management with forms
+│   ├── IncomeManager.tsx   # Income management with forms
+│   ├── PhotoManager.tsx    # Photo management with activity log view
+│   └── ui/                 # UI component library
+│       ├── Button.tsx
+│       ├── Card.tsx
+│       ├── Input.tsx
+│       └── CollapsibleSection.tsx
+├── lib/                    # Utilities and configurations
+│   ├── firebase.ts         # Firebase configuration
+│   ├── useAuth.tsx         # Authentication context
+│   ├── types.ts            # TypeScript type definitions
+│   ├── projectCosts.ts     # Project cost calculation utilities
+│   ├── projectRevenue.ts   # Project revenue calculation utilities
+│   └── imageCompression.ts # Image compression utilities
+├── pages/                  # Page components
+│   ├── AuthPage.tsx        # Login/signup page
+│   ├── Home.tsx            # Dashboard (company/projects)
+│   ├── ProjectPage.tsx     # Individual project view with activity log
+│   ├── ExpensePage.tsx     # Expense management page
+│   ├── IncomePage.tsx      # Income management page
+│   ├── PhotoPage.tsx       # Photo management page
+│   ├── ActivityLogsPage.tsx # Global activity logs
+│   ├── CategoryManagementPage.tsx # Categories, tasks, and vendors
+│   └── ProfilePage.tsx     # User profile settings
+└── App.tsx                 # Main app component with routing
 ```
 
 ## 🔥 Firebase Collections
 
+### Core Collections
 - **`companies/{id}`** - Company information
-- **`users/{uid}`** - User profiles with company association
-- **`projects/{id}`** - Construction projects
-- **`checkins/{id}`** - Staff check-in/out records
+- **`users/{uid}`** - User profiles with company association and permissions
+- **`projects/{id}`** - Construction projects with budget and revenue tracking
+- **`staffMembers/{id}`** - Staff member profiles with daily rates
+
+### Financial Collections
+- **`reimbursements/{id}`** - Expense entries (expenses and reimbursements)
+- **`incomes/{id}`** - Income entries with invoices
+- **`expenseCategories/{id}`** - Expense category organization
+- **`expenseSubcategories/{id}`** - Expense subcategories with usage tracking
+- **`incomeCategories/{id}`** - Income category organization
+- **`incomeSubcategories/{id}`** - Income subcategories with usage tracking
+- **`vendors/{id}`** - Vendor list for expense tracking
+
+### Task & Activity Collections
+- **`taskAssignments/{id}`** - Task assignments with staff and daily rates
+- **`tasks/{id}`** - Task templates and project tasks
+- **`projectPhotos/{id}`** - Project photo entries with metadata
+- **`dailyReports/{id}`** - Daily project reports (if used)
 
 ## 🚀 Deployment
 
@@ -162,10 +217,54 @@ ifconfig | grep "inet " | grep -v 127.0.0.1
 
 ## 📝 Available Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
+- `npm run dev` - Start development server on port 5173
+- `npm run build` - Build for production (outputs to `dist/`)
+- `npm run preview` - Preview production build locally
+- `npm run lint` - Run ESLint for code quality checks
+
+## 🎯 Key Features in Detail
+
+### Expense Management
+- Add expenses with categories, subcategories, and vendor selection
+- Track receipts with photo uploads
+- Link expenses to projects for budget tracking
+- "Submit and Add Another" for quick entry of multiple expenses
+- Inline vendor creation from expense form
+- Filter and sort expenses by various criteria
+
+### Income Management
+- Record project income with categories and subcategories
+- Upload invoice documents
+- Track income status (pending, received, cancelled)
+- Automatic revenue calculation per project
+
+### Photo Management
+- Upload multiple photos per entry (up to 9 photos)
+- Activity log-style view with filtering and sorting
+- Photo previews remain visible during edit mode
+- Monthly grouping for easy navigation
+
+### Activity Logs
+- Unified view of all project activities
+- Filter by type (assignment, expense, income, photo)
+- Filter by staff, project, and status
+- Sort by date, amount, staff, or project
+- Click photos/receipts to view full size
+- Inline editing with photo preview preservation
+
+### Category & Vendor Management
+- Organize expenses and income with hierarchical categories
+- Quick subcategory creation from expense form
+- Vendor management with dropdown selection
+- Usage tracking for subcategories
+- Task template management
+
+### Project Financials
+- Real-time budget tracking (budget vs actual cost)
+- Revenue tracking with profit calculations
+- Net profit and profit margin calculations
+- Cost breakdown by category
+- Revenue breakdown by category
 
 ## 🤝 Contributing
 
@@ -193,4 +292,4 @@ If you encounter any issues or have questions:
 - [Firebase Console](https://console.firebase.google.com)
 - [React Documentation](https://reactjs.org/docs)
 - [Tailwind CSS](https://tailwindcss.com/docs)
-- [Vite Documentation](https://vitejs.dev/guide)# Test GitHub Integration
+- [Vite Documentation](https://vitejs.dev/guide)
