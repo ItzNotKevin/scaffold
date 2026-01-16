@@ -9,6 +9,7 @@ import Card from '../components/ui/Card';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { ExpenseCategory, ExpenseSubcategory, Task, Vendor } from '../lib/types';
+import { categoryIcons, defaultCategoryIcons } from '../lib/categoryIcons';
 
 const CategoryManagementPage: React.FC = () => {
   const { t } = useTranslation();
@@ -26,12 +27,19 @@ const CategoryManagementPage: React.FC = () => {
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState('');
+  const [categoryIcon, setCategoryIcon] = useState<string>('');
+  const [showIconPicker, setShowIconPicker] = useState(false);
   
   // Subcategory form state
   const [showSubcategoryForm, setShowSubcategoryForm] = useState(false);
   const [editingSubcategoryId, setEditingSubcategoryId] = useState<string | null>(null);
   const [subcategoryName, setSubcategoryName] = useState('');
   const [subcategoryCategoryId, setSubcategoryCategoryId] = useState('');
+  const [subcategoryIcon, setSubcategoryIcon] = useState<string>('');
+  const [showSubcategoryIconPicker, setShowSubcategoryIconPicker] = useState(false);
+  
+  // Long press state for mobile
+  const [longPressedItem, setLongPressedItem] = useState<{type: 'category' | 'subcategory', id: string} | null>(null);
   
   // Task form state
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -177,6 +185,7 @@ const CategoryManagementPage: React.FC = () => {
       // Create Materials category
       await addDoc(collection(db, 'expenseCategories'), {
         name: 'Materials',
+        icon: defaultCategoryIcons['Materials'],
         isDefault: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -185,6 +194,7 @@ const CategoryManagementPage: React.FC = () => {
       // Create Equipment category
       await addDoc(collection(db, 'expenseCategories'), {
         name: 'Equipment',
+        icon: defaultCategoryIcons['Equipment'],
         isDefault: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -201,12 +211,16 @@ const CategoryManagementPage: React.FC = () => {
     try {
       setSaving(true);
       
-      const categoryData = {
+      const categoryData: any = {
         name: categoryName.trim(),
         isDefault: false,
         createdAt: editingCategoryId ? undefined : serverTimestamp(),
         updatedAt: serverTimestamp()
       };
+      
+      if (categoryIcon) {
+        categoryData.icon = categoryIcon;
+      }
 
       if (editingCategoryId) {
         await updateDoc(doc(db, 'expenseCategories', editingCategoryId), categoryData);
@@ -231,22 +245,30 @@ const CategoryManagementPage: React.FC = () => {
     try {
       setSaving(true);
       
-      const subcategoryData = {
+      const subcategoryData: any = {
         categoryId: subcategoryCategoryId,
         name: subcategoryName.trim(),
         usageCount: editingSubcategoryId ? undefined : 0,
         createdAt: editingSubcategoryId ? undefined : serverTimestamp(),
         updatedAt: serverTimestamp()
       };
+      
+      if (subcategoryIcon) {
+        subcategoryData.icon = subcategoryIcon;
+      }
 
       if (editingSubcategoryId) {
         // Don't reset usageCount when editing
         const existingSubcategory = subcategories.find(s => s.id === editingSubcategoryId);
-        await updateDoc(doc(db, 'expenseSubcategories', editingSubcategoryId), {
+        const updateData: any = {
           categoryId: subcategoryCategoryId,
           name: subcategoryName.trim(),
           updatedAt: serverTimestamp()
-        });
+        };
+        if (subcategoryIcon) {
+          updateData.icon = subcategoryIcon;
+        }
+        await updateDoc(doc(db, 'expenseSubcategories', editingSubcategoryId), updateData);
       } else {
         await addDoc(collection(db, 'expenseSubcategories'), subcategoryData);
       }
@@ -263,6 +285,7 @@ const CategoryManagementPage: React.FC = () => {
 
   const handleEditCategory = (category: ExpenseCategory) => {
     setCategoryName(category.name);
+    setCategoryIcon(category.icon || '');
     setEditingCategoryId(category.id);
     setShowCategoryForm(true);
   };
@@ -270,6 +293,7 @@ const CategoryManagementPage: React.FC = () => {
   const handleEditSubcategory = (subcategory: ExpenseSubcategory) => {
     setSubcategoryName(subcategory.name);
     setSubcategoryCategoryId(subcategory.categoryId);
+    setSubcategoryIcon(subcategory.icon || '');
     setEditingSubcategoryId(subcategory.id);
     setShowSubcategoryForm(true);
   };
@@ -313,16 +337,57 @@ const CategoryManagementPage: React.FC = () => {
 
   const resetCategoryForm = () => {
     setCategoryName('');
+    setCategoryIcon('');
     setEditingCategoryId(null);
     setShowCategoryForm(false);
+    setShowIconPicker(false);
   };
 
   const resetSubcategoryForm = () => {
     setSubcategoryName('');
     setSubcategoryCategoryId('');
+    setSubcategoryIcon('');
     setEditingSubcategoryId(null);
     setShowSubcategoryForm(false);
+    setShowSubcategoryIconPicker(false);
   };
+  
+  // Long press handler for mobile
+  const handleLongPress = (type: 'category' | 'subcategory', id: string) => {
+    setLongPressedItem({ type, id });
+  };
+  
+  const handleTouchStart = (e: React.TouchEvent, type: 'category' | 'subcategory', id: string) => {
+    e.preventDefault();
+    const timer = setTimeout(() => {
+      handleLongPress(type, id);
+    }, 500); // 500ms for long press
+    
+    const handleTouchEnd = () => {
+      clearTimeout(timer);
+      document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('touchcancel', handleTouchEnd);
+    };
+    
+    document.addEventListener('touchend', handleTouchEnd, { once: true });
+    document.addEventListener('touchcancel', handleTouchEnd, { once: true });
+  };
+  
+  // Click outside to dismiss long press
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (longPressedItem) {
+        setLongPressedItem(null);
+      }
+    };
+    
+    if (longPressedItem) {
+      document.addEventListener('click', handleClickOutside);
+      return () => {
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }
+  }, [longPressedItem]);
 
   const getSubcategoriesForCategory = (categoryId: string) => {
     return subcategories.filter(s => s.categoryId === categoryId).sort((a, b) => 
@@ -583,6 +648,63 @@ const CategoryManagementPage: React.FC = () => {
                     required
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Icon (Optional)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    {categoryIcon && (
+                      <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
+                        <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={categoryIcon} />
+                        </svg>
+                      </div>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowIconPicker(!showIconPicker)}
+                      className="flex-1"
+                    >
+                      {categoryIcon ? 'Change Icon' : 'Select Icon'}
+                    </Button>
+                    {categoryIcon && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setCategoryIcon('')}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  {showIconPicker && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 max-h-64 overflow-y-auto">
+                      <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
+                        {categoryIcons.map((icon, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => {
+                              setCategoryIcon(icon.path);
+                              setShowIconPicker(false);
+                            }}
+                            className={`w-10 h-10 flex items-center justify-center rounded-lg border-2 transition-colors touch-manipulation ${
+                              categoryIcon === icon.path
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 bg-white hover:border-gray-300'
+                            }`}
+                          >
+                            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon.path} />
+                            </svg>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="flex gap-2 pt-4 border-t border-gray-200">
                   <Button type="submit" disabled={saving} className="flex-1">
                     {saving ? 'Saving...' : (editingCategoryId ? 'Update' : 'Create')} Category
@@ -641,6 +763,63 @@ const CategoryManagementPage: React.FC = () => {
                     required
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Icon (Optional)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    {subcategoryIcon && (
+                      <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
+                        <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={subcategoryIcon} />
+                        </svg>
+                      </div>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowSubcategoryIconPicker(!showSubcategoryIconPicker)}
+                      className="flex-1"
+                    >
+                      {subcategoryIcon ? 'Change Icon' : 'Select Icon'}
+                    </Button>
+                    {subcategoryIcon && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setSubcategoryIcon('')}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  {showSubcategoryIconPicker && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 max-h-64 overflow-y-auto">
+                      <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
+                        {categoryIcons.map((icon, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => {
+                              setSubcategoryIcon(icon.path);
+                              setShowSubcategoryIconPicker(false);
+                            }}
+                            className={`w-10 h-10 flex items-center justify-center rounded-lg border-2 transition-colors touch-manipulation ${
+                              subcategoryIcon === icon.path
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 bg-white hover:border-gray-300'
+                            }`}
+                          >
+                            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon.path} />
+                            </svg>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="flex gap-2 pt-4 border-t border-gray-200">
                   <Button type="submit" disabled={saving} className="flex-1">
                     {saving ? 'Saving...' : (editingSubcategoryId ? 'Update' : 'Create')} Subcategory
@@ -668,76 +847,117 @@ const CategoryManagementPage: React.FC = () => {
               <p className="text-gray-400 text-xs mt-1">Create categories to organize expenses and reimbursements</p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {categories.map((category) => {
                 const categorySubcategories = getSubcategoriesForCategory(category.id);
+                const isLongPressed = longPressedItem?.type === 'category' && longPressedItem?.id === category.id;
                 return (
-                  <div key={category.id} className="border border-gray-200 rounded-xl p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-semibold text-gray-900">{category.name}</h3>
-                        {category.isDefault && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                            Default
-                          </span>
+                  <div key={category.id} className="border border-gray-200 rounded-xl p-3 sm:p-6">
+                    {/* Mobile: Compact view with icon */}
+                    <div className="sm:hidden">
+                      <div
+                        onTouchStart={(e) => handleTouchStart(e, 'category', category.id)}
+                        className={`flex items-center gap-2 p-2 rounded-lg ${isLongPressed ? 'bg-blue-50' : ''}`}
+                      >
+                        {category.icon && (
+                          <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-gray-100 rounded-lg">
+                            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={category.icon} />
+                            </svg>
+                          </div>
                         )}
-                        <span className="text-sm text-gray-500">
-                          ({categorySubcategories.length} {categorySubcategories.length === 1 ? 'subcategory' : 'subcategories'})
-                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-semibold text-gray-900 truncate">{category.name}</h3>
+                            {category.isDefault && (
+                              <span className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200 flex-shrink-0">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {categorySubcategories.length} {categorySubcategories.length === 1 ? 'subcategory' : 'subcategories'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSubcategoryCategoryId(category.id);
-                            setShowSubcategoryForm(true);
-                          }}
-                          className="flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
-                        >
-                          + Add Subcategory
-                        </Button>
-                        {!category.isDefault && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditCategory(category)}
-                              className="flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteCategory(category.id)}
-                              className="text-red-600 hover:text-red-700 flex-1 sm:flex-none min-h-[44px] sm:min-h-[36px]"
-                            >
-                              Delete
-                            </Button>
-                          </>
-                        )}
-                      </div>
+                      {isLongPressed && !category.isDefault && (
+                        <div className="flex gap-2 mt-2 pt-2 border-t border-gray-200">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              handleEditCategory(category);
+                              setLongPressedItem(null);
+                            }}
+                            className="flex-1 text-xs min-h-[36px]"
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              handleDeleteCategory(category.id);
+                              setLongPressedItem(null);
+                            }}
+                            className="flex-1 text-xs text-red-600 hover:text-red-700 min-h-[36px]"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSubcategoryCategoryId(category.id);
+                          setShowSubcategoryForm(true);
+                        }}
+                        className="w-full mt-2 text-xs min-h-[36px]"
+                      >
+                        + Add Subcategory
+                      </Button>
                     </div>
                     
-                    {/* Subcategories List */}
-                    {categorySubcategories.length === 0 ? (
-                      <p className="text-sm text-gray-500 italic">No subcategories yet. Click "Add Subcategory" to create one.</p>
-                    ) : (
-                      <div className="space-y-2 pl-4 border-l-2 border-gray-200">
-                        {categorySubcategories.map((subcategory) => (
-                          <div key={subcategory.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium text-gray-900">{subcategory.name}</span>
-                              <span className="text-xs text-gray-500">
-                                Used {subcategory.usageCount || 0} {subcategory.usageCount === 1 ? 'time' : 'times'}
-                              </span>
+                    {/* Desktop: More detailed view */}
+                    <div className="hidden sm:block">
+                      <div className="flex flex-row items-center justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-3">
+                          {category.icon && (
+                            <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-gray-100 rounded-lg">
+                              <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={category.icon} />
+                              </svg>
                             </div>
-                            <div className="flex gap-2">
+                          )}
+                          <h3 className="text-base font-semibold text-gray-900">{category.name}</h3>
+                          {category.isDefault && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                              Default
+                            </span>
+                          )}
+                          <span className="text-sm text-gray-500">
+                            ({categorySubcategories.length} {categorySubcategories.length === 1 ? 'subcategory' : 'subcategories'})
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSubcategoryCategoryId(category.id);
+                              setShowSubcategoryForm(true);
+                            }}
+                            className="min-h-[36px]"
+                          >
+                            + Add Subcategory
+                          </Button>
+                          {!category.isDefault && (
+                            <>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleEditSubcategory(subcategory)}
+                                onClick={() => handleEditCategory(category)}
                                 className="min-h-[36px]"
                               >
                                 Edit
@@ -745,14 +965,111 @@ const CategoryManagementPage: React.FC = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleDeleteSubcategory(subcategory.id)}
+                                onClick={() => handleDeleteCategory(category.id)}
                                 className="text-red-600 hover:text-red-700 min-h-[36px]"
                               >
                                 Delete
                               </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Subcategories List */}
+                    {categorySubcategories.length === 0 ? (
+                      <p className="text-xs sm:text-sm text-gray-500 italic pl-2 sm:pl-4">No subcategories yet. Click "Add Subcategory" to create one.</p>
+                    ) : (
+                      <div className="space-y-2 pl-2 sm:pl-4 border-l-2 border-gray-200 mt-2 sm:mt-0">
+                        {categorySubcategories.map((subcategory) => {
+                          const isSubLongPressed = longPressedItem?.type === 'subcategory' && longPressedItem?.id === subcategory.id;
+                          return (
+                            <div key={subcategory.id} className="flex items-center justify-between p-2 sm:p-3 bg-gray-50 rounded-lg">
+                              {/* Mobile: Compact view */}
+                              <div className="sm:hidden flex-1 min-w-0">
+                                <div
+                                  onTouchStart={(e) => handleTouchStart(e, 'subcategory', subcategory.id)}
+                                  className={`flex items-center gap-2 ${isSubLongPressed ? 'bg-blue-50 rounded p-1' : ''}`}
+                                >
+                                  {subcategory.icon && (
+                                    <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-white rounded">
+                                      <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={subcategory.icon} />
+                                      </svg>
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-xs font-medium text-gray-900 block truncate">{subcategory.name}</span>
+                                    <span className="text-xs text-gray-500">
+                                      Used {subcategory.usageCount || 0} {subcategory.usageCount === 1 ? 'time' : 'times'}
+                                    </span>
+                                  </div>
+                                </div>
+                                {isSubLongPressed && (
+                                  <div className="flex gap-2 mt-2 pt-2 border-t border-gray-200">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        handleEditSubcategory(subcategory);
+                                        setLongPressedItem(null);
+                                      }}
+                                      className="flex-1 text-xs min-h-[32px]"
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        handleDeleteSubcategory(subcategory.id);
+                                        setLongPressedItem(null);
+                                      }}
+                                      className="flex-1 text-xs text-red-600 hover:text-red-700 min-h-[32px]"
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Desktop: Detailed view */}
+                              <div className="hidden sm:flex sm:items-center sm:justify-between sm:flex-1 sm:gap-3">
+                                <div className="flex items-center gap-3">
+                                  {subcategory.icon && (
+                                    <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-white rounded">
+                                      <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={subcategory.icon} />
+                                      </svg>
+                                    </div>
+                                  )}
+                                  <span className="text-sm font-medium text-gray-900">{subcategory.name}</span>
+                                  <span className="text-xs text-gray-500">
+                                    Used {subcategory.usageCount || 0} {subcategory.usageCount === 1 ? 'time' : 'times'}
+                                  </span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditSubcategory(subcategory)}
+                                    className="min-h-[32px]"
+                                  >
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDeleteSubcategory(subcategory.id)}
+                                    className="text-red-600 hover:text-red-700 min-h-[32px]"
+                                  >
+                                    Delete
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

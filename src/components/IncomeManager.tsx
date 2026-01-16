@@ -5,7 +5,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../lib/useAuth';
-import type { Income, IncomeCategory, IncomeSubcategory } from '../lib/types';
+import type { Income, ExpenseCategory, ExpenseSubcategory } from '../lib/types';
 import { updateProjectActualRevenue } from '../lib/projectRevenue';
 import { compressImage } from '../lib/imageCompression';
 import Button from './ui/Button';
@@ -21,8 +21,8 @@ const IncomeManager: React.FC = () => {
   
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [projects, setProjects] = useState<Array<{id: string, name: string}>>([]);
-  const [categories, setCategories] = useState<IncomeCategory[]>([]);
-  const [subcategories, setSubcategories] = useState<IncomeSubcategory[]>([]);
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [subcategories, setSubcategories] = useState<ExpenseSubcategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -49,7 +49,7 @@ const IncomeManager: React.FC = () => {
     category: '',
     amount: '' as string | number,
     date: new Date().toISOString().split('T')[0],
-    invoiceUrl: '',
+    invoiceUrls: [] as string[],
     notes: '',
     client: '',
     status: 'received' as 'pending' | 'received' | 'cancelled'
@@ -67,28 +67,28 @@ const IncomeManager: React.FC = () => {
       }));
       setProjects(projectsData);
 
-      // Load categories
+      // Load categories (using expense categories)
       const categoriesQuery = query(
-        collection(db, 'incomeCategories'),
+        collection(db, 'expenseCategories'),
         orderBy('name', 'asc')
       );
       const categoriesSnapshot = await getDocs(categoriesQuery);
       const categoriesData = categoriesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      } as IncomeCategory));
+      } as ExpenseCategory));
       setCategories(categoriesData);
 
-      // Load subcategories
+      // Load subcategories (using expense subcategories)
       const subcategoriesQuery = query(
-        collection(db, 'incomeSubcategories'),
+        collection(db, 'expenseSubcategories'),
         orderBy('name', 'asc')
       );
       const subcategoriesSnapshot = await getDocs(subcategoriesQuery);
       const subcategoriesData = subcategoriesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      } as IncomeSubcategory));
+      } as ExpenseSubcategory));
       setSubcategories(subcategoriesData);
 
       // Load incomes
@@ -127,7 +127,7 @@ const IncomeManager: React.FC = () => {
 
   // Get subcategories organized by category
   const subcategoriesByCategory = useMemo(() => {
-    const organized: { [categoryId: string]: IncomeSubcategory[] } = {};
+    const organized: { [categoryId: string]: ExpenseSubcategory[] } = {};
     categories.forEach(category => {
       organized[category.id] = subcategories
         .filter(sub => sub.categoryId === category.id)
@@ -140,30 +140,39 @@ const IncomeManager: React.FC = () => {
     const files = e.target.files;
     if (!files || files.length === 0 || !currentUser) return;
 
-    // Use the last selected file (most recent photo taken)
-    const file = files[files.length - 1];
-
     try {
       setUploadingInvoice(true);
       
-      // Compress image if option is enabled
-      let fileToUpload = file;
-      if (compressInvoice && file.type.startsWith('image/')) {
-        fileToUpload = await compressImage(file);
+      // Process all selected files
+      const fileArray = Array.from(files);
+      const newUrls: string[] = [];
+      
+      for (const file of fileArray) {
+        // Compress image if option is enabled
+        let fileToUpload = file;
+        if (compressInvoice && file.type.startsWith('image/')) {
+          fileToUpload = await compressImage(file);
+        }
+        
+        // Create a reference to the file in Firebase Storage
+        const timestamp = Date.now();
+        const randomId = Math.random().toString(36).substring(2, 9);
+        const fileName = `invoices/${currentUser.uid}/${timestamp}_${randomId}_${fileToUpload.name}`;
+        const storageRef = ref(storage, fileName);
+        
+        // Upload the file
+        await uploadBytes(storageRef, fileToUpload);
+        
+        // Get the download URL
+        const downloadURL = await getDownloadURL(storageRef);
+        newUrls.push(downloadURL);
       }
       
-      // Create a reference to the file in Firebase Storage
-      const timestamp = Date.now();
-      const fileName = `invoices/${currentUser.uid}/${timestamp}_${fileToUpload.name}`;
-      const storageRef = ref(storage, fileName);
-      
-      // Upload the file
-      await uploadBytes(storageRef, fileToUpload);
-      
-      // Get the download URL
-      const downloadURL = await getDownloadURL(storageRef);
-      
-      setFormData({ ...formData, invoiceUrl: downloadURL });
+      // Append new URLs to existing ones
+      setFormData(prev => ({ 
+        ...formData, 
+        invoiceUrls: [...prev.invoiceUrls, ...newUrls] 
+      }));
     } catch (error) {
       console.error('Error uploading invoice:', error);
       alert('Failed to upload invoice. Please try again.');
@@ -201,7 +210,7 @@ const IncomeManager: React.FC = () => {
         category: formData.category,
         amount: amountValue,
         date: formData.date,
-        invoiceUrl: formData.invoiceUrl || null,
+        invoiceUrls: formData.invoiceUrls.length > 0 ? formData.invoiceUrls : null,
         notes: formData.notes || null,
         client: formData.client || null,
         status: formData.status,
@@ -217,7 +226,7 @@ const IncomeManager: React.FC = () => {
         if (oldCategoryName && oldCategoryName !== formData.category) {
           const oldSubcategory = subcategories.find(s => s.name === oldCategoryName);
           if (oldSubcategory && oldSubcategory.usageCount > 0) {
-            await updateDoc(doc(db, 'incomeSubcategories', oldSubcategory.id), {
+            await updateDoc(doc(db, 'expenseSubcategories', oldSubcategory.id), {
               usageCount: (oldSubcategory.usageCount || 0) - 1,
               updatedAt: serverTimestamp()
             });
@@ -234,7 +243,7 @@ const IncomeManager: React.FC = () => {
       // Increment usage count for the selected subcategory
       const selectedSubcategory = subcategories.find(s => s.name === formData.category);
       if (selectedSubcategory) {
-        await updateDoc(doc(db, 'incomeSubcategories', selectedSubcategory.id), {
+        await updateDoc(doc(db, 'expenseSubcategories', selectedSubcategory.id), {
           usageCount: (selectedSubcategory.usageCount || 0) + 1,
           updatedAt: serverTimestamp()
         });
@@ -259,18 +268,21 @@ const IncomeManager: React.FC = () => {
   };
 
   const handleEdit = (income: Income) => {
+    // Support both old single invoiceUrl and new invoiceUrls array
+    const invoiceUrls = (income as any).invoiceUrls || (income.invoiceUrl ? [income.invoiceUrl] : []);
+    
     setFormData({
       projectId: income.projectId || '',
       category: income.category || '',
       amount: income.amount,
       date: income.date,
-      invoiceUrl: income.invoiceUrl || '',
+      invoiceUrls: invoiceUrls,
       notes: income.notes || '',
       client: income.client || '',
       status: income.status
     });
     // Show optional fields if they have values
-    setShowInvoiceField(!!income.invoiceUrl);
+    setShowInvoiceField(invoiceUrls.length > 0);
     setShowNotesField(!!income.notes);
     setShowClientField(!!income.client);
     setEditingId(income.id);
@@ -292,7 +304,7 @@ const IncomeManager: React.FC = () => {
       if (categoryName) {
         const subcategory = subcategories.find(s => s.name === categoryName);
         if (subcategory && subcategory.usageCount > 0) {
-          await updateDoc(doc(db, 'incomeSubcategories', subcategory.id), {
+          await updateDoc(doc(db, 'expenseSubcategories', subcategory.id), {
             usageCount: (subcategory.usageCount || 0) - 1,
             updatedAt: serverTimestamp()
           });
@@ -317,7 +329,7 @@ const IncomeManager: React.FC = () => {
       category: '',
       amount: '',
       date: new Date().toISOString().split('T')[0],
-      invoiceUrl: '',
+      invoiceUrls: [],
       notes: '',
       client: '',
       status: 'received'
@@ -378,18 +390,18 @@ const IncomeManager: React.FC = () => {
         updatedAt: serverTimestamp()
       };
 
-      await addDoc(collection(db, 'incomeSubcategories'), subcategoryData);
+      await addDoc(collection(db, 'expenseSubcategories'), subcategoryData);
       
       // Reload subcategories
       const subcategoriesQuery = query(
-        collection(db, 'incomeSubcategories'),
+        collection(db, 'expenseSubcategories'),
         orderBy('name', 'asc')
       );
       const subcategoriesSnapshot = await getDocs(subcategoriesQuery);
       const subcategoriesData = subcategoriesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      } as IncomeSubcategory));
+      } as ExpenseSubcategory));
       setSubcategories(subcategoriesData);
 
       // Auto-select the newly created subcategory
@@ -626,11 +638,11 @@ const IncomeManager: React.FC = () => {
                     size="sm"
                     onClick={() => {
                       setShowInvoiceField(false);
-                      setFormData({ ...formData, invoiceUrl: '' });
+                      setFormData({ ...formData, invoiceUrls: [] });
                     }}
                     className="text-xs"
                   >
-                    Remove
+                    Remove All
                   </Button>
                 </div>
                 <div className="mb-2">
@@ -666,19 +678,38 @@ const IncomeManager: React.FC = () => {
                     </div>
                   )}
                 </div>
-                {formData.invoiceUrl && (
-                  <div className="mt-2">
-                    <a
-                      href={formData.invoiceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      View Invoice
-                    </a>
+                {formData.invoiceUrls.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {formData.invoiceUrls.map((url, index) => (
+                      <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1 flex-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          View Invoice {formData.invoiceUrls.length > 1 ? `${index + 1}` : ''}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              invoiceUrls: prev.invoiceUrls.filter((_, i) => i !== index)
+                            }));
+                          }}
+                          className="ml-2 text-red-600 hover:text-red-700 text-sm touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
+                          aria-label="Remove invoice"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -926,19 +957,28 @@ const IncomeManager: React.FC = () => {
                     {income.notes && (
                       <p className="text-xs sm:text-sm text-gray-600 mt-2 break-words">{income.notes}</p>
                     )}
-                    {income.invoiceUrl && (
-                      <a
-                        href={income.invoiceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs sm:text-sm text-blue-600 hover:text-blue-700 mt-2 touch-manipulation min-h-[44px]"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        View Invoice
-                      </a>
-                    )}
+                    {(() => {
+                      // Support both old single invoiceUrl and new invoiceUrls array
+                      const invoiceUrls = (income as any).invoiceUrls || (income.invoiceUrl ? [income.invoiceUrl] : []);
+                      return invoiceUrls.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {invoiceUrls.map((url: string, index: number) => (
+                            <a
+                              key={index}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs sm:text-sm text-blue-600 hover:text-blue-700 touch-manipulation min-h-[44px]"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              View Invoice {invoiceUrls.length > 1 ? `${index + 1}` : ''}
+                            </a>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex gap-2 flex-shrink-0 sm:ml-4">
                     <Button

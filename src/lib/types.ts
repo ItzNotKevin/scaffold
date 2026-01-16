@@ -187,6 +187,7 @@ export interface PendingUser {
 export interface ExpenseCategory {
   id: string;
   name: string; // e.g., "Materials", "Equipment"
+  icon?: string; // Heroicon SVG path
   isDefault: boolean; // true for pre-made categories (Materials, Equipment)
   createdAt: any;
   updatedAt: any;
@@ -197,6 +198,7 @@ export interface ExpenseSubcategory {
   id: string;
   categoryId: string; // References ExpenseCategory.id
   name: string; // e.g., "Lumber", "Concrete", "Excavator"
+  icon?: string; // Heroicon SVG path
   usageCount: number; // Track how many times this subcategory has been used
   createdAt: any;
   updatedAt: any;

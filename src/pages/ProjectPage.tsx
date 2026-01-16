@@ -34,8 +34,10 @@ interface ActivityLog {
   // Expense-specific
   itemDescription?: string;
   status?: 'pending' | 'approved' | 'rejected' | 'received' | 'cancelled';
-  receiptUrl?: string;
-  invoiceUrl?: string;
+  receiptUrl?: string; // For backwards compatibility
+  receiptUrls?: string[]; // Array for multiple receipts
+  invoiceUrl?: string; // For backwards compatibility
+  invoiceUrls?: string[]; // Array for multiple invoices
   client?: string;
   // Photo-specific
   photoUrl?: string;
@@ -905,7 +907,8 @@ ${reportData.isOverBudget
           itemDescription: data.itemDescription || '',
           amount: data.amount || 0,
           status: data.status || 'pending',
-          receiptUrl: data.receiptUrl || undefined,
+          receiptUrl: data.receiptUrl || undefined, // For backwards compatibility
+          receiptUrls: data.receiptUrls || (data.receiptUrl ? [data.receiptUrl] : undefined),
           createdAt: data.createdAt
         };
       });
@@ -928,7 +931,8 @@ ${reportData.isOverBudget
           description: data.category || '',
           amount: data.amount || 0,
           status: data.status || 'pending',
-          invoiceUrl: data.invoiceUrl || undefined,
+          invoiceUrl: data.invoiceUrl || undefined, // For backwards compatibility
+          invoiceUrls: data.invoiceUrls || (data.invoiceUrl ? [data.invoiceUrl] : undefined),
           client: data.client || undefined,
           createdAt: data.createdAt
         };
@@ -1533,32 +1537,42 @@ ${reportData.isOverBudget
                                     )}
                                   </div>
                                 )}
-                                {activity.type === 'reimbursement' && activity.receiptUrl && (
+                                {activity.type === 'reimbursement' && activity.receiptUrls && activity.receiptUrls.length > 0 && (
                                   <div className="mb-3">
-                                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Receipt</label>
-                                    <img
-                                      src={activity.receiptUrl}
-                                      alt="Receipt"
-                                      className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        window.open(activity.receiptUrl, '_blank');
-                                      }}
-                                    />
+                                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Receipt{activity.receiptUrls.length > 1 ? 's' : ''}</label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {activity.receiptUrls.map((url, index) => (
+                                        <img
+                                          key={index}
+                                          src={url}
+                                          alt={`Receipt ${index + 1}`}
+                                          className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            window.open(url, '_blank');
+                                          }}
+                                        />
+                                      ))}
+                                    </div>
                                   </div>
                                 )}
-                                {activity.type === 'income' && activity.invoiceUrl && (
+                                {activity.type === 'income' && activity.invoiceUrls && activity.invoiceUrls.length > 0 && (
                                   <div className="mb-3">
-                                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Invoice</label>
-                                    <img
-                                      src={activity.invoiceUrl}
-                                      alt="Invoice"
-                                      className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        window.open(activity.invoiceUrl, '_blank');
-                                      }}
-                                    />
+                                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Invoice{activity.invoiceUrls.length > 1 ? 's' : ''}</label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {activity.invoiceUrls.map((url, index) => (
+                                        <img
+                                          key={index}
+                                          src={url}
+                                          alt={`Invoice ${index + 1}`}
+                                          className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            window.open(url, '_blank');
+                                          }}
+                                        />
+                                      ))}
+                                    </div>
                                   </div>
                                 )}
                                 
@@ -1765,30 +1779,40 @@ ${reportData.isOverBudget
                                     </>
                                   ) : (
                                     <>
-                                      {activity.type === 'reimbursement' && activity.receiptUrl && (
+                                      {activity.type === 'reimbursement' && activity.receiptUrls && activity.receiptUrls.length > 0 && (
                                         <div className="mb-1.5">
-                                          <img
-                                            src={activity.receiptUrl}
-                                            alt="Receipt"
-                                            className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              window.open(activity.receiptUrl, '_blank');
-                                            }}
-                                          />
+                                          <div className="flex flex-wrap gap-2">
+                                            {activity.receiptUrls.map((url, index) => (
+                                              <img
+                                                key={index}
+                                                src={url}
+                                                alt={`Receipt ${index + 1}`}
+                                                className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  window.open(url, '_blank');
+                                                }}
+                                              />
+                                            ))}
+                                          </div>
                                         </div>
                                       )}
-                                      {activity.type === 'income' && activity.invoiceUrl && (
+                                      {activity.type === 'income' && activity.invoiceUrls && activity.invoiceUrls.length > 0 && (
                                         <div className="mb-1.5">
-                                          <img
-                                            src={activity.invoiceUrl}
-                                            alt="Invoice"
-                                            className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              window.open(activity.invoiceUrl, '_blank');
-                                            }}
-                                          />
+                                          <div className="flex flex-wrap gap-2">
+                                            {activity.invoiceUrls.map((url, index) => (
+                                              <img
+                                                key={index}
+                                                src={url}
+                                                alt={`Invoice ${index + 1}`}
+                                                className="w-20 h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  window.open(url, '_blank');
+                                                }}
+                                              />
+                                            ))}
+                                          </div>
                                         </div>
                                       )}
                                       <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">

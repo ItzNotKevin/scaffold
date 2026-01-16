@@ -59,7 +59,7 @@ const ExpenseManager: React.FC = () => {
     subcategory: '',
     amount: '' as string | number,
     date: new Date().toISOString().split('T')[0],
-    receiptUrl: '',
+    receiptUrls: [] as string[],
     notes: '',
     vendor: '',
     status: 'approved' as 'pending' | 'approved' | 'rejected'
@@ -170,30 +170,39 @@ const ExpenseManager: React.FC = () => {
     const files = e.target.files;
     if (!files || files.length === 0 || !currentUser) return;
 
-    // Use the last selected file (most recent photo taken)
-    const file = files[files.length - 1];
-
     try {
       setUploadingReceipt(true);
       
-      // Compress image if option is enabled
-      let fileToUpload = file;
-      if (compressReceipt && file.type.startsWith('image/')) {
-        fileToUpload = await compressImage(file);
+      // Process all selected files
+      const fileArray = Array.from(files);
+      const newUrls: string[] = [];
+      
+      for (const file of fileArray) {
+        // Compress image if option is enabled
+        let fileToUpload = file;
+        if (compressReceipt && file.type.startsWith('image/')) {
+          fileToUpload = await compressImage(file);
+        }
+        
+        // Create a reference to the file in Firebase Storage
+        const timestamp = Date.now();
+        const randomId = Math.random().toString(36).substring(2, 9);
+        const fileName = `receipts/${currentUser.uid}/${timestamp}_${randomId}_${fileToUpload.name}`;
+        const storageRef = ref(storage, fileName);
+        
+        // Upload the file
+        await uploadBytes(storageRef, fileToUpload);
+        
+        // Get the download URL
+        const downloadURL = await getDownloadURL(storageRef);
+        newUrls.push(downloadURL);
       }
       
-      // Create a reference to the file in Firebase Storage
-      const timestamp = Date.now();
-      const fileName = `receipts/${currentUser.uid}/${timestamp}_${fileToUpload.name}`;
-      const storageRef = ref(storage, fileName);
-      
-      // Upload the file
-      await uploadBytes(storageRef, fileToUpload);
-      
-      // Get the download URL
-      const downloadURL = await getDownloadURL(storageRef);
-      
-      setFormData({ ...formData, receiptUrl: downloadURL });
+      // Append new URLs to existing ones
+      setFormData(prev => ({ 
+        ...formData, 
+        receiptUrls: [...prev.receiptUrls, ...newUrls] 
+      }));
     } catch (error) {
       console.error('Error uploading receipt:', error);
       alert('Failed to upload receipt. Please try again.');
@@ -232,7 +241,7 @@ const ExpenseManager: React.FC = () => {
         subcategory: formData.subcategory,
         amount: amountValue,
         date: formData.date,
-        receiptUrl: formData.receiptUrl || null,
+        receiptUrls: formData.receiptUrls.length > 0 ? formData.receiptUrls : null,
         notes: formData.notes || null,
         vendor: formData.vendor || null,
         status: formData.status,
@@ -304,20 +313,23 @@ const ExpenseManager: React.FC = () => {
   };
 
   const handleEdit = (expense: Expense) => {
+    // Support both old single receiptUrl and new receiptUrls array
+    const receiptUrls = (expense as any).receiptUrls || (expense.receiptUrl ? [expense.receiptUrl] : []);
+    
     setFormData({
       staffId: expense.staffId || '',
       projectId: expense.projectId || '',
       subcategory: expense.subcategory || '',
       amount: expense.amount,
       date: expense.date,
-      receiptUrl: expense.receiptUrl || '',
+      receiptUrls: receiptUrls,
       notes: expense.notes || '',
       vendor: expense.vendor || '',
       status: expense.status
     });
     // Show optional fields if they have values
     setShowStaffField(!!expense.staffId);
-    setShowReceiptField(!!expense.receiptUrl);
+    setShowReceiptField(receiptUrls.length > 0);
     setShowNotesField(!!expense.notes);
     setShowVendorField(!!expense.vendor);
     setEditingId(expense.id);
@@ -365,7 +377,7 @@ const ExpenseManager: React.FC = () => {
       subcategory: '',
       amount: '',
       date: new Date().toISOString().split('T')[0],
-      receiptUrl: '',
+      receiptUrls: [],
       notes: '',
       vendor: '',
       status: 'approved'
@@ -383,11 +395,11 @@ const ExpenseManager: React.FC = () => {
   };
 
   const resetFormForAddAnother = () => {
-    // Preserve all fields except amount, receiptUrl, and notes
+    // Preserve all fields except amount, receiptUrls, and notes
     setFormData(prev => ({
       ...prev,
       amount: '',
-      receiptUrl: '',
+      receiptUrls: [],
       notes: ''
     }));
     // Hide receipt and notes fields since they're cleared
@@ -800,11 +812,11 @@ const ExpenseManager: React.FC = () => {
                     size="sm"
                     onClick={() => {
                       setShowReceiptField(false);
-                      setFormData({ ...formData, receiptUrl: '' });
+                      setFormData({ ...formData, receiptUrls: [] });
                     }}
                     className="text-xs"
                   >
-                    Remove
+                    Remove All
                   </Button>
                 </div>
                 <div className="mb-2">
@@ -840,19 +852,38 @@ const ExpenseManager: React.FC = () => {
                     </div>
                   )}
                 </div>
-                {formData.receiptUrl && (
-                  <div className="mt-2">
-                    <a
-                      href={formData.receiptUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      View Receipt
-                    </a>
+                {formData.receiptUrls.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {formData.receiptUrls.map((url, index) => (
+                      <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1 flex-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          View Receipt {formData.receiptUrls.length > 1 ? `${index + 1}` : ''}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              receiptUrls: prev.receiptUrls.filter((_, i) => i !== index)
+                            }));
+                          }}
+                          className="ml-2 text-red-600 hover:text-red-700 text-sm touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
+                          aria-label="Remove receipt"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1200,19 +1231,28 @@ const ExpenseManager: React.FC = () => {
                     {expense.notes && (
                       <p className="text-xs sm:text-sm text-gray-600 mt-2 break-words">{expense.notes}</p>
                     )}
-                    {expense.receiptUrl && (
-                      <a
-                        href={expense.receiptUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs sm:text-sm text-blue-600 hover:text-blue-700 mt-2 touch-manipulation min-h-[44px]"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        View Receipt
-                      </a>
-                    )}
+                    {(() => {
+                      // Support both old single receiptUrl and new receiptUrls array
+                      const receiptUrls = (expense as any).receiptUrls || (expense.receiptUrl ? [expense.receiptUrl] : []);
+                      return receiptUrls.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {receiptUrls.map((url: string, index: number) => (
+                            <a
+                              key={index}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs sm:text-sm text-blue-600 hover:text-blue-700 touch-manipulation min-h-[44px]"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              View Receipt {receiptUrls.length > 1 ? `${index + 1}` : ''}
+                            </a>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex gap-2 flex-shrink-0 sm:ml-4">
                     <Button
