@@ -38,12 +38,7 @@ export const PushNotificationProvider: React.FC<PushNotificationProviderProps> =
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('PushNotificationProvider: Initializing...');
-    console.log('VAPID Key check:', import.meta.env.VITE_VAPID_PUBLIC_KEY ? 'Present' : 'Missing');
-    
-    // Check if push notifications are supported
     const supported = pushNotificationService.isSupported();
-    console.log('Push notifications supported:', supported);
     setIsSupported(supported);
 
     if (supported) {

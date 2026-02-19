@@ -871,7 +871,7 @@ const DailyReportForm: React.FC<DailyReportFormProps> = ({
           multiple
           accept="image/*"
           onChange={(e) => e.target.files && handlePhotoUpload(e.target.files)}
-          className="w-full p-2 border border-gray-300 rounded-md"
+          className="w-full p-2 border border-gray-300 rounded-md touch-manipulation min-h-[44px]"
         />
         
         {uploadedPhotos.length > 0 && (

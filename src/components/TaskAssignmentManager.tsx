@@ -315,24 +315,35 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
         }
 
         taskIdsToAssign = selectedTaskIds;
-        const mappedTasks = await Promise.all(selectedTaskIds.map(async (taskId) => {
-          if (taskId === 'custom') {
-            if (!taskDescription.trim()) {
-              throw new Error('Custom task description is required');
+        try {
+          const mappedTasks = await Promise.all(selectedTaskIds.map(async (taskId) => {
+            if (taskId === 'custom') {
+              if (!taskDescription.trim()) {
+                throw new Error('Custom task description is required');
+              }
+              // Custom task - just use the description, don't save as template
+              return { taskId: undefined, description: taskDescription.trim() };
+            } else {
+              // Handle project task or task template
+              let task = projectTasks.find(t => t.id === taskId);
+              if (!task) {
+                // Check if it's a task template
+                const template = taskTemplates.find(t => t.id === taskId);
+                if (template) {
+                  return { taskId, description: template.title || 'Untitled Task' };
+                }
+                console.warn(`Task ${taskId} not found in project tasks or templates`);
+                return { taskId, description: 'Unknown Task' };
+              }
+              return { taskId, description: task.title || 'Untitled Task' };
             }
-            // Custom task - just use the description, don't save as template
-            return { taskId: undefined, description: taskDescription.trim() };
-          } else {
-            // Handle project task
-            const task = projectTasks.find(t => t.id === taskId);
-            if (!task) {
-              console.warn(`Task ${taskId} not found in project tasks`);
-              return { taskId, description: 'Unknown Task' };
-            }
-            return { taskId, description: task.title || 'Untitled Task' };
-          }
-        }));
-        taskDescriptions = mappedTasks.filter(task => task.description.trim() !== ''); // Filter out empty descriptions
+          }));
+          taskDescriptions = mappedTasks.filter(task => task.description.trim() !== ''); // Filter out empty descriptions
+        } catch (error: any) {
+          console.error('Error mapping tasks:', error);
+          alert(`Error processing tasks: ${error?.message || 'Unknown error'}. Please try again.`);
+          return;
+        }
 
         if (taskDescriptions.length === 0) {
           // Fallback if all tasks filtered out
@@ -418,8 +429,9 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
           } catch (error: any) {
             const errorMessage = error?.message || 'Unknown error';
             const errorCode = error?.code || 'unknown';
-            console.error(`Error creating assignment for ${staffMember.name}:`, error);
-            errors.push(`${staffMember.name}: ${errorMessage} (${errorCode})`);
+            const taskDesc = taskInfo.description || 'Unknown Task';
+            console.error(`Error creating assignment for ${staffMember.name} - ${taskDesc}:`, error);
+            errors.push(`${staffMember.name} - ${taskDesc}: ${errorMessage} (${errorCode})`);
           }
         }
       }
@@ -516,6 +528,85 @@ const TaskAssignmentManager: React.FC<TaskAssignmentManagerProps> = ({ onClose, 
     } catch (error) {
       console.error('Error deleting assignment:', error);
       alert('Failed to delete assignment');
+    }
+  };
+
+  const resetTaskModal = () => {
+    setShowAddTaskModal(false);
+    setNewTaskTitle('');
+    setNewTaskNotes('');
+    setShowTaskNotesField(false);
+    setTaskError('');
+    setCreatingTask(false);
+  };
+
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Clear any previous errors
+    setTaskError('');
+
+    // Validate user is logged in
+    if (!currentUser) {
+      setTaskError('You must be logged in to create tasks.');
+      return;
+    }
+
+    // Validate project is selected
+    if (!selectedProjectId || selectedProjectId.trim() === '') {
+      setTaskError('Please select a project first before creating a task.');
+      return;
+    }
+
+    // Validate task title
+    if (!newTaskTitle || !newTaskTitle.trim()) {
+      setTaskError('Task title is required.');
+      return;
+    }
+
+    setCreatingTask(true);
+
+    try {
+      const taskData = {
+        title: newTaskTitle.trim(),
+        description: newTaskNotes.trim() || '',
+        status: 'todo' as const,
+        priority: 'medium' as const,
+        projectId: selectedProjectId,
+        isTemplate: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, 'tasks'), taskData);
+      const newTaskId = docRef.id;
+
+      // Reload project tasks to include the new task
+      try {
+        await loadProjectTasks(selectedProjectId);
+      } catch (loadError: any) {
+        console.warn('Error reloading project tasks (task was created):', loadError);
+        // Continue even if reload fails - the task was created successfully
+      }
+
+      // If in multi-task mode, automatically select the newly created task
+      if (multiTaskMode) {
+        setSelectedTaskIds(prev => [...prev, newTaskId]);
+      } else {
+        // In single task mode, select the new task
+        setSelectedTaskId(newTaskId);
+        setTaskDescription(newTaskTitle.trim());
+      }
+
+      // Close modal and reset form
+      resetTaskModal();
+    } catch (error: any) {
+      console.error('Error creating task:', error);
+      const errorMessage = error?.message || 'Unknown error occurred';
+      const errorCode = error?.code || 'unknown';
+      setTaskError(`Failed to create task: ${errorMessage} (${errorCode})`);
+    } finally {
+      setCreatingTask(false);
     }
   };
 

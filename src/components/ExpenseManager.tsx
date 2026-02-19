@@ -176,8 +176,10 @@ const ExpenseManager: React.FC = () => {
       // Process all selected files
       const fileArray = Array.from(files);
       const newUrls: string[] = [];
+      const baseTimestamp = Date.now();
       
-      for (const file of fileArray) {
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
         // Compress image if option is enabled
         let fileToUpload = file;
         if (compressReceipt && file.type.startsWith('image/')) {
@@ -185,9 +187,9 @@ const ExpenseManager: React.FC = () => {
         }
         
         // Create a reference to the file in Firebase Storage
-        const timestamp = Date.now();
+        // Use index to ensure unique filenames even if uploaded simultaneously
         const randomId = Math.random().toString(36).substring(2, 9);
-        const fileName = `receipts/${currentUser.uid}/${timestamp}_${randomId}_${fileToUpload.name}`;
+        const fileName = `receipts/${currentUser.uid}/${baseTimestamp}_${i}_${randomId}_${fileToUpload.name}`;
         const storageRef = ref(storage, fileName);
         
         // Upload the file
@@ -739,7 +741,7 @@ const ExpenseManager: React.FC = () => {
                   onClick={() => setShowReceiptField(true)}
                   className="text-sm"
                 >
-                  + Add Receipt Photo
+                  + Add Receipt Photos
                 </Button>
               )}
               {!showNotesField && (
@@ -804,20 +806,22 @@ const ExpenseManager: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-gray-700">
-                    Receipt Photo
+                    Receipt Photos {formData.receiptUrls.length > 0 && `(${formData.receiptUrls.length} uploaded)`}
                   </label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setShowReceiptField(false);
-                      setFormData({ ...formData, receiptUrls: [] });
-                    }}
-                    className="text-xs"
-                  >
-                    Remove All
-                  </Button>
+                  {formData.receiptUrls.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowReceiptField(false);
+                        setFormData({ ...formData, receiptUrls: [] });
+                      }}
+                      className="text-xs"
+                    >
+                      Remove All
+                    </Button>
+                  )}
                 </div>
                 <div className="mb-2">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -827,33 +831,41 @@ const ExpenseManager: React.FC = () => {
                       onChange={(e) => setCompressReceipt(e.target.checked)}
                       className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                     />
-                    <span className="text-sm text-gray-700">Compress image (faster upload, smaller file)</span>
+                    <span className="text-sm text-gray-700">Compress images (faster upload, smaller files)</span>
                   </label>
                 </div>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleFileUpload}
-                    disabled={uploadingReceipt}
-                    className="block w-full text-sm text-gray-500
-                      file:mr-4 file:py-2 file:px-4
-                      file:rounded-lg file:border-0
-                      file:text-sm file:font-semibold
-                      file:bg-blue-50 file:text-blue-700
-                      hover:file:bg-blue-100
-                      disabled:opacity-50"
-                  />
-                  {uploadingReceipt && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                      <span>Uploading...</span>
-                    </div>
-                  )}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleFileUpload}
+                      disabled={uploadingReceipt}
+                      className="block w-full text-sm text-gray-500 touch-manipulation min-h-[44px]
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-lg file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100
+                        disabled:opacity-50"
+                    />
+                    {uploadingReceipt && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        <span>Uploading...</span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {formData.receiptUrls.length > 0 
+                      ? `You can add more receipts. Select multiple photos at once or upload them one at a time.`
+                      : `Select multiple photos at once or upload them one at a time. You can add more receipts anytime.`}
+                  </p>
                 </div>
                 {formData.receiptUrls.length > 0 && (
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-medium text-gray-700">Uploaded Receipts:</p>
                     {formData.receiptUrls.map((url, index) => (
                       <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
                         <a
@@ -865,7 +877,7 @@ const ExpenseManager: React.FC = () => {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                          View Receipt {formData.receiptUrls.length > 1 ? `${index + 1}` : ''}
+                          View Receipt {formData.receiptUrls.length > 1 ? `${index + 1} of ${formData.receiptUrls.length}` : ''}
                         </a>
                         <button
                           type="button"
@@ -1247,7 +1259,7 @@ const ExpenseManager: React.FC = () => {
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
-                              View Receipt {receiptUrls.length > 1 ? `${index + 1}` : ''}
+                              View Receipt {receiptUrls.length > 1 ? `${index + 1} of ${receiptUrls.length}` : ''}
                             </a>
                           ))}
                         </div>

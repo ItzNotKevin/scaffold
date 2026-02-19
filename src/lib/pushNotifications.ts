@@ -75,19 +75,13 @@ export class PushNotificationService {
         return this.subscription;
       }
 
-      // Get VAPID key and validate
       const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-      console.log('VAPID Key from env:', vapidKey ? 'Present' : 'Missing');
-      console.log('VAPID Key value:', vapidKey);
-      console.log('All env vars:', import.meta.env);
       
       if (!vapidKey) {
         throw new Error('VAPID public key is not configured. Please add VITE_VAPID_PUBLIC_KEY to your environment variables.');
       }
 
-      // Create new subscription
       const applicationServerKey = this.urlBase64ToUint8Array(vapidKey);
-      console.log('Application server key created:', applicationServerKey.length, 'bytes');
 
       this.subscription = await this.registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -202,8 +196,6 @@ export class PushNotificationService {
 
   // Convert VAPID key from base64 to Uint8Array
   private urlBase64ToUint8Array(base64String: string): Uint8Array {
-    console.log('Converting VAPID key:', base64String ? 'Present' : 'Missing');
-    
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding)
       .replace(/-/g, '+')

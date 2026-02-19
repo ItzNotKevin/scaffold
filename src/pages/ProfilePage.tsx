@@ -318,6 +318,7 @@ const ProfilePage: React.FC = () => {
                 variant="outline"
                 size="sm"
                 loading={loading}
+                className="touch-manipulation min-h-[44px]"
               >
                 {profilePicture ? t('profile.changePicture') : t('profile.uploadPicture')}
               </Button>

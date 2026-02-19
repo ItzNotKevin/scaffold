@@ -23,3 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Environment files with secrets
+.env
+.env.local
+.env.local.backup
+.env.*.local
+.env.production
+
+# Temporary key files
+temp_key.txt

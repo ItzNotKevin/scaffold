@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -36,6 +36,9 @@ const PhotoManager: React.FC = () => {
   const [showStaffField, setShowStaffField] = useState(false);
   const [editShowNotesField, setEditShowNotesField] = useState(false);
   const [editShowStaffField, setEditShowStaffField] = useState(false);
+  
+  // File input ref for mobile compatibility
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Edit form data (for inline editing)
   const [editFormData, setEditFormData] = useState<{
@@ -753,24 +756,35 @@ const PhotoManager: React.FC = () => {
                     Photos *
                   </label>
                   <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-gray-400 transition-colors">
-                    <label htmlFor="photo-file-upload" className="cursor-pointer block">
-                      <span className="block text-sm font-medium text-gray-900">
+                    <div className="flex flex-col items-center justify-center min-h-[44px]">
+                      <span className="block text-sm font-medium text-gray-900 mb-1">
                         {formData.selectedFiles.length > 0 
                           ? `${formData.selectedFiles.length} photo(s) selected`
-                          : 'Click to select photos'}
+                          : 'Select photos from library or camera'}
                       </span>
-                      <span className="mt-1 block text-xs text-gray-500">
+                      <span className="mt-1 block text-xs text-gray-500 mb-3">
                         PNG, JPG, GIF up to 10MB each
                       </span>
-                    </label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="touch-manipulation min-h-[44px] min-w-[120px]"
+                      >
+                        {formData.selectedFiles.length > 0 ? 'Change Photos' : 'Select Photos'}
+                      </Button>
+                    </div>
                     <input
-                      id="photo-file-upload"
+                      ref={fileInputRef}
                       type="file"
                       multiple
                       accept="image/*"
                       onChange={handleFileSelect}
                       disabled={uploading}
                       className="hidden"
+                      style={{ display: 'none' }}
                     />
                   </div>
                   {formData.selectedFiles.length > 0 && (
